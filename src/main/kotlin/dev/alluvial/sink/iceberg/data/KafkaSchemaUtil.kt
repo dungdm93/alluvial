@@ -67,4 +67,50 @@ object KafkaSchemaUtil {
     fun toIcebergType(kafkaSchema: KafkaSchema): IcebergType {
         return KafkaTypeToType().visit(kafkaSchema)
     }
+
+    fun equalsIgnoreId(a: NestedField, b: NestedField): Boolean {
+        // ignore compare id
+        if (a.isOptional != b.isOptional) {
+            return false
+        } else if (a.name() != b.name()) {
+            return false
+        } else if (a.doc() != b.doc()) {
+            return false
+        }
+        return equalsIgnoreId(a.type(), b.type())
+    }
+
+    fun equalsIgnoreId(a: IcebergType, b: IcebergType): Boolean {
+        if (a.typeId() != b.typeId()) return false
+
+        return when (a.typeId()) {
+            LIST -> {
+                val aList = a.asListType()
+                val bList = b.asListType()
+                return aList.isElementOptional == bList.isElementOptional
+                    && equalsIgnoreId(aList.elementType(), bList.elementType())
+            }
+            MAP -> {
+                val aMap = a.asMapType()
+                val bMap = b.asMapType()
+                return aMap.isValueOptional == bMap.isValueOptional
+                    && equalsIgnoreId(aMap.keyType(), bMap.keyType())
+                    && equalsIgnoreId(aMap.valueType(), bMap.valueType())
+            }
+            STRUCT -> {
+                val aStruct = a.asStructType()
+                val bStruct = b.asStructType()
+                if (aStruct.fields().any { bStruct.field(it.name()) == null })
+                    return false
+                if (bStruct.fields().any { aStruct.field(it.name()) == null })
+                    return false
+
+                return aStruct.fields().all { aField ->
+                    val bField = bStruct.field(aField.name())
+                    return equalsIgnoreId(aField, bField)
+                }
+            }
+            else -> a == b
+        }
+    }
 }
