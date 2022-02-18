@@ -1,0 +1,73 @@
+version: '3.7'
+
+
+services:
+  zookeeper:
+    image: quay.io/debezium/zookeeper:1.8.1.Final
+    # ports:
+    #   - 2181:2181 # client connections
+    #   - 2888:2888 # peers connections
+    #   - 3888:3888 # leader election
+
+  kafka:
+    image: quay.io/debezium/kafka:1.8.1.Final
+    environment:
+      ZOOKEEPER_CONNECT: zookeeper:2181
+    depends_on:
+      - zookeeper
+    ports:
+      - 9092:9092
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:6.1.0
+    container_name: schema-registry
+    hostname: schema-registry
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:9092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    depends_on:
+      - kafka
+    ports:
+      - 8081:8081
+
+  debezium:
+    image: quay.io/debezium/connect:1.8.1.Final
+    environment:
+      BOOTSTRAP_SERVERS: kafka:9092
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: debezium.configs
+      OFFSET_STORAGE_TOPIC: debezium.offsets
+      STATUS_STORAGE_TOPIC: debezium.statuses
+    depends_on:
+      - kafka
+    ports:
+      - 8083:8083
+
+  akhq:
+    image: tchiotludo/akhq:0.20.0
+    environment:
+      MICRONAUT_CONFIG_FILES: /etc/akhq/akhq.yml
+    volumes:
+      - ./akhq.yml:/etc/akhq/akhq.yml
+    ports:
+      - 8080:8080
+
+  ##### MySQL #####
+  # https://hub.docker.com/_/mysql
+  # Help:
+  # > mysql -u root -p
+  mysql:
+    image: mysql:8.0
+    command: [ --default-authentication-plugin=mysql_native_password ]
+    environment:
+      MYSQL_ROOT_PASSWORD: SuperSecr3t
+    ports:
+      - 3306:3306
+      - 33060:33060
+    volumes:
+      - ./mysql-sakila/:/docker-entrypoint-initdb.d/
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:

@@ -1,0 +1,10 @@
+akhq:
+  connections:
+    local:
+      properties:
+        bootstrap.servers: kafka:9092
+      schema-registry:
+        url: http://schema-registry:8081
+      connect:
+        - name: debezium
+          url: http://debezium:8083
