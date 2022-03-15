@@ -30,6 +30,7 @@ val kafkaVersion = "3.0.0"
 val confluentVersion = "7.0.0"
 val icebergVersion = "0.13.1"
 val hadoopVersion = "3.2.1"
+val jacksonVersion = "2.11.4"
 
 val junitVersion = "5.8.2"
 val striktVersion = "0.33.0"
@@ -40,6 +41,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.6.0")
     api("org.slf4j:slf4j-api:$slf4jVersion")
     runtimeOnly("ch.qos.logback:logback-classic:$logbackVersion")
+    implementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion")
 
     // Kafka
     implementation("org.apache.kafka:kafka-clients:$kafkaVersion")
@@ -65,8 +69,6 @@ dependencies {
     // Iceberg transient dependency
     implementation("org.apache.iceberg:iceberg-common:$icebergVersion")
     implementation("org.apache.iceberg:iceberg-bundled-guava:$icebergVersion")
-    implementation("com.fasterxml.jackson.core:jackson-core:2.11.4")
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.11.4")
     implementation("com.github.ben-manes.caffeine:caffeine:2.8.4")
     implementation("com.github.stephenc.findbugs:findbugs-annotations:1.3.9-1")
     implementation("org.roaringbitmap:RoaringBitmap:0.9.22")

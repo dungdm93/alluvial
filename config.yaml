@@ -1,0 +1,20 @@
+source:
+  kind: kafka
+  props:
+    bootstrap.servers: kafka:9092
+    group.id: alluvial
+    alluvial.source.kafka.topic-prefix: debezium.mysql
+    key.converter: io.confluent.connect.avro.AvroConverter
+    value.converter: io.confluent.connect.avro.AvroConverter
+    key.converter.schema.registry.url: http://schema-registry:8081
+    value.converter.schema.registry.url: http://schema-registry:8081
+
+sink:
+  kind: iceberg
+  props:
+    catalog-type: hadoop
+    warehouse: /tmp/warehouse
+
+stream:
+  kind: debezium
+  props: { }
