@@ -10,6 +10,7 @@ import org.apache.kafka.connect.sink.SinkRecord
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import java.util.Objects
+import kotlin.math.max
 import kotlin.time.Duration.Companion.minutes
 
 class DebeziumStreamlet(
@@ -22,6 +23,7 @@ class DebeziumStreamlet(
     }
 
     private val positions = mutableMapOf<Int, Long>()
+    private var lastRecordTimestamp = Long.MIN_VALUE
     private var hashedSchema: Int? = null
     private val time = SystemTime
     var commitBatchSize = 1000
@@ -37,7 +39,7 @@ class DebeziumStreamlet(
         ensurePosition()
         while (
             inlet.currentLag() >= commitBatchSize ||
-            (outlet.committedTimestamp() ?: Long.MIN_VALUE) < time.millis() - commitTimespanMs
+            lastRecordTimestamp < time.millis() - commitTimespanMs
         ) {
             captureChanges(commitBatchSize)
         }
@@ -57,7 +59,7 @@ class DebeziumStreamlet(
 
     private fun commit() {
         logger.info("Committing changes")
-        outlet.commit(positions)
+        outlet.commit(positions, lastRecordTimestamp)
         inlet.commit(positions)
     }
 
@@ -72,6 +74,7 @@ class DebeziumStreamlet(
             }
             outlet.write(record)
             positions[record.kafkaPartition()] = record.kafkaOffset() + 1
+            lastRecordTimestamp = max(lastRecordTimestamp, record.timestamp())
             count++
             if (count >= batchSize) break
             record = inlet.read()
@@ -82,6 +85,7 @@ class DebeziumStreamlet(
     private fun ensurePosition() {
         val committedPositions = outlet.committedPositions() ?: return
         positions.putAll(committedPositions)
+        lastRecordTimestamp = outlet.lastRecordTimestamp() ?: Long.MIN_VALUE
 
         val committedOffsets = inlet.committedOffsets()
         val isUpToDate = positions.all { (partition, offset) ->

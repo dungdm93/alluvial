@@ -23,6 +23,7 @@ class IcebergTableOutlet(
         private val mapper = JsonMapper()
         private val typeRef = object : TypeReference<Map<Int, Long>>() {}
         private const val ALLUVIAL_POSITION_PROP = "alluvial.position"
+        private const val ALLUVIAL_LAST_RECORD_TIMESTAMP_PROP = "alluvial.last-record.timestamp"
     }
 
     private val writerFactory = AlluvialTaskWriterFactory(table)
@@ -36,7 +37,7 @@ class IcebergTableOutlet(
         writer!!.write(record)
     }
 
-    fun commit(positions: Map<Int, Long>) {
+    fun commit(positions: Map<Int, Long>, lastRecordTimestamp: Long) {
         val result = writer!!.complete()
         val rowDelta = table.newRowDelta()
 
@@ -46,6 +47,7 @@ class IcebergTableOutlet(
             .validateDataFilesExist(result.referencedDataFiles().asIterable())
 
         rowDelta.set(ALLUVIAL_POSITION_PROP, mapper.writeValueAsString(positions))
+        rowDelta.set(ALLUVIAL_LAST_RECORD_TIMESTAMP_PROP, lastRecordTimestamp.toString())
 
         rowDelta.commit()
         writer = null
@@ -89,6 +91,18 @@ class IcebergTableOutlet(
     fun committedTimestamp(): Long? {
         return table.currentSnapshot()
             ?.timestampMillis()
+    }
+
+    /**
+     * @return timestamp in millisecond of last record committed or null
+     * if outlet doesn't have any snapshot.
+     */
+    fun lastRecordTimestamp(): Long? {
+        val ts = table.currentSnapshot()
+            ?.summary()
+            ?.get(ALLUVIAL_LAST_RECORD_TIMESTAMP_PROP)
+            ?: return null
+        return ts.toLong()
     }
 
     override fun close() {
