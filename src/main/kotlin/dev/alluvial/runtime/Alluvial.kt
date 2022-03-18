@@ -70,15 +70,13 @@ class Alluvial(config: Config) : Runnable {
             CREATED -> logger.warn("Streamlet {} is still in CREATED state, something may be wrong!!!", id)
             RUNNING -> logger.info("Streamlet {} is RUNNING", id)
             SUSPENDED -> {
-                val lag = currentLagOf(streamlet)
-                val committedTime = sink.committedTimestamp(id)!!
+                val lag = streamlet.inlet.currentLag()
+                val committedTime = streamlet.outlet.committedTimestamp() ?: Long.MIN_VALUE
                 if (lag <= 0 && committedTime < time.millis() - streamletIdleTimeout) {
                     logger.info("No more message in {} for {}ms => close streamlet", id, streamletIdleTimeout)
                     streamlet.close()
                     streamlets.remove(id)
-                } else if (lag > streamlet.commitBatchSize ||
-                    committedTime < time.millis() - streamlet.commitTimespanMs
-                ) {
+                } else if (streamlet.shouldRun()) {
                     channel.send(id)
                 } else {
                     logger.info("Streamlet {} still SUSPENDED for next examination", id)
@@ -86,10 +84,6 @@ class Alluvial(config: Config) : Runnable {
             }
             FAILED -> logger.error("Streamlet {} is FAILED", id) // TODO add retry mechanism
         }
-    }
-
-    private fun currentLagOf(streamlet: DebeziumStreamlet): Long {
-        return streamlet.inlet.currentLag()
     }
 
     private fun currentLagOf(id: StreamletId): Long {

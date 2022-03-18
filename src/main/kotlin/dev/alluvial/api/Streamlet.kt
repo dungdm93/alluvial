@@ -10,6 +10,7 @@ interface Streamlet : Closeable {
     val id: StreamletId
     var status: Status
     fun run()
+    fun shouldRun(): Boolean
     fun pause()
     fun resume()
 }

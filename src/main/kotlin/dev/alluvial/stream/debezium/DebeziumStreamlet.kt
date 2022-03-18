@@ -37,10 +37,7 @@ class DebeziumStreamlet(
         status = RUNNING
         logger.info("Streamlet {} is running", id)
         ensurePosition()
-        while (
-            inlet.currentLag() >= commitBatchSize ||
-            lastRecordTimestamp < time.millis() - commitTimespanMs
-        ) {
+        while (shouldRun()) {
             captureChanges(commitBatchSize)
         }
         pause()
@@ -61,6 +58,13 @@ class DebeziumStreamlet(
         logger.info("Committing changes")
         outlet.commit(positions, lastRecordTimestamp)
         inlet.commit(positions)
+    }
+
+    override fun shouldRun(): Boolean {
+        val lag = inlet.currentLag()
+        if (lag <= 0) return false
+        if (lag > commitBatchSize) return true
+        return lastRecordTimestamp < time.millis() - commitTimespanMs
     }
 
     private fun captureChanges(batchSize: Int) {
@@ -128,10 +132,10 @@ class DebeziumStreamlet(
 
     private inline fun <R> withMDC(block: () -> R): R {
         try {
-            MDC.put("streamlet.id", "${id.schema}.${id.table}")
+            MDC.put("streamlet.id", id.toString())
             return block()
         } catch (e: Exception) {
-            logger.error("Streamlet {} is failed", this)
+            logger.error("Streamlet {} is failed", id)
             status = FAILED
             throw e
         } finally {
