@@ -3,7 +3,6 @@ package dev.alluvial.source.kafka
 import dev.alluvial.api.Inlet
 import dev.alluvial.api.StreamletId
 import org.apache.kafka.clients.consumer.Consumer
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
@@ -25,7 +24,7 @@ class KafkaTopicInlet(
 
     private val consumer: Consumer<ByteArray, ByteArray>
     private val converter: KafkaConverter
-    private val pendingSeekingOffsets = mutableMapOf<Int, Long>()
+    private val partitions: Set<TopicPartition>
     private val partitionQueues = mutableMapOf<Int, Queue<SinkRecord>>()
     private val heap = PriorityQueue(Comparator.comparing(SinkRecord::timestamp))
     private val requestTimeout = Duration.ofSeconds(1)
@@ -34,18 +33,11 @@ class KafkaTopicInlet(
         consumer = KafkaConsumer(config)
         converter = KafkaConverter(config)
 
-        val listener = object : ConsumerRebalanceListener {
-            override fun onPartitionsRevoked(partitions: Collection<TopicPartition>) {}
+        partitions = consumer.partitionsFor(topic).map {
+            TopicPartition(it.topic(), it.partition())
+        }.toSet()
 
-            override fun onPartitionsAssigned(partitions: Collection<TopicPartition>) {
-                partitions.forEach { tp ->
-                    // alternative: using admin.alterConsumerGroupOffsets but it require admin privilege
-                    val offset = pendingSeekingOffsets.remove(tp.partition())
-                    if (offset != null) consumer.seek(tp, offset)
-                }
-            }
-        }
-        consumer.subscribe(listOf(topic), listener)
+        consumer.assign(partitions)
     }
 
     /**
@@ -94,12 +86,10 @@ class KafkaTopicInlet(
     }
 
     fun pause() {
-        val partitions = consumer.assignment()
         consumer.pause(partitions)
     }
 
     fun resume() {
-        val partitions = consumer.assignment()
         consumer.resume(partitions)
     }
 
@@ -122,18 +112,18 @@ class KafkaTopicInlet(
     }
 
     fun committedOffsets(): Map<Int, Long?> {
-        val tp = partitions()
-        return consumer.committed(tp)
+        return consumer.committed(partitions)
             .map { (tp, oam) -> tp.partition() to oam?.offset() }
             .toMap()
     }
 
     fun seekOffsets(offsets: Map<Int, Long>) {
-        pendingSeekingOffsets.putAll(offsets)
+        offsets.forEach { (partition, offset) ->
+            consumer.seek(TopicPartition(topic, partition), offset)
+        }
     }
 
     fun currentLag(): Long {
-        val partitions = partitions()
         val endOffsets = consumer.endOffsets(partitions)
         val committedOffsets = committedOffsets()
 
@@ -143,13 +133,6 @@ class KafkaTopicInlet(
             lag += endOffset - currentOffset
         }
         return lag
-    }
-
-    private fun partitions(): Set<TopicPartition> {
-        val partitions = consumer.partitionsFor(topic)
-        return partitions
-            .map { TopicPartition(it.topic(), it.partition()) }
-            .toSet()
     }
 
     override fun close() {
