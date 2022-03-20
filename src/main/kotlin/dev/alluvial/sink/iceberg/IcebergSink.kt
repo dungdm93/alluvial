@@ -9,6 +9,7 @@ import org.apache.iceberg.TableProperties
 import org.apache.iceberg.catalog.Catalog
 import org.apache.iceberg.catalog.TableIdentifier
 import org.apache.iceberg.exceptions.NoSuchTableException
+import org.apache.iceberg.util.PropertyUtil
 import org.slf4j.LoggerFactory
 import org.apache.iceberg.Schema as IcebergSchema
 
@@ -35,17 +36,18 @@ class IcebergSink(config: Map<String, Any>) {
     init {
         this.properties = config.mapValues { (_, v) -> v.toString() }
 
-        this.cacheEnabled = properties.getOrDefault(CACHE_ENABLED, "true").toBoolean()
-        val cacheExpirationInterval = properties.getOrDefault(
+        this.cacheEnabled = PropertyUtil.propertyAsBoolean(properties, CACHE_ENABLED, CACHE_ENABLED_DEFAULT)
+        val cacheExpirationIntervalMs = PropertyUtil.propertyAsLong(
+            properties,
             CACHE_EXPIRATION_INTERVAL_MS,
-            CACHE_EXPIRATION_INTERVAL_MS_DEFAULT.toString()
-        ).toLong()
+            CACHE_EXPIRATION_INTERVAL_MS_DEFAULT
+        )
         val catalogImpl = NAMED_CATALOG.getOrDefault(properties["catalog-type"], properties[CATALOG_IMPL])
         requireNotNull(catalogImpl) { "catalogImpl must not be null" }
 
         val catalog = CatalogUtil.loadCatalog(catalogImpl, "iceberg", properties, Configuration())
         this.catalog = if (cacheEnabled)
-            CachingCatalog.wrap(catalog, cacheExpirationInterval) else
+            CachingCatalog.wrap(catalog, cacheExpirationIntervalMs) else
             catalog
 
         this.locationBase = properties[LOCATION_BASE_PROP]?.removeSuffix("/")
