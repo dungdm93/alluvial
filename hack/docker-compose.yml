@@ -32,6 +32,7 @@ services:
       SCHEMA_REGISTRY_HOST_NAME: schema-registry
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:9092
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY_LEVEL: NONE
     depends_on:
       - kafka
     networks:
@@ -89,7 +90,7 @@ services:
       - 3306:3306
       - 33060:33060
     volumes:
-      - ./mysql-sakila/:/docker-entrypoint-initdb.d/
+      - ./mysql/:/docker-entrypoint-initdb.d/
       - mysql_data:/var/lib/mysql
 
 volumes:

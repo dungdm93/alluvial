@@ -8,3 +8,8 @@ akhq:
       connect:
         - name: debezium
           url: http://debezium:8083
+  pagination:
+    page-size: 100
+  ui-options:
+    topic-data:
+      sort: NEWEST

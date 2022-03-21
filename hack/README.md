@@ -12,7 +12,7 @@ docker compose up -d
 curl -i -X POST http://localhost:8083/connectors/ \
     -H "Accept:application/json" \
     -H "Content-Type:application/json" \
-    -d @res/mysq-sakila.json
+    -d @debezium/mysql-sakila.json
 ```
 
 Then add follow lines to the `/etc/hosts` file
