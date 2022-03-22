@@ -13,6 +13,12 @@ curl -i -X POST http://localhost:8083/connectors/ \
     -H "Accept:application/json" \
     -H "Content-Type:application/json" \
     -d @debezium/mysql-sakila.json
+    
+# Create debezium's postgres.dvdrental connector
+curl -i -X POST http://localhost:8083/connectors/ \
+    -H "Accept:application/json" \
+    -H "Content-Type:application/json" \
+    -d @debezium/postgres-dvdrental.json
 ```
 
 Then add follow lines to the `/etc/hosts` file
