@@ -18,6 +18,7 @@ import kotlinx.coroutines.supervisorScope
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
+import kotlin.concurrent.thread
 import kotlin.time.Duration.Companion.minutes
 
 class Alluvial(config: Config) : Runnable {
@@ -32,7 +33,15 @@ class Alluvial(config: Config) : Runnable {
     private val streamletIdleTimeout = 15.minutes.inWholeMilliseconds
     private val time = SystemTime
 
+    private val terminateStreamletsHook = thread(start = false, name = "terminate-streamlets") {
+        logger.warn("Shutdown Hook: closing streamlets")
+        streamlets.values.forEach(DebeziumStreamlet::close)
+        streamlets.clear()
+    }
+
     override fun run(): Unit = runBlocking {
+        Runtime.getRuntime().addShutdownHook(terminateStreamletsHook)
+
         val channel = Channel<StreamletId>()
 
         scheduleInterval(3.minutes, Dispatchers.Default) {
