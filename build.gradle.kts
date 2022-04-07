@@ -12,6 +12,11 @@ java.toolchain {
     languageVersion.set(JavaLanguageVersion.of(11))
 }
 
+application {
+    applicationName = "alluvial"
+    mainClass.set("dev.alluvial.runtime.Main")
+}
+
 repositories {
     mavenCentral()
     maven {
