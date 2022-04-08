@@ -1,3 +1,8 @@
+### VCS template
+.git
+.hg
+.svn
+
 ### Java ###
 # Compiled class file
 *.class
