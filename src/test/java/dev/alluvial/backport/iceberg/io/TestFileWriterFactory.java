@@ -67,8 +67,8 @@ public abstract class TestFileWriterFactory<T> extends WriterTestBase<T> {
             new Object[]{FileFormat.AVRO, true},
             new Object[]{FileFormat.PARQUET, false},
             new Object[]{FileFormat.PARQUET, true},
-            new Object[]{FileFormat.ORC, false},
-            new Object[]{FileFormat.ORC, true}
+            // new Object[]{FileFormat.ORC, false},
+            // new Object[]{FileFormat.ORC, true}
         };
     }
 

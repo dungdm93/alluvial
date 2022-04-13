@@ -16,6 +16,7 @@ import org.apache.kafka.connect.data.SchemaBuilder
 import org.apache.kafka.connect.sink.SinkRecord
 import org.junit.Assert
 import org.junit.Before
+import org.junit.Ignore
 import org.junit.Test
 import java.io.File
 import java.util.concurrent.atomic.AtomicLong
@@ -133,6 +134,7 @@ internal class TestAlluvialTaskWriter : TableTestBase(TABLE_VERSION) {
 
 
     @Test
+    @Ignore
     fun testUnpartitioned() {
         initTable(false)
         testCdcEvents(false)
