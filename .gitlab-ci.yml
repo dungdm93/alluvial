@@ -1,5 +1,6 @@
 stages:
   - test
+  - build
 
 variables:
   GRADLE_OPTS: "-Dorg.gradle.daemon=false"
@@ -11,9 +12,24 @@ test:
   cache:
     key: gradle-cache
     paths:
-    - .gradle-cache/
+      - .gradle-cache/
   script:
     - gradle test
   only:
     - master
     - merge_requests
+
+build:
+  image: docker:20.10
+  stage: build
+  variables:
+    IMAGE: "hub.teko.vn/dataops/alluvial:$CI_COMMIT_TAG"
+  before_script:
+    - docker info
+    - mkdir -p $HOME/.docker
+    - echo $DOCKER_AUTH_CONFIG > $HOME/.docker/config.json
+  script:
+    - docker build -t $IMAGE .
+    - docker push $IMAGE
+  only:
+    - tags

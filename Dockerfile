@@ -5,7 +5,7 @@ WORKDIR /app
 COPY gradle.properties *.gradle.kts ./
 RUN gradle dependencies
 
-COPY . .
+COPY ./src ./src
 RUN gradle assembleDist
 RUN set -eux; \
     cd ./build/distributions/; \
