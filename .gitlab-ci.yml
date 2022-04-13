@@ -1,0 +1,19 @@
+stages:
+  - test
+
+variables:
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+  GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle-cache/"
+
+test:
+  image: gradle:7.4-jdk11
+  stage: test
+  cache:
+    key: gradle-cache
+    paths:
+    - .gradle-cache/
+  script:
+    - gradle test
+  only:
+    - master
+    - merge_requests
