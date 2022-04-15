@@ -31,6 +31,7 @@ repositories {
 
 val slf4jVersion = "1.7.36"
 val logbackVersion = "1.2.10"
+val debeziumVersion = "1.8.1.Final"
 val kafkaVersion = "3.0.0"
 val confluentVersion = "7.0.0"
 val icebergVersion = "0.13.1"
@@ -49,6 +50,9 @@ dependencies {
     implementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion")
+
+    // Debezium
+    implementation("io.debezium:debezium-ddl-parser:$debeziumVersion")
 
     // Kafka
     implementation("org.apache.kafka:kafka-clients:$kafkaVersion")

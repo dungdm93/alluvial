@@ -1,6 +1,8 @@
 package dev.alluvial.utils
 
 import dev.alluvial.utils.TimePrecision.NANOS
+import org.apache.avro.LogicalType
+import org.apache.avro.LogicalTypes
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -26,6 +28,18 @@ enum class TimePrecision(
     fun floorConvert(time: Long, sourcePrecision: TimePrecision): Long {
         if (this == sourcePrecision) return time
         return Math.floorDiv(time * sourcePrecision.scale, this.scale)
+    }
+}
+
+fun LogicalType.timePrecision(): TimePrecision {
+    return when (this) {
+        is LogicalTypes.TimeMillis,
+        is LogicalTypes.TimestampMillis,
+        is LogicalTypes.LocalTimestampMillis -> TimePrecision.MILLIS
+        is LogicalTypes.TimeMicros,
+        is LogicalTypes.TimestampMicros,
+        is LogicalTypes.LocalTimestampMicros -> TimePrecision.MICROS
+        else -> throw IllegalArgumentException("Unknown time precision of logicalType: ${this.name}")
     }
 }
 

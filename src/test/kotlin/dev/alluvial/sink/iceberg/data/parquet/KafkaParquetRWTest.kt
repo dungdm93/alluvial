@@ -22,12 +22,13 @@ internal class KafkaParquetRWTest : DataTest() {
         val expectedIcebergRecords = RandomGenericData.generate(icebergSchema, 3, 0L).toList()
         val expectedKafkaStructs = RandomKafkaStruct.convert(icebergSchema, expectedIcebergRecords).toList()
 
-        validateKafkaReader(icebergSchema, expectedIcebergRecords)
+        validateKafkaReader(icebergSchema, kafkaSchema, expectedIcebergRecords)
         validateKafkaWriter(icebergSchema, kafkaSchema, expectedKafkaStructs)
     }
 
     private fun validateKafkaReader(
         icebergSchema: IcebergSchema,
+        kafkaSchema: KafkaSchema,
         expected: List<IcebergRecord>
     ) {
         val tmp = temp.newFile()
@@ -55,7 +56,7 @@ internal class KafkaParquetRWTest : DataTest() {
         }
 
         expected.zip(actual) { e, a ->
-            assertEquals(icebergSchema, e, a)
+            assertEquals(icebergSchema, kafkaSchema, e, a)
         }
     }
 
@@ -91,7 +92,7 @@ internal class KafkaParquetRWTest : DataTest() {
         }
 
         actual.zip(expected) { a, e ->
-            assertEquals(icebergSchema, a, e)
+            assertEquals(icebergSchema, kafkaSchema, a, e)
         }
     }
 }

@@ -3,6 +3,9 @@ package dev.alluvial.sink.iceberg.data.avro
 import dev.alluvial.sink.iceberg.data.AssertionsKafka.assertEquals
 import dev.alluvial.sink.iceberg.data.KafkaSchemaUtil
 import dev.alluvial.sink.iceberg.data.RandomKafkaStruct
+import dev.alluvial.source.kafka.DEBEZIUM_LOGICAL_TYPES_SCHEMA
+import dev.alluvial.source.kafka.KAFKA_LOGICAL_TYPES_SCHEMA
+import dev.alluvial.source.kafka.KAFKA_PRIMITIVES_SCHEMA
 import org.apache.avro.io.DatumReader
 import org.apache.avro.io.DatumWriter
 import org.apache.iceberg.Files
@@ -14,6 +17,8 @@ import org.apache.iceberg.data.avro.DataReader
 import org.apache.iceberg.data.avro.DataWriter
 import org.apache.iceberg.io.CloseableIterable
 import org.apache.iceberg.io.FileAppender
+import org.apache.kafka.connect.data.SchemaBuilder
+import org.junit.Test
 import org.apache.avro.Schema as AvroSchema
 import org.apache.iceberg.Schema as IcebergSchema
 import org.apache.iceberg.data.Record as IcebergRecord
@@ -23,17 +28,26 @@ import org.apache.kafka.connect.data.Struct as KafkaStruct
 internal class KafkaAvroRWTest : DataTest() {
     override fun writeAndValidate(icebergSchema: IcebergSchema) {
         val kafkaSchema = KafkaSchemaUtil.toKafkaSchema(icebergSchema)
-        val expectedIcebergRecords = RandomGenericData.generate(icebergSchema, 3, 0L).toList()
+        val expectedIcebergRecords = RandomGenericData.generate(icebergSchema, 100, 0L).toList()
         val expectedKafkaStructs = RandomKafkaStruct.convert(icebergSchema, expectedIcebergRecords).toList()
 
-        validateKafkaReader(icebergSchema, expectedIcebergRecords)
+        validateKafkaReader(icebergSchema, kafkaSchema, expectedIcebergRecords)
         validateKafkaWriter(icebergSchema, kafkaSchema, expectedKafkaStructs)
+    }
+
+    private fun writeAndValidate(kafkaSchema: KafkaSchema) {
+        val icebergSchema = KafkaSchemaUtil.toIcebergSchema(kafkaSchema)
+        val expectedKafkaStructs = RandomKafkaStruct.generate(kafkaSchema, 100, 5).toList()
+
+        val expectedIcebergRecords = validateKafkaWriter(icebergSchema, kafkaSchema, expectedKafkaStructs)
+        validateKafkaReader(icebergSchema, kafkaSchema, expectedIcebergRecords)
     }
 
     private fun validateKafkaReader(
         icebergSchema: IcebergSchema,
+        kafkaSchema: KafkaSchema,
         expected: List<IcebergRecord>
-    ) {
+    ): List<KafkaStruct> {
         val tmp = temp.newFile()
         assert(tmp.delete()) { "Delete should succeed" }
 
@@ -50,8 +64,8 @@ internal class KafkaAvroRWTest : DataTest() {
 
         val reader: CloseableIterable<KafkaStruct> = Avro.read(Files.localInput(tmp))
             .project(icebergSchema)
-            .createReaderFunc { expectedSchema: IcebergSchema, readSchema: AvroSchema ->
-                KafkaAvroReader(expectedSchema, readSchema)
+            .createReaderFunc { _: IcebergSchema, readSchema: AvroSchema ->
+                KafkaAvroReader(kafkaSchema, readSchema)
             }
             .build()
         val actual = reader.use {
@@ -59,15 +73,17 @@ internal class KafkaAvroRWTest : DataTest() {
         }
 
         expected.zip(actual) { e, a ->
-            assertEquals(icebergSchema, e, a)
+            assertEquals(icebergSchema, kafkaSchema, e, a)
         }
+
+        return actual
     }
 
     private fun validateKafkaWriter(
         icebergSchema: IcebergSchema,
         kafkaSchema: KafkaSchema,
-        expected: List<KafkaStruct>
-    ) {
+        expected: List<KafkaStruct>,
+    ): List<IcebergRecord> {
         val tmp = temp.newFile()
         assert(tmp.delete()) { "Delete should succeed" }
 
@@ -91,7 +107,33 @@ internal class KafkaAvroRWTest : DataTest() {
         val actual = reader.toList()
 
         actual.zip(expected) { a, e ->
-            assertEquals(icebergSchema, a, e)
+            assertEquals(icebergSchema, kafkaSchema, a, e)
         }
+
+        return actual
+    }
+
+    @Test
+    fun testKafkaPrimitives() {
+        val kafkaSchema = SchemaBuilder.struct().apply {
+            KAFKA_PRIMITIVES_SCHEMA.forEach(::field)
+        }.build()
+        writeAndValidate(kafkaSchema)
+    }
+
+    @Test
+    fun testKafkaLogicalTypes() {
+        val kafkaSchema = SchemaBuilder.struct().apply {
+            KAFKA_LOGICAL_TYPES_SCHEMA.forEach(::field)
+        }.build()
+        writeAndValidate(kafkaSchema)
+    }
+
+    @Test
+    fun testDebeziumLogicalTypes() {
+        val kafkaSchema = SchemaBuilder.struct().apply {
+            DEBEZIUM_LOGICAL_TYPES_SCHEMA.forEach(::field)
+        }.build()
+        writeAndValidate(kafkaSchema)
     }
 }

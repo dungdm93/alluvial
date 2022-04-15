@@ -1,6 +1,7 @@
 package dev.alluvial.sink.iceberg.data.avro
 
-import org.apache.avro.LogicalTypes
+import dev.alluvial.utils.TimePrecision.*
+import dev.alluvial.utils.timePrecision
 import org.apache.avro.io.Encoder
 import org.apache.iceberg.FieldMetrics
 import org.apache.iceberg.avro.AvroWithPartnerByStructureVisitor
@@ -8,7 +9,7 @@ import org.apache.iceberg.avro.MetricsAwareDatumWriter
 import org.apache.iceberg.avro.ValueWriter
 import org.apache.iceberg.avro.ValueWriters
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions
-import java.util.concurrent.TimeUnit
+import org.apache.kafka.connect.data.Decimal
 import java.util.stream.Stream
 import org.apache.avro.Schema as AvroSchema
 import org.apache.avro.Schema.Type as AvroType
@@ -97,33 +98,9 @@ class KafkaAvroWriter(private val kafkaSchema: KafkaSchema) : MetricsAwareDatumW
             type: KafkaSchema?,
             primitive: AvroSchema
         ): ValueWriter<*> {
-            val logicalType = primitive.logicalType
-            if (logicalType != null) {
-                /** @see org.apache.avro.LogicalTypes */
-                return when (logicalType.name) {
-                    // LogicalTypes.DECIMAL
-                    "decimal" -> {
-                        val decimal = logicalType as LogicalTypes.Decimal
-                        ValueWriters.decimal(decimal.precision, decimal.scale)
-                    }
-                    // LogicalTypes.UUID
-                    "uuid" -> ValueWriters.uuids()
-                    // LogicalTypes.DATE
-                    "date" -> KafkaValueWriters.date()
-                    // LogicalTypes.TIME_MILLIS
-                    "time-millis" -> KafkaValueWriters.time(TimeUnit.MILLISECONDS)
-                    // LogicalTypes.TIME_MICROS
-                    "time-micros" -> KafkaValueWriters.time(TimeUnit.MICROSECONDS)
-                    // LogicalTypes.TIMESTAMP_MILLIS
-                    "timestamp-millis" -> KafkaValueWriters.timestamp(TimeUnit.MILLISECONDS)
-                    // LogicalTypes.TIMESTAMP_MICROS
-                    "timestamp-micros" -> KafkaValueWriters.timestamp(TimeUnit.MICROSECONDS)
-                    // LogicalTypes.LOCAL_TIMESTAMP_MILLIS
-                    "local-timestamp-millis" -> KafkaValueWriters.timestamp(TimeUnit.MILLISECONDS)
-                    // LogicalTypes.LOCAL_TIMESTAMP_MICROS
-                    "local-timestamp-micros" -> KafkaValueWriters.timestamp(TimeUnit.MICROSECONDS)
-                    else -> throw IllegalArgumentException("Unsupported logical type: $logicalType")
-                }
+            if (type != null) {
+                val writer = kafkaLogicalType(type, primitive)
+                if (writer != null) return writer
             }
 
             return when (primitive.type) {
@@ -141,6 +118,52 @@ class KafkaAvroWriter(private val kafkaSchema: KafkaSchema) : MetricsAwareDatumW
                 AvroType.FIXED -> ValueWriters.fixed(primitive.fixedSize)
                 AvroType.BYTES -> KafkaValueWriters.bytes()
                 else -> throw IllegalArgumentException("Unsupported type: $primitive")
+            }
+        }
+
+        private fun kafkaLogicalType(
+            type: KafkaSchema,
+            primitive: AvroSchema
+        ): ValueWriter<*>? {
+            val logicalType = primitive.logicalType
+
+            @Suppress("RemoveRedundantQualifierName")
+            return when (type.name()) {
+                /////////////// Debezium Logical Types ///////////////
+                io.debezium.time.Date.SCHEMA_NAME ->
+                    ValueWriters.ints()
+                io.debezium.time.Time.SCHEMA_NAME ->
+                    KafkaValueWriters.timeAsInt(MILLIS, logicalType.timePrecision())
+                io.debezium.time.MicroTime.SCHEMA_NAME ->
+                    KafkaValueWriters.timeAsLong(MICROS, logicalType.timePrecision())
+                io.debezium.time.NanoTime.SCHEMA_NAME ->
+                    KafkaValueWriters.timeAsLong(NANOS, logicalType.timePrecision())
+                io.debezium.time.ZonedTime.SCHEMA_NAME ->
+                    KafkaValueWriters.zonedTimeAsString(logicalType.timePrecision())
+                io.debezium.time.Timestamp.SCHEMA_NAME ->
+                    KafkaValueWriters.timestampAsLong(MILLIS, logicalType.timePrecision())
+                io.debezium.time.MicroTimestamp.SCHEMA_NAME ->
+                    KafkaValueWriters.timestampAsLong(MICROS, logicalType.timePrecision())
+                io.debezium.time.NanoTimestamp.SCHEMA_NAME ->
+                    KafkaValueWriters.timestampAsLong(NANOS, logicalType.timePrecision())
+                io.debezium.time.ZonedTimestamp.SCHEMA_NAME ->
+                    KafkaValueWriters.zonedTimestampAsString(logicalType.timePrecision())
+                io.debezium.time.Year.SCHEMA_NAME ->
+                    ValueWriters.ints()
+
+                /////////////// Kafka Logical Types ///////////////
+                org.apache.kafka.connect.data.Decimal.LOGICAL_NAME -> {
+                    val precision = type.parameters().getOrDefault("connect.decimal.precision", "38").toInt()
+                    val scale = type.parameters()[Decimal.SCALE_FIELD]!!.toInt()
+                    ValueWriters.decimal(precision, scale)
+                }
+                org.apache.kafka.connect.data.Date.LOGICAL_NAME ->
+                    KafkaValueWriters.date()
+                org.apache.kafka.connect.data.Time.LOGICAL_NAME ->
+                    KafkaValueWriters.timeAsDate(logicalType.timePrecision())
+                org.apache.kafka.connect.data.Timestamp.LOGICAL_NAME ->
+                    KafkaValueWriters.timestampAsDate(logicalType.timePrecision())
+                else -> null
             }
         }
     }
