@@ -6,7 +6,6 @@ import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.source.kafka.KafkaSource
 import dev.alluvial.stream.debezium.DebeziumStreamlet
 import dev.alluvial.stream.debezium.DebeziumStreamletFactory
-import dev.alluvial.utils.SystemTime
 import dev.alluvial.utils.scheduleInterval
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Runnable
@@ -16,6 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.supervisorScope
 import org.slf4j.LoggerFactory
+import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import kotlin.concurrent.thread
@@ -31,7 +31,7 @@ class Alluvial(config: Config) : Runnable {
     private val streamletFactory = DebeziumStreamletFactory(source, sink)
     private val streamlets: ConcurrentMap<StreamletId, DebeziumStreamlet> = ConcurrentHashMap()
     private val streamletIdleTimeout = 15.minutes.inWholeMilliseconds
-    private val time = SystemTime
+    private val time = Clock.systemUTC()
 
     private val terminateStreamletsHook = thread(start = false, name = "terminate-streamlets") {
         logger.warn("Shutdown Hook: closing streamlets")
