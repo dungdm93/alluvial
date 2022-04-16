@@ -84,6 +84,7 @@ dependencies {
     // Test Frameworks
     testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")
     testImplementation("org.junit.jupiter:junit-jupiter-engine:$junitVersion")
+    testImplementation("org.junit.jupiter:junit-jupiter-params:$junitVersion")
     testImplementation("org.junit.vintage:junit-vintage-engine:$junitVersion")
     testImplementation("org.assertj:assertj-core:$assertjVersion")
     testImplementation("io.strikt:strikt-jvm:$striktVersion")

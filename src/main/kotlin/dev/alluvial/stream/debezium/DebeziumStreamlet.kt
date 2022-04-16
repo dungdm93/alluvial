@@ -5,10 +5,10 @@ import dev.alluvial.api.Streamlet.Status.*
 import dev.alluvial.api.StreamletId
 import dev.alluvial.sink.iceberg.IcebergTableOutlet
 import dev.alluvial.source.kafka.KafkaTopicInlet
-import dev.alluvial.utils.SystemTime
 import org.apache.kafka.connect.sink.SinkRecord
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
+import java.time.Clock
 import java.util.Objects
 import kotlin.math.max
 import kotlin.time.Duration.Companion.minutes
@@ -25,7 +25,7 @@ class DebeziumStreamlet(
     private val positions = mutableMapOf<Int, Long>()
     private var lastRecordTimestamp = Long.MIN_VALUE
     private var hashedSchema: Int? = null
-    private val time = SystemTime
+    private val clock = Clock.systemUTC()
     var commitBatchSize = 1000
     var commitTimespanMs = 10.minutes.inWholeMilliseconds
 
@@ -64,7 +64,7 @@ class DebeziumStreamlet(
         val lag = inlet.currentLag()
         if (lag <= 0) return false
         if (lag > commitBatchSize) return true
-        return lastRecordTimestamp < time.millis() - commitTimespanMs
+        return lastRecordTimestamp < clock.millis() - commitTimespanMs
     }
 
     private fun captureChanges(batchSize: Int) {
