@@ -3,7 +3,6 @@ package dev.alluvial.sink.iceberg.data
 import org.apache.iceberg.types.Types
 import org.junit.jupiter.api.Test
 import strikt.api.expectThat
-import strikt.assertions.isEqualTo
 import strikt.assertions.isSameInstanceAs
 import strikt.java.propertiesAreEqualTo
 import org.apache.iceberg.Schema as IcebergSchema

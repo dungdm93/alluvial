@@ -1,5 +1,10 @@
 package dev.alluvial.sink.iceberg.data.avro
 
+import dev.alluvial.utils.OffsetTimes
+import dev.alluvial.utils.TimePrecision
+import dev.alluvial.utils.ZonedDateTimes
+import io.debezium.time.ZonedTime
+import io.debezium.time.ZonedTimestamp
 import org.apache.avro.io.Decoder
 import org.apache.avro.io.ResolvingDecoder
 import org.apache.iceberg.avro.ValueReader
@@ -8,8 +13,6 @@ import java.math.BigInteger
 import java.math.MathContext
 import java.util.Date
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeUnit.MICROSECONDS
-import java.util.concurrent.TimeUnit.MILLISECONDS
 import org.apache.kafka.connect.data.Schema as KafkaSchema
 import org.apache.kafka.connect.data.Struct as KafkaStruct
 
@@ -20,6 +23,14 @@ object KafkaValueReaders {
         struct: KafkaSchema,
     ): ValueReader<KafkaStruct> {
         return StructReader(names, fieldReaders, struct)
+    }
+
+    fun <N : Number> bytes(delegator: ValueReader<N>): ValueReader<Byte> {
+        return ByteReader(delegator)
+    }
+
+    fun <N : Number> shorts(delegator: ValueReader<N>): ValueReader<Short> {
+        return ShortReader(delegator)
     }
 
     fun <E> array(elementReader: ValueReader<E>): ValueReader<List<E>> {
@@ -42,19 +53,41 @@ object KafkaValueReaders {
         return DateReader
     }
 
-    fun time(precision: TimeUnit): ValueReader<Date> {
-        return when (precision) {
-            MILLISECONDS -> TimeReader.MILLISECONDS
-            MICROSECONDS -> TimeReader.MICROSECONDS
-            else -> throw IllegalArgumentException("Precision $precision is not allowed")
+    fun timeAsDate(precision: TimePrecision): ValueReader<Date> {
+        return TimeAsDateReader(precision)
+    }
+
+    fun timeAsInt(sourcePrecision: TimePrecision, targetPrecision: TimePrecision): ValueReader<Int> {
+        return TimeAsIntReader(sourcePrecision, targetPrecision)
+    }
+
+    fun timeAsLong(sourcePrecision: TimePrecision, targetPrecision: TimePrecision): ValueReader<Long> {
+        return TimeAsLongReader(sourcePrecision, targetPrecision)
+    }
+
+    fun timestampAsDate(precision: TimePrecision): ValueReader<Date> {
+        return TimestampAsDateReader(precision)
+    }
+
+    fun timestampAsLong(sourcePrecision: TimePrecision, targetPrecision: TimePrecision): ValueReader<Long> {
+        return TimestampAsLongReader(sourcePrecision, targetPrecision)
+    }
+
+    fun zonedTimestampAsString(targetPrecision: TimePrecision): ValueReader<String> {
+        return ZonedTimestampAsStringReader(targetPrecision)
+    }
+
+    class ByteReader<N : Number>(private val delegator: ValueReader<N>) : ValueReader<Byte> {
+        override fun read(decoder: Decoder, reuse: Any?): Byte {
+            val number = delegator.read(decoder, reuse)
+            return number.toByte()
         }
     }
 
-    fun timestamp(precision: TimeUnit): ValueReader<Date> {
-        return when (precision) {
-            MILLISECONDS -> TimestampReader.MILLISECONDS
-            MICROSECONDS -> TimestampReader.MICROSECONDS
-            else -> throw IllegalArgumentException("Precision $precision is not allowed")
+    class ShortReader<N : Number>(private val delegator: ValueReader<N>) : ValueReader<Short> {
+        override fun read(decoder: Decoder, reuse: Any?): Short {
+            val number = delegator.read(decoder, reuse)
+            return number.toShort()
         }
     }
 
@@ -202,45 +235,93 @@ object KafkaValueReaders {
         }
     }
 
-    private enum class TimeReader : ValueReader<Date> {
-        MILLISECONDS {
-            override fun read(decoder: Decoder, reuse: Any?): Date {
-                val timeMillis = decoder.readInt().toLong()
-                return Date(timeMillis)
+    abstract class TimeReader<T>(
+        private val sourcePrecision: TimePrecision,
+        private val targetPrecision: TimePrecision,
+    ) : ValueReader<T> {
+        init {
+            if (sourcePrecision == TimePrecision.NANOS) {
+                throw IllegalArgumentException("Avro has no $sourcePrecision precision time")
             }
-        },
-        MICROSECONDS {
-            override fun read(decoder: Decoder, reuse: Any?): Date {
-                val timeMicros = decoder.readLong()
-                var timeMillis = TimeUnit.MICROSECONDS.toMillis(timeMicros)
-                // represent a time before UNIX Epoch (1970-01-01T00:00:00+GMT)
-                // then, timeMicros will be negative
-                if (TimeUnit.MILLISECONDS.toMicros(timeMillis) > timeMicros) {
-                    timeMillis--
-                }
-                return if (timeMillis == (reuse as? Date)?.time) reuse else Date(timeMillis)
-            }
-        },
+        }
+
+        override fun read(decoder: Decoder, reuse: Any?): T {
+            var time = if (sourcePrecision == TimePrecision.MILLIS)
+                decoder.readInt().toLong() else
+                decoder.readLong()
+
+            time = targetPrecision.floorConvert(time, sourcePrecision)
+            return deserialize(time, reuse)
+        }
+
+        abstract fun deserialize(time: Long, reuse: Any?): T
     }
 
-    private enum class TimestampReader : ValueReader<Date> {
-        MILLISECONDS {
-            override fun read(decoder: Decoder, reuse: Any?): Date {
-                val timeMillis = decoder.readLong()
-                return Date(timeMillis)
+    private class TimeAsDateReader(sourcePrecision: TimePrecision) :
+        TimeReader<Date>(sourcePrecision, TimePrecision.MILLIS) {
+        override fun deserialize(time: Long, reuse: Any?): Date {
+            return if (time == (reuse as? Date)?.time)
+                reuse else
+                Date(time)
+        }
+    }
+
+    private class TimeAsIntReader(sourcePrecision: TimePrecision, targetPrecision: TimePrecision) :
+        TimeReader<Int>(sourcePrecision, targetPrecision) {
+        override fun deserialize(time: Long, reuse: Any?): Int = time.toInt()
+    }
+
+    private class TimeAsLongReader(sourcePrecision: TimePrecision, targetPrecision: TimePrecision) :
+        TimeReader<Long>(sourcePrecision, targetPrecision) {
+        override fun deserialize(time: Long, reuse: Any?): Long = time
+    }
+
+    private class ZonedTimeAsStringReader(sourcePrecision: TimePrecision) :
+        TimeReader<String>(sourcePrecision, TimePrecision.NANOS) {
+        override fun deserialize(time: Long, reuse: Any?): String {
+            val offsetTime = OffsetTimes.ofNanoOfDay(time)
+            return ZonedTime.toIsoString(offsetTime, null)
+        }
+    }
+
+    abstract class TimestampReader<T>(
+        private val sourcePrecision: TimePrecision,
+        private val targetPrecision: TimePrecision,
+    ) : ValueReader<T> {
+        init {
+            if (sourcePrecision == TimePrecision.NANOS) {
+                throw IllegalArgumentException("Avro has no $sourcePrecision precision timestamp")
             }
-        },
-        MICROSECONDS {
-            override fun read(decoder: Decoder, reuse: Any?): Date {
-                val timeMicros = decoder.readLong()
-                var timeMillis = TimeUnit.MICROSECONDS.toMillis(timeMicros)
-                // represent a timestamp before UNIX Epoch (1970-01-01T00:00:00+GMT)
-                // then, timeMicros will be negative
-                if (TimeUnit.MILLISECONDS.toMicros(timeMillis) > timeMicros) {
-                    timeMillis--
-                }
-                return if (timeMillis == (reuse as? Date)?.time) reuse else Date(timeMillis)
-            }
+        }
+
+        override fun read(decoder: Decoder, reuse: Any?): T {
+            var ts = decoder.readLong()
+            ts = targetPrecision.floorConvert(ts, sourcePrecision)
+            return deserialize(ts, reuse)
+        }
+
+        abstract fun deserialize(ts: Long, reuse: Any?): T
+    }
+
+    private class TimestampAsDateReader(sourcePrecision: TimePrecision) :
+        TimestampReader<Date>(sourcePrecision, TimePrecision.MILLIS) {
+        override fun deserialize(ts: Long, reuse: Any?): Date {
+            return if (ts == (reuse as? Date)?.time)
+                reuse else
+                Date(ts)
+        }
+    }
+
+    private class TimestampAsLongReader(sourcePrecision: TimePrecision, targetPrecision: TimePrecision) :
+        TimestampReader<Long>(sourcePrecision, targetPrecision) {
+        override fun deserialize(ts: Long, reuse: Any?) = ts
+    }
+
+    private class ZonedTimestampAsStringReader(sourcePrecision: TimePrecision) :
+        TimestampReader<String>(sourcePrecision, TimePrecision.NANOS) {
+        override fun deserialize(ts: Long, reuse: Any?): String {
+            val zdt = ZonedDateTimes.ofEpochNano(ts)
+            return ZonedTimestamp.toIsoString(zdt, null)
         }
     }
 }

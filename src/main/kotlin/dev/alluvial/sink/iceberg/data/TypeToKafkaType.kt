@@ -12,7 +12,6 @@ import org.apache.kafka.connect.data.Field
 import org.apache.kafka.connect.data.Schema.Type.*
 import org.apache.kafka.connect.data.Time
 import org.apache.kafka.connect.data.Timestamp
-import java.util.*
 import org.apache.kafka.connect.data.Schema as KafkaSchema
 import org.apache.kafka.connect.data.Schema.Type as KafkaType
 import org.apache.kafka.connect.data.SchemaBuilder as KafkaSchemaBuilder
@@ -132,7 +131,6 @@ class TypeToKafkaType : TypeUtil.SchemaVisitor<KafkaSchema>() {
             TypeID.DECIMAL -> {
                 val decimalType = primitive as DecimalType
                 Decimal.builder(decimalType.scale())
-                    .parameter("precision", decimalType.precision().toString())
                     .parameter("connect.decimal.precision", decimalType.precision().toString())
                     .build()
             }

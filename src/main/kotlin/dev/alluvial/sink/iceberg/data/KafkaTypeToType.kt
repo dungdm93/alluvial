@@ -58,36 +58,40 @@ class KafkaTypeToType : KafkaTypeVisitor<IcebergType>() {
     }
 
     override fun primitive(schema: KafkaSchema): IcebergType {
+        @Suppress("RemoveRedundantQualifierName")
         return when (schema.name()) {
-            "org.apache.kafka.connect.data.Date" -> Types.DateType.get()
-            "org.apache.kafka.connect.data.Time" -> Types.TimeType.get()
-            "org.apache.kafka.connect.data.Timestamp" -> Types.TimestampType.withoutZone()
-            "org.apache.kafka.connect.data.Decimal" -> {
+            /////////////// Kafka Logical Types ///////////////
+            org.apache.kafka.connect.data.Date.LOGICAL_NAME -> Types.DateType.get()
+            org.apache.kafka.connect.data.Time.LOGICAL_NAME -> Types.TimeType.get()
+            org.apache.kafka.connect.data.Timestamp.LOGICAL_NAME -> Types.TimestampType.withoutZone()
+            org.apache.kafka.connect.data.Decimal.LOGICAL_NAME -> {
                 val params = schema.parameters()
                 val precision = (params["precision"] ?: params["connect.decimal.precision"] ?: "38").toInt()
                 val scale = params.getOrDefault(Decimal.SCALE_FIELD, "10").toInt()
                 Types.DecimalType.of(precision, scale)
             }
-            //    "io.debezium.data.Bits"
-            //    "io.debezium.time.Date"
-            //    "io.debezium.time.Time"
-            //    "io.debezium.time.MicroTime"
-            //    "io.debezium.time.NanoTime"
-            //    "io.debezium.time.ZonedTime"
-            //    "io.debezium.time.Timestamp"
-            //    "io.debezium.time.MicroTimestamp"
-            //    "io.debezium.time.NanoTimestamp"
-            //    "io.debezium.time.ZonedTimestamp"
+
+            /////////////// Debezium Logical Types ///////////////
+            io.debezium.time.Date.SCHEMA_NAME -> Types.DateType.get()
+            io.debezium.time.Time.SCHEMA_NAME,
+            io.debezium.time.MicroTime.SCHEMA_NAME,
+            io.debezium.time.NanoTime.SCHEMA_NAME -> Types.TimeType.get()
+            io.debezium.time.ZonedTime.SCHEMA_NAME -> Types.StringType.get() // TODO(ZonedTime): can save it as number?
+            io.debezium.time.Timestamp.SCHEMA_NAME,
+            io.debezium.time.MicroTimestamp.SCHEMA_NAME,
+            io.debezium.time.NanoTimestamp.SCHEMA_NAME -> Types.TimestampType.withoutZone()
+            io.debezium.time.ZonedTimestamp.SCHEMA_NAME -> Types.TimestampType.withZone()
+            io.debezium.time.Year.SCHEMA_NAME -> Types.IntegerType.get()
             //    "io.debezium.time.MicroDuration"
             //    "io.debezium.time.NanoDuration"
             //    "io.debezium.time.Interval"
-            //    "io.debezium.time.Year"
-            //    "io.debezium.data.Json"
-            //    "io.debezium.data.Xml"
-            //    "io.debezium.data.Uuid"
             //    "io.debezium.data.geometry.Point"
             //    "io.debezium.data.geometry.Geometry"
             //    "io.debezium.data.geometry.Geography"
+            //    "io.debezium.data.Bits"
+            //    "io.debezium.data.Json"
+            //    "io.debezium.data.Xml"
+            //    "io.debezium.data.Uuid"
             //    "io.debezium.data.Ltree"
             //    "io.debezium.data.Enum"
             //    "io.debezium.data.EnumSet"

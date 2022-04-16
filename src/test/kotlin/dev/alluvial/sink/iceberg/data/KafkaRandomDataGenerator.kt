@@ -1,5 +1,9 @@
 package dev.alluvial.sink.iceberg.data
 
+import dev.alluvial.utils.OffsetDateTimes
+import dev.alluvial.utils.OffsetTimes
+import dev.alluvial.utils.TimePrecision
+import dev.alluvial.utils.TimePrecision.*
 import org.apache.iceberg.relocated.com.google.common.collect.Sets
 import org.apache.iceberg.types.Type
 import org.apache.iceberg.types.TypeUtil
@@ -7,6 +11,7 @@ import org.apache.iceberg.types.Types
 import org.apache.iceberg.util.RandomUtil
 import java.math.BigDecimal
 import java.math.BigInteger
+import java.time.ZoneOffset
 import java.util.Date
 import java.util.Random
 import java.util.concurrent.TimeUnit
@@ -20,9 +25,10 @@ import org.apache.kafka.connect.data.Struct as KafkaStruct
 
 
 internal object KafkaRandomDataGenerator {
-    private const val FIFTY_YEARS_IN_MICROS = 50L * (365 * 3 + 366) * 24 * 60 * 60 * 1000000 / 4
+    private const val FIFTY_YEARS_IN_NANOS = 50L * (365 * 3 + 366) * 24 * 60 * 60 * 1_000_000_000 / 4
     private const val ABOUT_380_YEARS_IN_DAYS = 380 * 365
-    private const val ONE_DAY_IN_MICROS = 24 * 60 * 60 * 1000000L
+    private const val A_HUNDRED_YEAR = 100
+    private const val ONE_DAY_IN_NANOS = 24 * 60 * 60 * 1_000_000_000L
     private const val CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.!?"
     private const val DIGITS = "0123456789"
 
@@ -54,12 +60,7 @@ internal object KafkaRandomDataGenerator {
     }
 
     private fun datetimeFrom(timeMicros: Long): Date {
-        var timeMillis = TimeUnit.MICROSECONDS.toMillis(timeMicros)
-        // represent a timestamp before UNIX Epoch (1970-01-01T00:00:00+GMT)
-        // then, timeMicros will be negative
-        if (TimeUnit.MILLISECONDS.toMicros(timeMillis) > timeMicros) {
-            timeMillis--
-        }
+        val timeMillis = MILLIS.floorConvert(timeMicros, MICROS)
         return Date(timeMillis)
     }
 
@@ -225,24 +226,47 @@ internal object KafkaRandomDataGenerator {
             }
         }
 
-        private fun randomDate(random: Random): Date {
+        private fun randomDate(): Date {
             val days = random.nextInt() % ABOUT_380_YEARS_IN_DAYS
             return dateFrom(days)
         }
 
-        private fun randomTime(random: Random): Date {
-            val time = (random.nextLong() and Int.MAX_VALUE.toLong()) % ONE_DAY_IN_MICROS
+        private fun randomTime(): Date {
+            val time = randomTimeAsLong(MICROS)
             return datetimeFrom(time)
         }
 
-        private fun randomTimestamp(random: Random): Date {
-            val time = random.nextLong() % FIFTY_YEARS_IN_MICROS
+        private fun randomTimestamp(): Date {
+            val time = randomTimestampAsLong(MICROS)
             return datetimeFrom(time)
+        }
+
+        private fun randomTimeAsLong(precision: TimePrecision): Long {
+            val timeNanos = (random.nextLong() and Long.MAX_VALUE) % ONE_DAY_IN_NANOS
+            return precision.convert(timeNanos, NANOS)
+        }
+
+        private fun randomTimestampAsLong(precision: TimePrecision): Long {
+            val timeNanos = random.nextLong() % FIFTY_YEARS_IN_NANOS
+            return precision.convert(timeNanos, NANOS)
+        }
+
+        private fun randomZone(): ZoneOffset {
+            return when (random.nextInt(10)) {
+                1 -> ZoneOffset.UTC
+                2 -> ZoneOffset.MIN
+                3 -> ZoneOffset.MAX
+                else -> {
+                    var second = random.nextInt(ZoneOffset.MAX.totalSeconds - ZoneOffset.MIN.totalSeconds)
+                    second += ZoneOffset.MIN.totalSeconds
+                    ZoneOffset.ofTotalSeconds(second)
+                }
+            }
         }
 
         private fun randomDecimal(schema: KafkaSchema, random: Random): BigDecimal {
             val precision = schema.parameters()
-                .getOrDefault("precision", "38").toInt()
+                .getOrDefault("connect.decimal.precision", "38").toInt()
             val scale = schema.parameters()
                 .getOrDefault(org.apache.kafka.connect.data.Decimal.SCALE_FIELD, "10").toInt()
 
@@ -255,11 +279,35 @@ internal object KafkaRandomDataGenerator {
             val choice = random.nextInt(20)
 
             return when (schema.name()) {
-                org.apache.kafka.connect.data.Date.LOGICAL_NAME -> randomDate(random)
-                org.apache.kafka.connect.data.Time.LOGICAL_NAME -> randomTime(random)
-                org.apache.kafka.connect.data.Timestamp.LOGICAL_NAME -> randomTimestamp(random)
+                /////////////// Debezium Logical Types ///////////////
+                io.debezium.time.Date.SCHEMA_NAME -> random.nextInt() % ABOUT_380_YEARS_IN_DAYS
+                io.debezium.time.Time.SCHEMA_NAME -> randomTimeAsLong(MILLIS).toInt()
+                io.debezium.time.MicroTime.SCHEMA_NAME -> randomTimeAsLong(MICROS)
+                io.debezium.time.NanoTime.SCHEMA_NAME -> randomTimeAsLong(NANOS)
+                io.debezium.time.ZonedTime.SCHEMA_NAME -> {
+                    val zone = randomZone()
+                    val timeNanos = randomTimeAsLong(NANOS)
+                    val offsetTime = OffsetTimes.ofNanoOfDay(timeNanos, zone)
+                    return io.debezium.time.ZonedTime.toIsoString(offsetTime, null)
+                }
+                io.debezium.time.Timestamp.SCHEMA_NAME -> randomTimestampAsLong(MILLIS)
+                io.debezium.time.MicroTimestamp.SCHEMA_NAME -> randomTimestampAsLong(MICROS)
+                io.debezium.time.NanoTimestamp.SCHEMA_NAME -> randomTimestampAsLong(NANOS)
+                io.debezium.time.ZonedTimestamp.SCHEMA_NAME -> {
+                    val zone = randomZone()
+                    val timeNanos = randomTimestampAsLong(NANOS)
+                    val offsetDateTime = OffsetDateTimes.ofEpochNano(timeNanos, zone)
+                    return io.debezium.time.ZonedTimestamp.toIsoString(offsetDateTime, null)
+                }
+                io.debezium.time.Year.SCHEMA_NAME -> 1970 + random.nextInt(A_HUNDRED_YEAR)
+
+                /////////////// Kafka Logical Types ///////////////
+                org.apache.kafka.connect.data.Date.LOGICAL_NAME -> randomDate()
+                org.apache.kafka.connect.data.Time.LOGICAL_NAME -> randomTime()
+                org.apache.kafka.connect.data.Timestamp.LOGICAL_NAME -> randomTimestamp()
                 org.apache.kafka.connect.data.Decimal.LOGICAL_NAME -> randomDecimal(schema, random)
                     .let { if (negate(choice)) -it else it }
+
                 else -> when (schema.type()) {
                     KafkaType.INT8 -> when (choice) {
                         1 -> Byte.MIN_VALUE
