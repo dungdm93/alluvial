@@ -139,7 +139,8 @@ class KafkaAvroWriter(private val kafkaSchema: KafkaSchema) : MetricsAwareDatumW
                 io.debezium.time.NanoTime.SCHEMA_NAME ->
                     KafkaValueWriters.timeAsLong(NANOS, logicalType.timePrecision())
                 io.debezium.time.ZonedTime.SCHEMA_NAME ->
-                    KafkaValueWriters.zonedTimeAsString(logicalType.timePrecision())
+                    // KafkaValueWriters.zonedTimeAsString(logicalType.timePrecision())
+                    ValueWriters.strings() // TODO(ZonedTime): can save it as number?
                 io.debezium.time.Timestamp.SCHEMA_NAME ->
                     KafkaValueWriters.timestampAsLong(MILLIS, logicalType.timePrecision())
                 io.debezium.time.MicroTimestamp.SCHEMA_NAME ->

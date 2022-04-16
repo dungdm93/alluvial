@@ -14,7 +14,6 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.OffsetDateTime
-import java.time.OffsetTime
 import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.util.Date
@@ -129,9 +128,10 @@ object AssertionsKafka {
                 expectThat(expectedMicros).isEqualTo(actualMicros)
             }
             io.debezium.time.ZonedTime.SCHEMA_NAME -> {
-                val expectedOt = OffsetTime.of(expected as LocalTime, ZoneOffset.UTC)
-                val actualOt = OffsetTime.parse(actual as String).truncatedTo(ChronoUnit.MICROS)
-                expectThat(expectedOt.isEqual(actualOt)).isTrue()
+                expectThat(expected as String).isEqualTo(actual as String) // TODO(ZonedTime): can save it as number?
+                // val expectedOt = OffsetTime.of(expected as LocalTime, ZoneOffset.UTC)
+                // val actualOt = OffsetTime.parse(actual as String).truncatedTo(ChronoUnit.MICROS)
+                // expectThat(expectedOt.isEqual(actualOt)).isTrue()
             }
             io.debezium.time.Timestamp.SCHEMA_NAME -> {
                 val expectedMillis = MILLIS.floorConvert(LocalDateTimes.toEpochNano(expected as LocalDateTime), NANOS)

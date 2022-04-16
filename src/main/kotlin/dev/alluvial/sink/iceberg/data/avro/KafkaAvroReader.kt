@@ -144,7 +144,8 @@ class KafkaAvroReader(
                 io.debezium.time.NanoTime.SCHEMA_NAME ->
                     KafkaValueReaders.timeAsLong(logicalType.timePrecision(), NANOS)
                 io.debezium.time.ZonedTime.SCHEMA_NAME ->
-                    KafkaValueReaders.zonedTimeAsString(logicalType.timePrecision())
+                    // KafkaValueReaders.zonedTimeAsString(logicalType.timePrecision())
+                    ValueReaders.strings() // TODO(ZonedTime): can save it as number?
                 io.debezium.time.Timestamp.SCHEMA_NAME ->
                     KafkaValueReaders.timestampAsLong(logicalType.timePrecision(), MILLIS)
                 io.debezium.time.MicroTimestamp.SCHEMA_NAME ->
