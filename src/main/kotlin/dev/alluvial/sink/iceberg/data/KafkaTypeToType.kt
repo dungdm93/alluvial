@@ -1,7 +1,6 @@
 package dev.alluvial.sink.iceberg.data
 
 import org.apache.iceberg.types.Types
-import org.apache.kafka.connect.data.Decimal
 import org.apache.iceberg.types.Type as IcebergType
 import org.apache.kafka.connect.data.Field as KafkaField
 import org.apache.kafka.connect.data.Schema as KafkaSchema
@@ -67,7 +66,7 @@ class KafkaTypeToType : KafkaTypeVisitor<IcebergType>() {
             org.apache.kafka.connect.data.Decimal.LOGICAL_NAME -> {
                 val params = schema.parameters()
                 val precision = (params["precision"] ?: params["connect.decimal.precision"] ?: "38").toInt()
-                val scale = params.getOrDefault(Decimal.SCALE_FIELD, "10").toInt()
+                val scale = params.getOrDefault(org.apache.kafka.connect.data.Decimal.SCALE_FIELD, "10").toInt()
                 Types.DecimalType.of(precision, scale)
             }
 
@@ -82,6 +81,8 @@ class KafkaTypeToType : KafkaTypeVisitor<IcebergType>() {
             io.debezium.time.NanoTimestamp.SCHEMA_NAME -> Types.TimestampType.withoutZone()
             io.debezium.time.ZonedTimestamp.SCHEMA_NAME -> Types.TimestampType.withZone()
             io.debezium.time.Year.SCHEMA_NAME -> Types.IntegerType.get()
+            io.debezium.data.Enum.LOGICAL_NAME -> Types.StringType.get()
+            io.debezium.data.EnumSet.LOGICAL_NAME -> Types.ListType.ofRequired(getNextId(), Types.StringType.get())
             //    "io.debezium.time.MicroDuration"
             //    "io.debezium.time.NanoDuration"
             //    "io.debezium.time.Interval"
@@ -93,8 +94,6 @@ class KafkaTypeToType : KafkaTypeVisitor<IcebergType>() {
             //    "io.debezium.data.Xml"
             //    "io.debezium.data.Uuid"
             //    "io.debezium.data.Ltree"
-            //    "io.debezium.data.Enum"
-            //    "io.debezium.data.EnumSet"
             //    "io.debezium.data.VariableScaleDecimal"
             else -> when (schema.type()) {
                 KafkaType.INT8,

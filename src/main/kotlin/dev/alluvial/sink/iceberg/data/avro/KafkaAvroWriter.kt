@@ -46,7 +46,7 @@ class KafkaAvroWriter(private val kafkaSchema: KafkaSchema) : MetricsAwareDatumW
             names: List<String>,
             fields: List<ValueWriter<*>>
         ): ValueWriter<*> {
-            return KafkaValueWriters.struct(fields, names)
+            return kafkaLogicalType(struct, record) ?: KafkaValueWriters.struct(fields, names)
         }
 
         override fun union(
@@ -74,7 +74,7 @@ class KafkaAvroWriter(private val kafkaSchema: KafkaSchema) : MetricsAwareDatumW
             array: AvroSchema,
             element: ValueWriter<*>
         ): ValueWriter<*> {
-            return KafkaValueWriters.array(element)
+            return kafkaLogicalType(sArray, array) ?: KafkaValueWriters.array(element)
         }
 
         override fun map(
@@ -82,7 +82,7 @@ class KafkaAvroWriter(private val kafkaSchema: KafkaSchema) : MetricsAwareDatumW
             map: AvroSchema,
             value: ValueWriter<*>
         ): ValueWriter<*> {
-            return KafkaValueWriters.map(ValueWriters.strings(), value)
+            return kafkaLogicalType(sMap, map) ?: KafkaValueWriters.map(ValueWriters.strings(), value)
         }
 
         override fun map(
@@ -91,7 +91,7 @@ class KafkaAvroWriter(private val kafkaSchema: KafkaSchema) : MetricsAwareDatumW
             key: ValueWriter<*>,
             value: ValueWriter<*>
         ): ValueWriter<*> {
-            return KafkaValueWriters.arrayMap(key, value)
+            return kafkaLogicalType(sMap, map) ?: KafkaValueWriters.arrayMap(key, value)
         }
 
         override fun primitive(
@@ -151,6 +151,11 @@ class KafkaAvroWriter(private val kafkaSchema: KafkaSchema) : MetricsAwareDatumW
                     KafkaValueWriters.zonedTimestampAsString(logicalType.timePrecision())
                 io.debezium.time.Year.SCHEMA_NAME ->
                     ValueWriters.ints()
+                io.debezium.data.EnumSet.LOGICAL_NAME ->
+                    KafkaValueWriters.arrayAsString()
+                io.debezium.data.Enum.LOGICAL_NAME ->
+                    ValueWriters.strings()
+
 
                 /////////////// Kafka Logical Types ///////////////
                 org.apache.kafka.connect.data.Decimal.LOGICAL_NAME -> {

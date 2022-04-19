@@ -24,8 +24,13 @@ abstract class AvroWithKafkaSchemaVisitor<T> : AvroWithPartnerByStructureVisitor
     open fun isArrayType(type: KafkaSchema) = type.type() == KafkaType.ARRAY
 
     override fun arrayElementType(arrayType: KafkaSchema): KafkaSchema {
-        Preconditions.checkArgument(isArrayType(arrayType), "Invalid array: %s is not an array", arrayType)
-        return arrayType.valueSchema()
+        return when (arrayType.name()) {
+            io.debezium.data.EnumSet.LOGICAL_NAME -> arrayType
+            else -> {
+                Preconditions.checkArgument(isArrayType(arrayType), "Invalid array: %s is not an array", arrayType)
+                return arrayType.valueSchema()
+            }
+        }
     }
 
     override fun fieldNameAndType(structType: KafkaSchema, pos: Int): Pair<String, KafkaSchema> {

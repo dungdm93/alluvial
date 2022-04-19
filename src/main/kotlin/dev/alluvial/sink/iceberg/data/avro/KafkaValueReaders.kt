@@ -8,6 +8,7 @@ import io.debezium.time.ZonedTimestamp
 import org.apache.avro.io.Decoder
 import org.apache.avro.io.ResolvingDecoder
 import org.apache.iceberg.avro.ValueReader
+import org.apache.iceberg.avro.ValueReaders
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.MathContext
@@ -75,6 +76,10 @@ object KafkaValueReaders {
 
     fun zonedTimestampAsString(targetPrecision: TimePrecision): ValueReader<String> {
         return ZonedTimestampAsStringReader(targetPrecision)
+    }
+
+    fun arrayAsString(): ValueReader<String> {
+        return ArrayAsStringReader
     }
 
     class ByteReader<N : Number>(private val delegator: ValueReader<N>) : ValueReader<Byte> {
@@ -322,6 +327,15 @@ object KafkaValueReaders {
         override fun deserialize(ts: Long, reuse: Any?): String {
             val zdt = ZonedDateTimes.ofEpochNano(ts)
             return ZonedTimestamp.toIsoString(zdt, null)
+        }
+    }
+
+    private object ArrayAsStringReader : ValueReader<String> {
+        private val delegatedReader = ValueReaders.array(ValueReaders.strings())
+
+        override fun read(decoder: Decoder, reuse: Any?): String {
+            val list = delegatedReader.read(decoder, reuse)
+            return list.joinToString(",")
         }
     }
 }
