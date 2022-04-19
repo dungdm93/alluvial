@@ -151,6 +151,16 @@ object AssertionsKafka {
                 val actualOdt = OffsetDateTime.parse(actual as String).truncatedTo(ChronoUnit.MICROS)
                 expectThat((expected as OffsetDateTime).isEqual(actualOdt)).isTrue()
             }
+            io.debezium.data.Enum.LOGICAL_NAME -> expectThat(expected as String).isEqualTo(actual as String)
+            io.debezium.data.EnumSet.LOGICAL_NAME -> {
+                val actualAsSet = if ((actual as String).isEmpty())
+                    emptySet() else
+                    actual.split(",").toSet()
+                val expectedAsList = expected as List<*>
+                val expectedAsSet = expectedAsList.toSet()
+                expectThat(expectedAsList.size).isEqualTo(expectedAsSet.size)
+                expectThat(expectedAsSet).isEqualTo(actualAsSet)
+            }
 
             /////////////// Kafka Logical Types ///////////////
             org.apache.kafka.connect.data.Date.LOGICAL_NAME -> {

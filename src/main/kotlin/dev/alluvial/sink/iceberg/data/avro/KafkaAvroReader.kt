@@ -61,7 +61,7 @@ class KafkaAvroReader(
             names: List<String>,
             fieldReaders: List<ValueReader<*>>
         ): ValueReader<*> {
-            return KafkaValueReaders.struct(names, fieldReaders, expected)
+            return kafkaLogicalType(expected, record) ?: KafkaValueReaders.struct(names, fieldReaders, expected)
         }
 
         override fun union(
@@ -77,7 +77,7 @@ class KafkaAvroReader(
             array: AvroSchema,
             elementReader: ValueReader<*>
         ): ValueReader<*> {
-            return KafkaValueReaders.array(elementReader)
+            return kafkaLogicalType(expected, array) ?: KafkaValueReaders.array(elementReader)
         }
 
         override fun map(
@@ -85,7 +85,7 @@ class KafkaAvroReader(
             map: AvroSchema,
             valueReader: ValueReader<*>
         ): ValueReader<*> {
-            return KafkaValueReaders.map(ValueReaders.strings(), valueReader)
+            return kafkaLogicalType(expected, map) ?: KafkaValueReaders.map(ValueReaders.strings(), valueReader)
         }
 
         override fun map(
@@ -94,7 +94,7 @@ class KafkaAvroReader(
             keyReader: ValueReader<*>,
             valueReader: ValueReader<*>
         ): ValueReader<*> {
-            return KafkaValueReaders.arrayMap(keyReader, valueReader)
+            return kafkaLogicalType(expected, map) ?: KafkaValueReaders.arrayMap(keyReader, valueReader)
         }
 
         override fun primitive(
@@ -156,6 +156,9 @@ class KafkaAvroReader(
                     KafkaValueReaders.zonedTimestampAsString(logicalType.timePrecision())
                 io.debezium.time.Year.SCHEMA_NAME ->
                     ValueReaders.ints()
+                io.debezium.data.Enum.LOGICAL_NAME ->
+                    ValueReaders.strings()
+                io.debezium.data.EnumSet.LOGICAL_NAME -> KafkaValueReaders.arrayAsString()
 
                 /////////////// Kafka Logical Types ///////////////
                 org.apache.kafka.connect.data.Decimal.LOGICAL_NAME -> {

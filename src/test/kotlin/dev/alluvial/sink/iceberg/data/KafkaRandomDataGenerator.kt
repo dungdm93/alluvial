@@ -1,5 +1,6 @@
 package dev.alluvial.sink.iceberg.data
 
+import dev.alluvial.source.kafka.ENUM_VALUES
 import dev.alluvial.utils.OffsetDateTimes
 import dev.alluvial.utils.OffsetTimes
 import dev.alluvial.utils.TimePrecision
@@ -274,6 +275,13 @@ internal object KafkaRandomDataGenerator {
             return BigDecimal(unscaled, scale)
         }
 
+        private fun randomEnumSet(random: Random): List<String> {
+            val allowed = ENUM_VALUES.toTypedArray().apply { this.shuffle() }
+            val numElements = random.nextInt(allowed.size)
+
+            return allowed.take(numElements)
+        }
+
         @Suppress("WHEN_ENUM_CAN_BE_NULL_IN_JAVA")
         fun generate(schema: KafkaSchema): Any {
             val choice = random.nextInt(20)
@@ -300,6 +308,7 @@ internal object KafkaRandomDataGenerator {
                     return io.debezium.time.ZonedTimestamp.toIsoString(offsetDateTime, null)
                 }
                 io.debezium.time.Year.SCHEMA_NAME -> 1970 + random.nextInt(A_HUNDRED_YEAR)
+                io.debezium.data.EnumSet.LOGICAL_NAME -> randomEnumSet(random).joinToString(",")
 
                 /////////////// Kafka Logical Types ///////////////
                 org.apache.kafka.connect.data.Date.LOGICAL_NAME -> randomDate()

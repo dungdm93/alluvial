@@ -66,6 +66,10 @@ object KafkaValueWriters {
         return BytesWriter
     }
 
+    fun arrayAsString(): ValueWriter<String> {
+        return ArrayAsStringWriter
+    }
+
     private class StructWriter(writers: List<ValueWriter<*>>, fields: List<String>) : ValueWriter<KafkaStruct> {
         private val writers: List<Pair<String, ValueWriter<*>>>
 
@@ -220,6 +224,18 @@ object KafkaValueWriters {
         override fun serialize(ts: String): Long {
             val zdt = ZonedDateTime.parse(ts)
             return ZonedDateTimes.toEpochNano(zdt)
+        }
+    }
+
+    private object ArrayAsStringWriter : ValueWriter<String> {
+        private val delegatedWriter = ValueWriters.array(ValueWriters.strings())
+
+        override fun write(enumStr: String, encoder: Encoder) {
+            val enumSet = if (enumStr.isEmpty())
+                emptyList() else
+                enumStr.split(",")
+
+            delegatedWriter.write(enumSet, encoder)
         }
     }
 
