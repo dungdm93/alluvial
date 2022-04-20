@@ -48,6 +48,7 @@ class AlluvialTaskWriterFactory(private val table: Table) {
         val partitionId = PARTITION_FORMATTER.format(Instant.now()).toInt()
         val taskId = TASK_FORMATTER.format(Instant.now()).toLong()
         val outputFileFactory = OutputFileFactory.builderFor(table, partitionId, taskId)
+            .format(fileFormat)
             .build()
 
         val partitioningWriterFactory = PartitioningWriterFactory.builder(fileWriterFactory)
