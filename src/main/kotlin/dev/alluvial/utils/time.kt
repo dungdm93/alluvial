@@ -1,6 +1,6 @@
 package dev.alluvial.utils
 
-import dev.alluvial.utils.TimePrecision.NANOS
+import dev.alluvial.utils.TimePrecision.*
 import org.apache.avro.LogicalType
 import org.apache.avro.LogicalTypes
 import java.time.Instant
@@ -9,6 +9,7 @@ import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.time.OffsetTime
 import java.time.ZoneOffset
+import java.time.ZoneOffset.UTC
 import java.time.ZonedDateTime
 
 enum class TimePrecision(
@@ -18,7 +19,7 @@ enum class TimePrecision(
     MICROS(1_000L),
     MILLIS(1_000_000L);
 
-    val inSecond = 1_000_000_000L / scale
+    val ofSecond = 1_000_000_000L / scale
 
     fun convert(time: Long, sourcePrecision: TimePrecision): Long {
         if (this == sourcePrecision) return time
@@ -27,7 +28,9 @@ enum class TimePrecision(
 
     fun floorConvert(time: Long, sourcePrecision: TimePrecision): Long {
         if (this == sourcePrecision) return time
-        return Math.floorDiv(time * sourcePrecision.scale, this.scale)
+        return if (this.scale > sourcePrecision.scale)
+            Math.floorDiv(time, this.scale / sourcePrecision.scale) else
+            Math.multiplyExact(time, sourcePrecision.scale / this.scale)
     }
 }
 
@@ -35,10 +38,10 @@ fun LogicalType.timePrecision(): TimePrecision {
     return when (this) {
         is LogicalTypes.TimeMillis,
         is LogicalTypes.TimestampMillis,
-        is LogicalTypes.LocalTimestampMillis -> TimePrecision.MILLIS
+        is LogicalTypes.LocalTimestampMillis -> MILLIS
         is LogicalTypes.TimeMicros,
         is LogicalTypes.TimestampMicros,
-        is LogicalTypes.LocalTimestampMicros -> TimePrecision.MICROS
+        is LogicalTypes.LocalTimestampMicros -> MICROS
         else -> throw IllegalArgumentException("Unknown time precision of logicalType: ${this.name}")
     }
 }
@@ -46,109 +49,84 @@ fun LogicalType.timePrecision(): TimePrecision {
 // java.time.LocalDate.ofEpochDay
 // java.time.LocalDate.toEpochDay
 
-// java.time.LocalTime.ofNanoOfDay
-// java.time.LocalTime.toNanoOfDay
+object LocalTimes {
+    fun ofMidnightTime(time: Long, precision: TimePrecision = NANOS): LocalTime {
+        return LocalTime.ofNanoOfDay(time * precision.scale)
+    }
+
+    fun toMidnightTime(localTime: LocalTime, precision: TimePrecision = NANOS): Long {
+        return localTime.toNanoOfDay() / precision.scale
+    }
+}
 
 object OffsetTimes {
-    /**
-     * @return [OffsetTime] from nano of day in given timezone
-     */
-    fun ofNanoOfDay(nanoOfDay: Long, tz: ZoneOffset = ZoneOffset.UTC): OffsetTime {
-        val localTime = LocalTime.ofNanoOfDay(nanoOfDay)
+    fun ofUtcMidnightTime(time: Long, precision: TimePrecision = NANOS, tz: ZoneOffset = UTC): OffsetTime {
+        val nod = time * precision.scale + tz.totalSeconds * precision.ofSecond
+        val localTime = LocalTime.ofNanoOfDay(nod)
         return OffsetTime.of(localTime, tz)
     }
 
-    /**
-     * @return the nano of day in given timezone.
-     *      if timezone is none, return in current timezone
-     */
-    fun toNanoOfDay(offsetTime: OffsetTime, tz: ZoneOffset? = null): Long {
-        val localTimeNanos = offsetTime.toLocalTime().toNanoOfDay()
-        if (tz == null) return localTimeNanos
-
-        val diffOffsetSeconds = (offsetTime.offset.totalSeconds - tz.totalSeconds).toLong()
-        return localTimeNanos - diffOffsetSeconds * NANOS.inSecond
+    fun toUtcMidnightTime(offsetTime: OffsetTime, precision: TimePrecision = NANOS): Long {
+        val nod = offsetTime.toLocalTime().toNanoOfDay()
+        val offsetNanos = offsetTime.offset.totalSeconds * precision.ofSecond
+        return (nod - offsetNanos) / precision.scale
     }
 }
 
 object LocalDateTimes {
-    /**
-     * @return [LocalDateTime] from `epochNano` in given timezone
-     */
-    fun ofEpochNano(epochNano: Long, tz: ZoneOffset = ZoneOffset.UTC): LocalDateTime {
-        val epochSecond = Math.floorDiv(epochNano, NANOS.inSecond)
-        val nanoOfSecond = Math.floorMod(epochNano, NANOS.inSecond).toInt()
-        return LocalDateTime.ofEpochSecond(epochSecond, nanoOfSecond, tz)
+    fun ofLocalEpochTime(time: Long, precision: TimePrecision = NANOS): LocalDateTime {
+        val epochSecond = Math.floorDiv(time, precision.ofSecond)
+        val nanoOfSecond = Math.floorMod(time, precision.ofSecond).toInt()
+        return LocalDateTime.ofEpochSecond(epochSecond, nanoOfSecond, UTC)
     }
 
-    /**
-     * @return the number of nanos since epoch from `localDateTime` given timezone
-     */
-    fun toEpochNano(localDateTime: LocalDateTime, tz: ZoneOffset = ZoneOffset.UTC): Long {
-        val epochSecond = localDateTime.toEpochSecond(tz)
+    fun toLocalEpochTime(localDateTime: LocalDateTime, precision: TimePrecision = NANOS): Long {
+        val epochSecond = localDateTime.toEpochSecond(UTC)
         val nanoOfSecond = localDateTime.nano
-        return epochSecond * NANOS.inSecond + nanoOfSecond
+        return Math.multiplyExact(epochSecond, precision.ofSecond) + nanoOfSecond / precision.scale
     }
 }
 
 object OffsetDateTimes {
-    /**
-     * @return [OffsetDateTime] from `epochNano` and timezone
-     */
-    fun ofEpochNano(epochNano: Long, tz: ZoneOffset = ZoneOffset.UTC): OffsetDateTime {
-        val epochSecond = Math.floorDiv(epochNano, NANOS.inSecond)
-        val nanoOfSecond = Math.floorMod(epochNano, NANOS.inSecond).toInt()
+    fun ofEpochTime(time: Long, precision: TimePrecision = NANOS, tz: ZoneOffset = UTC): OffsetDateTime {
+        val epochSecond = Math.floorDiv(time, precision.ofSecond)
+        val nanoOfSecond = (Math.floorMod(time, precision.ofSecond) * precision.scale).toInt()
         val localDateTime = LocalDateTime.ofEpochSecond(epochSecond, nanoOfSecond, tz)
         return OffsetDateTime.of(localDateTime, tz)
     }
 
-    /**
-     * @return the number of nanos since epoch from `offsetDateTime`
-     */
-    fun toEpochNano(offsetDateTime: OffsetDateTime): Long {
+    fun toEpochTime(offsetDateTime: OffsetDateTime, precision: TimePrecision = NANOS): Long {
         val epochSecond = offsetDateTime.toEpochSecond()
         val nanoOfSecond = offsetDateTime.nano
-        return epochSecond * NANOS.inSecond + nanoOfSecond
+        return Math.multiplyExact(epochSecond, precision.ofSecond) + nanoOfSecond / precision.scale
     }
 }
 
 object ZonedDateTimes {
-    /**
-     * @return [ZonedDateTime] from `epochNano` and timezone
-     */
-    fun ofEpochNano(epochNano: Long, tz: ZoneOffset = ZoneOffset.UTC): ZonedDateTime {
-        val epochSecond = Math.floorDiv(epochNano, NANOS.inSecond)
-        val nanoOfSecond = Math.floorMod(epochNano, NANOS.inSecond).toInt()
+    fun ofEpochTime(time: Long, precision: TimePrecision = NANOS, tz: ZoneOffset = UTC): ZonedDateTime {
+        val epochSecond = Math.floorDiv(time, precision.ofSecond)
+        val nanoOfSecond = (Math.floorMod(time, precision.ofSecond) * precision.scale).toInt()
         val localDateTime = LocalDateTime.ofEpochSecond(epochSecond, nanoOfSecond, tz)
         return ZonedDateTime.of(localDateTime, tz)
     }
 
-    /**
-     * @return the number of nanos since epoch from `zonedDateTime`
-     */
-    fun toEpochNano(zonedDateTime: ZonedDateTime): Long {
+    fun toEpochTime(zonedDateTime: ZonedDateTime, precision: TimePrecision = NANOS): Long {
         val epochSecond = zonedDateTime.toEpochSecond()
         val nanoOfSecond = zonedDateTime.nano
-        return epochSecond * NANOS.inSecond + nanoOfSecond
+        return Math.multiplyExact(epochSecond, precision.ofSecond) + nanoOfSecond / precision.scale
     }
 }
 
 object Instants {
-    /**
-     * @return [Instant] from given `epochNano`
-     */
-    fun ofEpochNano(epochNano: Long): Instant {
-        val epochSecond = Math.floorDiv(epochNano, NANOS.inSecond)
-        val nanoOfSecond = Math.floorMod(epochNano, NANOS.inSecond)
+    fun ofEpochTime(time: Long, precision: TimePrecision = NANOS): Instant {
+        val epochSecond = Math.floorDiv(time, precision.ofSecond)
+        val nanoOfSecond = Math.floorMod(time, precision.ofSecond) * precision.scale
         return Instant.ofEpochSecond(epochSecond, nanoOfSecond)
     }
 
-    /**
-     * @return the number of nanos since epoch from `instant`
-     */
-    fun toEpochNano(instant: Instant): Long {
+    fun toEpochTime(instant: Instant, precision: TimePrecision = NANOS): Long {
         val epochSecond = instant.epochSecond
         val nanoOfSecond = instant.nano
-        return epochSecond * NANOS.inSecond + nanoOfSecond
+        return Math.multiplyExact(epochSecond, precision.ofSecond) + nanoOfSecond / precision.scale
     }
 }

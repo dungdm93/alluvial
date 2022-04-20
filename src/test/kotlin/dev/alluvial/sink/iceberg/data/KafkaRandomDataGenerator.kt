@@ -293,9 +293,8 @@ internal object KafkaRandomDataGenerator {
                 io.debezium.time.MicroTime.SCHEMA_NAME -> randomTimeAsLong(MICROS)
                 io.debezium.time.NanoTime.SCHEMA_NAME -> randomTimeAsLong(NANOS)
                 io.debezium.time.ZonedTime.SCHEMA_NAME -> {
-                    val zone = randomZone()
                     val timeNanos = randomTimeAsLong(NANOS)
-                    val offsetTime = OffsetTimes.ofNanoOfDay(timeNanos, zone)
+                    val offsetTime = OffsetTimes.ofUtcMidnightTime(timeNanos)
                     return io.debezium.time.ZonedTime.toIsoString(offsetTime, null)
                 }
                 io.debezium.time.Timestamp.SCHEMA_NAME -> randomTimestampAsLong(MILLIS)
@@ -304,7 +303,7 @@ internal object KafkaRandomDataGenerator {
                 io.debezium.time.ZonedTimestamp.SCHEMA_NAME -> {
                     val zone = randomZone()
                     val timeNanos = randomTimestampAsLong(NANOS)
-                    val offsetDateTime = OffsetDateTimes.ofEpochNano(timeNanos, zone)
+                    val offsetDateTime = OffsetDateTimes.ofEpochTime(timeNanos, tz = zone)
                     return io.debezium.time.ZonedTimestamp.toIsoString(offsetDateTime, null)
                 }
                 io.debezium.time.Year.SCHEMA_NAME -> 1970 + random.nextInt(A_HUNDRED_YEAR)
