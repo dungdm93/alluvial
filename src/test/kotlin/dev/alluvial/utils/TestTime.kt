@@ -93,9 +93,9 @@ internal class TestTime {
     @MethodSource("offsetTimes")
     fun testOffsetTimes(timeStr: String) {
         val oTime = OffsetTime.parse(timeStr)
-        val oTimeNanos = OffsetTimes.toNanoOfDay(oTime)
-        val pTime = OffsetTimes.ofNanoOfDay(oTimeNanos, oTime.offset)
-        val pTimeNanos = OffsetTimes.toNanoOfDay(pTime)
+        val oTimeNanos = OffsetTimes.toUtcMidnightTime(oTime)
+        val pTime = OffsetTimes.ofUtcMidnightTime(oTimeNanos, tz = oTime.offset)
+        val pTimeNanos = OffsetTimes.toUtcMidnightTime(pTime)
 
         expectThat(oTime).isEqualTo(pTime)
         expectThat(oTimeNanos).isEqualTo(pTimeNanos)
@@ -105,14 +105,12 @@ internal class TestTime {
     @MethodSource("localDateTimes")
     fun testLocalDateTimes(str: String) {
         val ldt = LocalDateTime.parse(str)
-        timezones.forEach { tz ->
-            val lTimeNanos = LocalDateTimes.toEpochNano(ldt, tz)
-            val mdt = LocalDateTimes.ofEpochNano(lTimeNanos, tz)
-            val mTimeNanos = LocalDateTimes.toEpochNano(mdt, tz)
+        val lTimeNanos = LocalDateTimes.toLocalEpochTime(ldt)
+        val mdt = LocalDateTimes.ofLocalEpochTime(lTimeNanos)
+        val mTimeNanos = LocalDateTimes.toLocalEpochTime(mdt)
 
-            expectThat(ldt.isEqual(mdt)).isTrue()
-            expectThat(lTimeNanos).isEqualTo(mTimeNanos)
-        }
+        expectThat(ldt.isEqual(mdt)).isTrue()
+        expectThat(lTimeNanos).isEqualTo(mTimeNanos)
     }
 
     @ParameterizedTest
@@ -120,9 +118,9 @@ internal class TestTime {
     fun testOffsetDateTimes(str: String) {
         val zdt = OffsetDateTime.parse(str)
         timezones.forEach { tz ->
-            val zTimeNanos = OffsetDateTimes.toEpochNano(zdt)
-            val ydt = OffsetDateTimes.ofEpochNano(zTimeNanos, tz)
-            val yTimeNanos = OffsetDateTimes.toEpochNano(ydt)
+            val zTimeNanos = OffsetDateTimes.toEpochTime(zdt)
+            val ydt = OffsetDateTimes.ofEpochTime(zTimeNanos, tz = tz)
+            val yTimeNanos = OffsetDateTimes.toEpochTime(ydt)
 
             expectThat(zdt.isEqual(ydt)).isTrue()
             expectThat(zTimeNanos).isEqualTo(yTimeNanos)
@@ -134,9 +132,9 @@ internal class TestTime {
     fun testZonedDateTimes(str: String) {
         val zdt = ZonedDateTime.parse(str)
         timezones.forEach { tz ->
-            val zTimeNanos = ZonedDateTimes.toEpochNano(zdt)
-            val ydt = ZonedDateTimes.ofEpochNano(zTimeNanos, tz)
-            val yTimeNanos = ZonedDateTimes.toEpochNano(ydt)
+            val zTimeNanos = ZonedDateTimes.toEpochTime(zdt)
+            val ydt = ZonedDateTimes.ofEpochTime(zTimeNanos, tz = tz)
+            val yTimeNanos = ZonedDateTimes.toEpochTime(ydt)
 
             expectThat(zdt.isEqual(ydt)).isTrue()
             expectThat(zTimeNanos).isEqualTo(yTimeNanos)
@@ -147,9 +145,9 @@ internal class TestTime {
     @MethodSource("instants")
     fun testInstants(str: String) {
         val zts = Instant.parse(str)
-        val zTimeNanos = Instants.toEpochNano(zts)
-        val yts = Instants.ofEpochNano(zTimeNanos)
-        val yTimeNanos = Instants.toEpochNano(yts)
+        val zTimeNanos = Instants.toEpochTime(zts)
+        val yts = Instants.ofEpochTime(zTimeNanos)
+        val yTimeNanos = Instants.toEpochTime(yts)
 
         expectThat(zts).isEqualTo(yts)
         expectThat(zTimeNanos).isEqualTo(yTimeNanos)

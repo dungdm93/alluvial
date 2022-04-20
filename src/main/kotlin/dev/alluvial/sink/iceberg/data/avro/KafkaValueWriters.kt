@@ -2,6 +2,8 @@ package dev.alluvial.sink.iceberg.data.avro
 
 import dev.alluvial.utils.OffsetTimes
 import dev.alluvial.utils.TimePrecision
+import dev.alluvial.utils.TimePrecision.MILLIS
+import dev.alluvial.utils.TimePrecision.NANOS
 import dev.alluvial.utils.ZonedDateTimes
 import org.apache.avro.io.Encoder
 import org.apache.iceberg.avro.ValueWriter
@@ -151,7 +153,7 @@ object KafkaValueWriters {
         private val targetPrecision: TimePrecision,
     ) : ValueWriter<T> {
         init {
-            if (targetPrecision == TimePrecision.NANOS) {
+            if (targetPrecision == NANOS) {
                 throw IllegalArgumentException("Avro has no $targetPrecision precision time")
             }
         }
@@ -159,7 +161,7 @@ object KafkaValueWriters {
         override fun write(datum: T, encoder: Encoder) {
             var time = serialize(datum)
             time = targetPrecision.floorConvert(time, sourcePrecision)
-            if (targetPrecision == TimePrecision.MILLIS)
+            if (targetPrecision == MILLIS)
                 encoder.writeInt(time.toInt()) else
                 encoder.writeLong(time)
         }
@@ -168,7 +170,7 @@ object KafkaValueWriters {
     }
 
     private class TimeAsDateWriter(targetPrecision: TimePrecision) :
-        TimeWriter<Date>(TimePrecision.MILLIS, targetPrecision) {
+        TimeWriter<Date>(MILLIS, targetPrecision) {
         override fun serialize(time: Date) = time.time
     }
 
@@ -183,19 +185,19 @@ object KafkaValueWriters {
     }
 
     private class ZonedTimeAsStringWriter(targetPrecision: TimePrecision) :
-        TimeWriter<String>(TimePrecision.NANOS, targetPrecision) {
+        TimeWriter<String>(NANOS, targetPrecision) {
         override fun serialize(time: String): Long {
             val ot = OffsetTime.parse(time)
-            return OffsetTimes.toNanoOfDay(ot)
+            return OffsetTimes.toUtcMidnightTime(ot)
         }
     }
 
     abstract class TimestampWriter<T>(
-        private val sourcePrecision: TimePrecision,
-        private val targetPrecision: TimePrecision,
+        protected val sourcePrecision: TimePrecision,
+        protected val targetPrecision: TimePrecision,
     ) : ValueWriter<T> {
         init {
-            if (targetPrecision == TimePrecision.NANOS) {
+            if (targetPrecision == NANOS) {
                 throw IllegalArgumentException("Avro has no $targetPrecision precision timestamp")
             }
         }
@@ -210,7 +212,7 @@ object KafkaValueWriters {
     }
 
     private class TimestampAsDateWriter(targetPrecision: TimePrecision) :
-        TimestampWriter<Date>(TimePrecision.MILLIS, targetPrecision) {
+        TimestampWriter<Date>(MILLIS, targetPrecision) {
         override fun serialize(ts: Date) = ts.time
     }
 
@@ -220,10 +222,14 @@ object KafkaValueWriters {
     }
 
     private class ZonedTimestampAsStringWriter(targetPrecision: TimePrecision) :
-        TimestampWriter<String>(TimePrecision.NANOS, targetPrecision) {
-        override fun serialize(ts: String): Long {
-            val zdt = ZonedDateTime.parse(ts)
-            return ZonedDateTimes.toEpochNano(zdt)
+        TimestampWriter<String>(targetPrecision, targetPrecision) {
+        override fun serialize(ts: String): Long = when (ts.lowercase()) {
+            "infinity" -> Long.MAX_VALUE
+            "-infinity" -> Long.MIN_VALUE
+            else -> {
+                val zdt = ZonedDateTime.parse(ts)
+                ZonedDateTimes.toEpochTime(zdt, targetPrecision)
+            }
         }
     }
 

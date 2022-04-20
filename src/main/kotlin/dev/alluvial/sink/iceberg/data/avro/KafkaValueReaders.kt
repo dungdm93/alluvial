@@ -2,6 +2,8 @@ package dev.alluvial.sink.iceberg.data.avro
 
 import dev.alluvial.utils.OffsetTimes
 import dev.alluvial.utils.TimePrecision
+import dev.alluvial.utils.TimePrecision.MILLIS
+import dev.alluvial.utils.TimePrecision.NANOS
 import dev.alluvial.utils.ZonedDateTimes
 import io.debezium.time.ZonedTime
 import io.debezium.time.ZonedTimestamp
@@ -245,13 +247,13 @@ object KafkaValueReaders {
         private val targetPrecision: TimePrecision,
     ) : ValueReader<T> {
         init {
-            if (sourcePrecision == TimePrecision.NANOS) {
+            if (sourcePrecision == NANOS) {
                 throw IllegalArgumentException("Avro has no $sourcePrecision precision time")
             }
         }
 
         override fun read(decoder: Decoder, reuse: Any?): T {
-            var time = if (sourcePrecision == TimePrecision.MILLIS)
+            var time = if (sourcePrecision == MILLIS)
                 decoder.readInt().toLong() else
                 decoder.readLong()
 
@@ -263,7 +265,7 @@ object KafkaValueReaders {
     }
 
     private class TimeAsDateReader(sourcePrecision: TimePrecision) :
-        TimeReader<Date>(sourcePrecision, TimePrecision.MILLIS) {
+        TimeReader<Date>(sourcePrecision, MILLIS) {
         override fun deserialize(time: Long, reuse: Any?): Date {
             return if (time == (reuse as? Date)?.time)
                 reuse else
@@ -282,19 +284,19 @@ object KafkaValueReaders {
     }
 
     private class ZonedTimeAsStringReader(sourcePrecision: TimePrecision) :
-        TimeReader<String>(sourcePrecision, TimePrecision.NANOS) {
+        TimeReader<String>(sourcePrecision, NANOS) {
         override fun deserialize(time: Long, reuse: Any?): String {
-            val offsetTime = OffsetTimes.ofNanoOfDay(time)
+            val offsetTime = OffsetTimes.ofUtcMidnightTime(time)
             return ZonedTime.toIsoString(offsetTime, null)
         }
     }
 
     abstract class TimestampReader<T>(
-        private val sourcePrecision: TimePrecision,
-        private val targetPrecision: TimePrecision,
+        protected val sourcePrecision: TimePrecision,
+        protected val targetPrecision: TimePrecision,
     ) : ValueReader<T> {
         init {
-            if (sourcePrecision == TimePrecision.NANOS) {
+            if (sourcePrecision == NANOS) {
                 throw IllegalArgumentException("Avro has no $sourcePrecision precision timestamp")
             }
         }
@@ -309,7 +311,7 @@ object KafkaValueReaders {
     }
 
     private class TimestampAsDateReader(sourcePrecision: TimePrecision) :
-        TimestampReader<Date>(sourcePrecision, TimePrecision.MILLIS) {
+        TimestampReader<Date>(sourcePrecision, MILLIS) {
         override fun deserialize(ts: Long, reuse: Any?): Date {
             return if (ts == (reuse as? Date)?.time)
                 reuse else
@@ -323,10 +325,14 @@ object KafkaValueReaders {
     }
 
     private class ZonedTimestampAsStringReader(sourcePrecision: TimePrecision) :
-        TimestampReader<String>(sourcePrecision, TimePrecision.NANOS) {
-        override fun deserialize(ts: Long, reuse: Any?): String {
-            val zdt = ZonedDateTimes.ofEpochNano(ts)
-            return ZonedTimestamp.toIsoString(zdt, null)
+        TimestampReader<String>(sourcePrecision, sourcePrecision) {
+        override fun deserialize(ts: Long, reuse: Any?): String = when (ts) {
+            Long.MAX_VALUE -> "infinity"
+            Long.MIN_VALUE -> "-infinity"
+            else -> {
+                val zdt = ZonedDateTimes.ofEpochTime(ts, sourcePrecision)
+                ZonedTimestamp.toIsoString(zdt, null)
+            }
         }
     }
 

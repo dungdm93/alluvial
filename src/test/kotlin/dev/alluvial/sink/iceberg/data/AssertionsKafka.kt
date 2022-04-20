@@ -1,6 +1,8 @@
 package dev.alluvial.sink.iceberg.data
 
 import dev.alluvial.utils.LocalDateTimes
+import dev.alluvial.utils.LocalTimes
+import dev.alluvial.utils.OffsetDateTimes
 import dev.alluvial.utils.TimePrecision.*
 import org.apache.iceberg.types.Type.TypeID
 import org.apache.iceberg.types.Types
@@ -14,7 +16,6 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.OffsetDateTime
-import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.util.Date
 import java.util.UUID
@@ -114,17 +115,17 @@ object AssertionsKafka {
                 expectThat(expectedDays).isEqualTo((actual as Int).toLong())
             }
             io.debezium.time.Time.SCHEMA_NAME -> {
-                val expectedMillis = MILLIS.floorConvert((expected as LocalTime).toNanoOfDay(), NANOS)
+                val expectedMillis = LocalTimes.toMidnightTime(expected as LocalTime, MILLIS)
                 expectThat(expectedMillis).isEqualTo((actual as Int).toLong())
             }
             io.debezium.time.MicroTime.SCHEMA_NAME -> {
-                val expectedMicros = MICROS.floorConvert((expected as LocalTime).toNanoOfDay(), NANOS)
+                val expectedMicros = LocalTimes.toMidnightTime(expected as LocalTime, MICROS)
                 expectThat(expectedMicros).isEqualTo(actual as Long)
             }
             io.debezium.time.NanoTime.SCHEMA_NAME -> {
-                val expectedMicros = MICROS.floorConvert((expected as LocalTime).toNanoOfDay(), NANOS)
-                val actualMicros = MICROS.floorConvert(actual as Long, NANOS)
                 // Iceberg stores time type with micros precision
+                val expectedMicros = LocalTimes.toMidnightTime(expected as LocalTime, MICROS)
+                val actualMicros = MICROS.floorConvert(actual as Long, NANOS)
                 expectThat(expectedMicros).isEqualTo(actualMicros)
             }
             io.debezium.time.ZonedTime.SCHEMA_NAME -> {
@@ -134,17 +135,17 @@ object AssertionsKafka {
                 // expectThat(expectedOt.isEqual(actualOt)).isTrue()
             }
             io.debezium.time.Timestamp.SCHEMA_NAME -> {
-                val expectedMillis = MILLIS.floorConvert(LocalDateTimes.toEpochNano(expected as LocalDateTime), NANOS)
+                val expectedMillis = LocalDateTimes.toLocalEpochTime(expected as LocalDateTime, MILLIS)
                 expectThat(expectedMillis).isEqualTo(actual as Long)
             }
             io.debezium.time.MicroTimestamp.SCHEMA_NAME -> {
-                val expectedMicros = MICROS.floorConvert(LocalDateTimes.toEpochNano(expected as LocalDateTime), NANOS)
-                expectThat(expectedMicros).isEqualTo((actual as Number).toLong())
+                val expectedMicros = LocalDateTimes.toLocalEpochTime(expected as LocalDateTime, MICROS)
+                expectThat(expectedMicros).isEqualTo(actual as Long)
             }
             io.debezium.time.NanoTimestamp.SCHEMA_NAME -> {
-                val expectedMicros = MICROS.floorConvert(LocalDateTimes.toEpochNano(expected as LocalDateTime), NANOS)
-                val actualMicros = MICROS.floorConvert(actual as Long, NANOS)
                 // Iceberg stores timestamp type with micros precision
+                val expectedMicros = LocalDateTimes.toLocalEpochTime(expected as LocalDateTime, MICROS)
+                val actualMicros = MICROS.floorConvert(actual as Long, NANOS)
                 expectThat(expectedMicros).isEqualTo(actualMicros)
             }
             io.debezium.time.ZonedTimestamp.SCHEMA_NAME -> {
@@ -169,15 +170,16 @@ object AssertionsKafka {
                 expectThat(expectedDays).isEqualTo(actualDays)
             }
             org.apache.kafka.connect.data.Time.LOGICAL_NAME -> {
-                val expectedMillis = MILLIS.convert((expected as LocalTime).toNanoOfDay(), NANOS)
+                val expectedMillis = LocalTimes.toMidnightTime(expected as LocalTime, MILLIS)
                 val actualMillis = (actual as Date).time
                 expectThat(expectedMillis).isEqualTo(actualMillis)
             }
             org.apache.kafka.connect.data.Timestamp.LOGICAL_NAME -> {
-                val expectedInstant = if ((icebergType as Types.TimestampType).shouldAdjustToUTC())
-                    (expected as OffsetDateTime).toInstant() else
-                    (expected as LocalDateTime).toInstant(ZoneOffset.UTC)
-                expectThat(Date.from(expectedInstant)).isEqualTo(actual as Date)
+                val expectedMillis = if ((icebergType as Types.TimestampType).shouldAdjustToUTC())
+                    OffsetDateTimes.toEpochTime(expected as OffsetDateTime, MILLIS) else
+                    LocalDateTimes.toLocalEpochTime(expected as LocalDateTime, MILLIS)
+                val actualMillis = (actual as Date).time
+                expectThat(expectedMillis).isEqualTo(actualMillis)
             }
             else -> return false
         }
