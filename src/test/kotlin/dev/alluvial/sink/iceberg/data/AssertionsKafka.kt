@@ -163,6 +163,20 @@ object AssertionsKafka {
                 expectThat(expectedAsSet).isEqualTo(actualAsSet)
             }
 
+            // Spatial types
+            io.debezium.data.geometry.Geometry.LOGICAL_NAME -> {
+                val wkbFieldName = io.debezium.data.geometry.Geometry.WKB_FIELD
+                val sridFieldName = io.debezium.data.geometry.Geometry.SRID_FIELD
+
+                val actualStruct = actual as KafkaStruct
+                val expectedRecord = expected as IcebergRecord
+                expectThat(actualStruct.get(sridFieldName)).isEqualTo(expectedRecord.getField(sridFieldName))
+
+                val actualWkb = toByteBuffer(actualStruct.get(wkbFieldName))
+                val expectedWkb = toByteBuffer(expectedRecord.getField(wkbFieldName))
+                expectThat(actualWkb).isEqualTo(expectedWkb)
+            }
+
             /////////////// Kafka Logical Types ///////////////
             org.apache.kafka.connect.data.Date.LOGICAL_NAME -> {
                 val expectedDays = (expected as LocalDate).toEpochDay()
@@ -206,18 +220,8 @@ object AssertionsKafka {
             TypeID.UUID -> expectThat(expected as UUID).isEqualTo(actual as UUID)
             TypeID.FIXED -> expectThat(expected as ByteArray).isEqualTo(actual as ByteArray)
             TypeID.BINARY -> {
-                val e = when (expected) {
-                    null -> null
-                    is ByteBuffer -> expected
-                    is ByteArray -> ByteBuffer.wrap(expected)
-                    else -> throw AssertionError("Unexpected kind ${expected.javaClass}")
-                }
-                val a = when (actual) {
-                    null -> null
-                    is ByteBuffer -> actual
-                    is ByteArray -> ByteBuffer.wrap(actual)
-                    else -> throw AssertionError("Unexpected kind ${actual.javaClass}")
-                }
+                val e = toByteBuffer(expected)
+                val a = toByteBuffer(actual)
                 expectThat(e).isEqualTo(a)
             }
             TypeID.DECIMAL -> expectThat(expected as BigDecimal).isEqualTo(actual as BigDecimal)
@@ -242,5 +246,14 @@ object AssertionsKafka {
             else -> return false
         }
         return true
+    }
+
+    private fun toByteBuffer(value: Any?): ByteBuffer? {
+        return when (value) {
+            null -> null
+            is ByteBuffer -> value
+            is ByteArray -> ByteBuffer.wrap(value)
+            else -> throw AssertionError("Unexpected kind ${value.javaClass}")
+        }
     }
 }

@@ -160,6 +160,11 @@ class KafkaAvroReader(
                     ValueReaders.strings()
                 io.debezium.data.EnumSet.LOGICAL_NAME -> KafkaValueReaders.arrayAsString()
 
+                // Spatial types
+                io.debezium.data.geometry.Geometry.LOGICAL_NAME -> KafkaValueReaders.geometry(type)
+                // io.debezium.data.geometry.Geography.LOGICAL_NAME ->
+                // io.debezium.data.geometry.Point.LOGICAL_NAME ->
+
                 /////////////// Kafka Logical Types ///////////////
                 org.apache.kafka.connect.data.Decimal.LOGICAL_NAME -> {
                     val decimal = primitive.logicalType as LogicalTypes.Decimal
