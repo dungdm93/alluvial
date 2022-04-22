@@ -73,7 +73,7 @@ val DBZ_ENUM_SET_SCHEMA = io.debezium.data.EnumSet.schema(ENUM_VALUES)
 //val DBZ_LTREE_SCHEMA = io.debezium.data.Ltree.schema()
 //val DBZ_VAR_DECIMAL_SCHEMA = io.debezium.data.VariableScaleDecimal.schema()
 //val DBZ_POINT_SCHEMA = io.debezium.data.geometry.Point.schema()
-//val DBZ_GEOMETRY_SCHEMA = io.debezium.data.geometry.Geometry.schema()
+val DBZ_GEOMETRY_SCHEMA = io.debezium.data.geometry.Geometry.schema()
 //val DBZ_GEOGRAPHY_SCHEMA = io.debezium.data.geometry.Geography.schema()
 
 val DEBEZIUM_LOGICAL_TYPES_SCHEMA = mapOf(
@@ -100,6 +100,6 @@ val DEBEZIUM_LOGICAL_TYPES_SCHEMA = mapOf(
 //    "dbz_ltree" to DBZ_LTREE_SCHEMA,
 //    "dbz_var_decimal" to DBZ_VAR_DECIMAL_SCHEMA,
 //    "dbz_point" to DBZ_POINT_SCHEMA,
-//    "dbz_geometry" to DBZ_GEOMETRY_SCHEMA,
+    "dbz_geometry" to DBZ_GEOMETRY_SCHEMA,
 //    "dbz_geography" to DBZ_GEOGRAPHY_SCHEMA,
 )

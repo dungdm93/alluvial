@@ -156,6 +156,10 @@ class KafkaAvroWriter(private val kafkaSchema: KafkaSchema) : MetricsAwareDatumW
                 io.debezium.data.Enum.LOGICAL_NAME ->
                     ValueWriters.strings()
 
+                // Spatial types
+                io.debezium.data.geometry.Geometry.LOGICAL_NAME -> KafkaValueWriters.geometry()
+                // io.debezium.data.geometry.Geography.LOGICAL_NAME ->
+                // io.debezium.data.geometry.Point.LOGICAL_NAME ->
 
                 /////////////// Kafka Logical Types ///////////////
                 org.apache.kafka.connect.data.Decimal.LOGICAL_NAME -> {

@@ -88,6 +88,14 @@ class KafkaTypeToType : KafkaTypeVisitor<IcebergType>() {
             //    "io.debezium.time.Interval"
             //    "io.debezium.data.geometry.Point"
             //    "io.debezium.data.geometry.Geometry"
+            io.debezium.data.geometry.Geometry.LOGICAL_NAME -> Types.StructType.of(
+                Types.NestedField.of(
+                    getNextId(), false, io.debezium.data.geometry.Geometry.WKB_FIELD, Types.BinaryType.get()
+                ),
+                Types.NestedField.of(
+                    getNextId(), true, io.debezium.data.geometry.Geometry.SRID_FIELD, Types.IntegerType.get()
+                )
+            )
             //    "io.debezium.data.geometry.Geography"
             //    "io.debezium.data.Bits"
             //    "io.debezium.data.Json"

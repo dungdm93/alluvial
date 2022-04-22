@@ -84,6 +84,14 @@ object KafkaValueReaders {
         return ArrayAsStringReader
     }
 
+    fun geometry(schema: KafkaSchema): ValueReader<KafkaStruct> {
+        return struct(
+            listOf(io.debezium.data.geometry.Geometry.WKB_FIELD, io.debezium.data.geometry.Geometry.SRID_FIELD),
+            listOf(ValueReaders.bytes(), ValueReaders.union(listOf(ValueReaders.nulls(), ValueReaders.ints()))),
+            schema,
+        )
+    }
+
     class ByteReader<N : Number>(private val delegator: ValueReader<N>) : ValueReader<Byte> {
         override fun read(decoder: Decoder, reuse: Any?): Byte {
             val number = delegator.read(decoder, reuse)

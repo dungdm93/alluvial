@@ -309,6 +309,9 @@ internal object KafkaRandomDataGenerator {
                 io.debezium.time.Year.SCHEMA_NAME -> 1970 + random.nextInt(A_HUNDRED_YEAR)
                 io.debezium.data.EnumSet.LOGICAL_NAME -> randomEnumSet(random).joinToString(",")
 
+                // Spatial types
+                io.debezium.data.geometry.Geometry.LOGICAL_NAME -> struct(schema)
+
                 /////////////// Kafka Logical Types ///////////////
                 org.apache.kafka.connect.data.Date.LOGICAL_NAME -> randomDate()
                 org.apache.kafka.connect.data.Time.LOGICAL_NAME -> randomTime()

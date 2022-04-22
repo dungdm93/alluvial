@@ -72,6 +72,13 @@ object KafkaValueWriters {
         return ArrayAsStringWriter
     }
 
+    fun geometry(): ValueWriter<KafkaStruct> {
+        return struct(
+            listOf(bytes(), ValueWriters.option(0, ValueWriters.ints())),
+            listOf(io.debezium.data.geometry.Geometry.WKB_FIELD, io.debezium.data.geometry.Geometry.SRID_FIELD)
+        )
+    }
+
     private class StructWriter(writers: List<ValueWriter<*>>, fields: List<String>) : ValueWriter<KafkaStruct> {
         private val writers: List<Pair<String, ValueWriter<*>>>
 
