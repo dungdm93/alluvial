@@ -49,6 +49,10 @@ services:
       CONFIG_STORAGE_TOPIC: debezium.configs
       OFFSET_STORAGE_TOPIC: debezium.offsets
       STATUS_STORAGE_TOPIC: debezium.statuses
+      KEY_CONVERTER: io.confluent.connect.avro.AvroConverter
+      VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
+      CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
     depends_on:
       - kafka
     networks:
