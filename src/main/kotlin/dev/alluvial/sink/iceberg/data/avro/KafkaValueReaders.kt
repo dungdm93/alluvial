@@ -68,6 +68,10 @@ object KafkaValueReaders {
         return TimeAsLongReader(sourcePrecision, targetPrecision)
     }
 
+    fun zonedTimeAsString(timePrecision: TimePrecision): ValueReader<String> {
+        return ZonedTimeAsStringReader(timePrecision)
+    }
+
     fun timestampAsDate(precision: TimePrecision): ValueReader<Date> {
         return TimestampAsDateReader(precision)
     }
@@ -251,8 +255,8 @@ object KafkaValueReaders {
     }
 
     abstract class TimeReader<T>(
-        private val sourcePrecision: TimePrecision,
-        private val targetPrecision: TimePrecision,
+        protected val sourcePrecision: TimePrecision,
+        protected val targetPrecision: TimePrecision,
     ) : ValueReader<T> {
         init {
             if (sourcePrecision == NANOS) {
@@ -292,9 +296,9 @@ object KafkaValueReaders {
     }
 
     private class ZonedTimeAsStringReader(sourcePrecision: TimePrecision) :
-        TimeReader<String>(sourcePrecision, NANOS) {
+        TimeReader<String>(sourcePrecision, sourcePrecision) {
         override fun deserialize(time: Long, reuse: Any?): String {
-            val offsetTime = OffsetTimes.ofUtcMidnightTime(time)
+            val offsetTime = OffsetTimes.ofUtcMidnightTime(time, sourcePrecision)
             return ZonedTime.toIsoString(offsetTime, null)
         }
     }

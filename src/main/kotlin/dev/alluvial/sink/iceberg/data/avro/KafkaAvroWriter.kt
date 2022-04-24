@@ -139,8 +139,7 @@ class KafkaAvroWriter(private val kafkaSchema: KafkaSchema) : MetricsAwareDatumW
                 io.debezium.time.NanoTime.SCHEMA_NAME ->
                     KafkaValueWriters.timeAsLong(NANOS, logicalType.timePrecision())
                 io.debezium.time.ZonedTime.SCHEMA_NAME ->
-                    // KafkaValueWriters.zonedTimeAsString(logicalType.timePrecision())
-                    ValueWriters.strings() // TODO(ZonedTime): can save it as number?
+                    KafkaValueWriters.zonedTimeAsString(logicalType.timePrecision())
                 io.debezium.time.Timestamp.SCHEMA_NAME ->
                     KafkaValueWriters.timestampAsLong(MILLIS, logicalType.timePrecision())
                 io.debezium.time.MicroTimestamp.SCHEMA_NAME ->
@@ -155,9 +154,8 @@ class KafkaAvroWriter(private val kafkaSchema: KafkaSchema) : MetricsAwareDatumW
                     KafkaValueWriters.arrayAsString()
                 io.debezium.data.Enum.LOGICAL_NAME ->
                     ValueWriters.strings()
-
-                // Spatial types
-                io.debezium.data.geometry.Geometry.LOGICAL_NAME -> KafkaValueWriters.geometry()
+                io.debezium.data.geometry.Geometry.LOGICAL_NAME ->
+                    KafkaValueWriters.geometry()
                 // io.debezium.data.geometry.Geography.LOGICAL_NAME ->
                 // io.debezium.data.geometry.Point.LOGICAL_NAME ->
 
