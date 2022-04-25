@@ -144,8 +144,7 @@ class KafkaAvroReader(
                 io.debezium.time.NanoTime.SCHEMA_NAME ->
                     KafkaValueReaders.timeAsLong(logicalType.timePrecision(), NANOS)
                 io.debezium.time.ZonedTime.SCHEMA_NAME ->
-                    // KafkaValueReaders.zonedTimeAsString(logicalType.timePrecision())
-                    ValueReaders.strings() // TODO(ZonedTime): can save it as number?
+                    KafkaValueReaders.zonedTimeAsString(logicalType.timePrecision())
                 io.debezium.time.Timestamp.SCHEMA_NAME ->
                     KafkaValueReaders.timestampAsLong(logicalType.timePrecision(), MILLIS)
                 io.debezium.time.MicroTimestamp.SCHEMA_NAME ->
@@ -158,10 +157,10 @@ class KafkaAvroReader(
                     ValueReaders.ints()
                 io.debezium.data.Enum.LOGICAL_NAME ->
                     ValueReaders.strings()
-                io.debezium.data.EnumSet.LOGICAL_NAME -> KafkaValueReaders.arrayAsString()
-
-                // Spatial types
-                io.debezium.data.geometry.Geometry.LOGICAL_NAME -> KafkaValueReaders.geometry(type)
+                io.debezium.data.EnumSet.LOGICAL_NAME ->
+                    KafkaValueReaders.arrayAsString()
+                io.debezium.data.geometry.Geometry.LOGICAL_NAME ->
+                    KafkaValueReaders.geometry(type)
                 // io.debezium.data.geometry.Geography.LOGICAL_NAME ->
                 // io.debezium.data.geometry.Point.LOGICAL_NAME ->
 

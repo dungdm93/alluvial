@@ -74,8 +74,8 @@ class KafkaTypeToType : KafkaTypeVisitor<IcebergType>() {
             io.debezium.time.Date.SCHEMA_NAME -> Types.DateType.get()
             io.debezium.time.Time.SCHEMA_NAME,
             io.debezium.time.MicroTime.SCHEMA_NAME,
-            io.debezium.time.NanoTime.SCHEMA_NAME -> Types.TimeType.get()
-            io.debezium.time.ZonedTime.SCHEMA_NAME -> Types.StringType.get() // TODO(ZonedTime): can save it as number?
+            io.debezium.time.NanoTime.SCHEMA_NAME,
+            io.debezium.time.ZonedTime.SCHEMA_NAME -> Types.TimeType.get()
             io.debezium.time.Timestamp.SCHEMA_NAME,
             io.debezium.time.MicroTimestamp.SCHEMA_NAME,
             io.debezium.time.NanoTimestamp.SCHEMA_NAME -> Types.TimestampType.withoutZone()

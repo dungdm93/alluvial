@@ -10,6 +10,7 @@ import org.apache.iceberg.avro.ValueWriter
 import org.apache.iceberg.avro.ValueWriters
 import java.nio.ByteBuffer
 import java.time.OffsetTime
+import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import java.util.Date
 import java.util.concurrent.TimeUnit
@@ -156,8 +157,8 @@ object KafkaValueWriters {
     }
 
     abstract class TimeWriter<T>(
-        private val sourcePrecision: TimePrecision,
-        private val targetPrecision: TimePrecision,
+        protected val sourcePrecision: TimePrecision,
+        protected val targetPrecision: TimePrecision,
     ) : ValueWriter<T> {
         init {
             if (targetPrecision == NANOS) {
@@ -192,10 +193,11 @@ object KafkaValueWriters {
     }
 
     private class ZonedTimeAsStringWriter(targetPrecision: TimePrecision) :
-        TimeWriter<String>(NANOS, targetPrecision) {
+        TimeWriter<String>(targetPrecision, targetPrecision) {
         override fun serialize(time: String): Long {
             val ot = OffsetTime.parse(time)
-            return OffsetTimes.toUtcMidnightTime(ot)
+            assert(ot.offset == ZoneOffset.UTC) { "ZonedTime must be in UTC, got $time" }
+            return OffsetTimes.toUtcMidnightTime(ot, targetPrecision)
         }
     }
 

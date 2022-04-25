@@ -5,6 +5,8 @@ import dev.alluvial.utils.OffsetDateTimes
 import dev.alluvial.utils.OffsetTimes
 import dev.alluvial.utils.TimePrecision
 import dev.alluvial.utils.TimePrecision.*
+import dev.alluvial.utils.random
+import dev.alluvial.utils.randomSublist
 import org.apache.iceberg.relocated.com.google.common.collect.Sets
 import org.apache.iceberg.types.Type
 import org.apache.iceberg.types.TypeUtil
@@ -23,7 +25,6 @@ import org.apache.kafka.connect.data.Field as KafkaField
 import org.apache.kafka.connect.data.Schema as KafkaSchema
 import org.apache.kafka.connect.data.Schema.Type as KafkaType
 import org.apache.kafka.connect.data.Struct as KafkaStruct
-
 
 internal object KafkaRandomDataGenerator {
     private const val FIFTY_YEARS_IN_NANOS = 50L * (365 * 3 + 366) * 24 * 60 * 60 * 1_000_000_000 / 4
@@ -275,13 +276,6 @@ internal object KafkaRandomDataGenerator {
             return BigDecimal(unscaled, scale)
         }
 
-        private fun randomEnumSet(random: Random): List<String> {
-            val allowed = ENUM_VALUES.toTypedArray().apply { this.shuffle() }
-            val numElements = random.nextInt(allowed.size)
-
-            return allowed.take(numElements)
-        }
-
         @Suppress("WHEN_ENUM_CAN_BE_NULL_IN_JAVA")
         fun generate(schema: KafkaSchema): Any {
             val choice = random.nextInt(20)
@@ -293,8 +287,9 @@ internal object KafkaRandomDataGenerator {
                 io.debezium.time.MicroTime.SCHEMA_NAME -> randomTimeAsLong(MICROS)
                 io.debezium.time.NanoTime.SCHEMA_NAME -> randomTimeAsLong(NANOS)
                 io.debezium.time.ZonedTime.SCHEMA_NAME -> {
-                    val timeNanos = randomTimeAsLong(NANOS)
-                    val offsetTime = OffsetTimes.ofUtcMidnightTime(timeNanos)
+                    val precision = TimePrecision.values().random(random)
+                    val time = randomTimeAsLong(precision)
+                    val offsetTime = OffsetTimes.ofUtcMidnightTime(time, precision)
                     return io.debezium.time.ZonedTime.toIsoString(offsetTime, null)
                 }
                 io.debezium.time.Timestamp.SCHEMA_NAME -> randomTimestampAsLong(MILLIS)
@@ -302,12 +297,13 @@ internal object KafkaRandomDataGenerator {
                 io.debezium.time.NanoTimestamp.SCHEMA_NAME -> randomTimestampAsLong(NANOS)
                 io.debezium.time.ZonedTimestamp.SCHEMA_NAME -> {
                     val zone = randomZone()
-                    val timeNanos = randomTimestampAsLong(NANOS)
-                    val offsetDateTime = OffsetDateTimes.ofEpochTime(timeNanos, tz = zone)
+                    val precision = TimePrecision.values().random(random)
+                    val time = randomTimestampAsLong(precision)
+                    val offsetDateTime = OffsetDateTimes.ofEpochTime(time, precision, zone)
                     return io.debezium.time.ZonedTimestamp.toIsoString(offsetDateTime, null)
                 }
                 io.debezium.time.Year.SCHEMA_NAME -> 1970 + random.nextInt(A_HUNDRED_YEAR)
-                io.debezium.data.EnumSet.LOGICAL_NAME -> randomEnumSet(random).joinToString(",")
+                io.debezium.data.EnumSet.LOGICAL_NAME -> ENUM_VALUES.randomSublist(random).joinToString(",")
 
                 // Spatial types
                 io.debezium.data.geometry.Geometry.LOGICAL_NAME -> struct(schema)
