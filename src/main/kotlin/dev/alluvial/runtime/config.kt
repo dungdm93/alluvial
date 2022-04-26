@@ -1,30 +1,31 @@
 package dev.alluvial.runtime
 
 data class Config(
-    val source: ConfigSource,
-    val sink: ConfigSink,
-    val stream: ConfigStream,
+    val source: SourceConfig,
+    val sink: SinkConfig,
+    val stream: StreamConfig,
 )
 
-data class ConfigSource(
+data class SourceConfig(
     val kind: String,
-    val props: Map<String, String>,
+    val topicPrefix: String,
+    val config: Map<String, String>,
 ) {
     init {
         require(kind.isNotEmpty()) { "source.kind cannot be empty" }
     }
 }
 
-data class ConfigSink(
+data class SinkConfig(
     val kind: String,
-    val props: Map<String, String>,
+    val catalog: Map<String, String>,
 ) {
     init {
         require(kind.isNotEmpty()) { "sink.kind cannot be empty" }
     }
 }
 
-data class ConfigStream(
+data class StreamConfig(
     val kind: String,
     val props: Map<String, String>,
 ) {

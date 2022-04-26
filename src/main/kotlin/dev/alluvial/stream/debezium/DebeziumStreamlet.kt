@@ -1,30 +1,30 @@
 package dev.alluvial.stream.debezium
 
+import dev.alluvial.api.SchemaHandler
 import dev.alluvial.api.Streamlet
 import dev.alluvial.api.Streamlet.Status.*
 import dev.alluvial.api.StreamletId
 import dev.alluvial.sink.iceberg.IcebergTableOutlet
 import dev.alluvial.source.kafka.KafkaTopicInlet
-import org.apache.kafka.connect.sink.SinkRecord
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import java.time.Clock
-import java.util.Objects
 import kotlin.math.max
 import kotlin.time.Duration.Companion.minutes
 
+@Suppress("MemberVisibilityCanBePrivate")
 class DebeziumStreamlet(
     override val id: StreamletId,
     val inlet: KafkaTopicInlet,
     val outlet: IcebergTableOutlet,
+    val schemaHandler: SchemaHandler,
 ) : Streamlet {
     companion object {
         private val logger = LoggerFactory.getLogger(DebeziumStreamlet::class.java)
     }
 
-    private val positions = mutableMapOf<Int, Long>()
+    private val offsets = mutableMapOf<Int, Long>()
     private var lastRecordTimestamp = Long.MIN_VALUE
-    private var hashedSchema: Int? = null
     private val clock = Clock.systemUTC()
     var commitBatchSize = 1000
     var commitTimespanMs = 10.minutes.inWholeMilliseconds
@@ -36,7 +36,7 @@ class DebeziumStreamlet(
         if (status != CREATED) resume()
         status = RUNNING
         logger.info("Streamlet {} is running", id)
-        ensurePosition()
+        ensureOffsets()
         while (shouldRun()) {
             captureChanges(commitBatchSize)
         }
@@ -56,8 +56,8 @@ class DebeziumStreamlet(
 
     private fun commit() {
         logger.info("Committing changes")
-        outlet.commit(positions, lastRecordTimestamp)
-        inlet.commit(positions)
+        outlet.commit(offsets, lastRecordTimestamp)
+        inlet.commit(offsets)
     }
 
     override fun shouldRun(): Boolean {
@@ -70,14 +70,21 @@ class DebeziumStreamlet(
     private fun captureChanges(batchSize: Int) {
         var record = inlet.read()
         var count = 0
+        var firstNonNull = false
         while (record != null) {
-            if (!ensureSchema(record)) {
+            if (schemaHandler.shouldMigrate(record)) {
                 if (count > 0) commit()
                 count = 0 // reset counter
+                firstNonNull = false
+                schemaHandler.migrateSchema(record)
                 continue
             }
+            if (!firstNonNull && record.value() != null) {
+                outlet.updateSourceSchema(record.keySchema(), record.valueSchema())
+                firstNonNull = true
+            }
             outlet.write(record)
-            positions[record.kafkaPartition()] = record.kafkaOffset() + 1
+            offsets[record.kafkaPartition()] = record.kafkaOffset() + 1
             lastRecordTimestamp = max(lastRecordTimestamp, record.timestamp())
             count++
             if (count >= batchSize) break
@@ -86,43 +93,27 @@ class DebeziumStreamlet(
         if (count > 0) commit()
     }
 
-    private fun ensurePosition() {
-        val committedPositions = outlet.committedPositions() ?: return
-        positions.putAll(committedPositions)
+    private fun ensureOffsets() {
+        val outletOffsets = outlet.committedOffsets() ?: return
+        offsets.putAll(outletOffsets)
         lastRecordTimestamp = outlet.lastRecordTimestamp() ?: Long.MIN_VALUE
 
-        val committedOffsets = inlet.committedOffsets()
-        val isUpToDate = positions.all { (partition, offset) ->
-            committedOffsets[partition] == offset
+        val inletOffsets = inlet.committedOffsets()
+        val isUpToDate = offsets.all { (partition, offset) ->
+            inletOffsets[partition] == offset
         }
         if (isUpToDate) return
 
         logger.warn(
             """
-            Table position is different to Kafka committed offsets:
-                Iceberg table positions: {}
+            Table offsets is different to Kafka committed offsets:
+                Iceberg table offsets  : {}
                 Kafka committed offsets: {}
             """.trimIndent(),
-            positions, committedOffsets
+            offsets, inletOffsets
         )
-        logger.warn("Seeking to position stored in Iceberg table")
-        inlet.seekOffsets(positions)
-    }
-
-    private fun ensureSchema(record: SinkRecord): Boolean {
-        val keySchema = record.keySchema()
-        val valueSchema = record.valueSchema()
-        val hashed = Objects.hash(keySchema, valueSchema)
-
-        if (hashedSchema == hashed)
-            return true
-
-        if (hashedSchema != null) {
-            outlet.migrate(keySchema, valueSchema)
-        }
-        outlet.updateSourceSchema(keySchema, valueSchema)
-        hashedSchema = hashed
-        return false
+        logger.warn("Seeking to offsets stored in Iceberg table")
+        inlet.seekOffsets(offsets)
     }
 
     override fun close() {

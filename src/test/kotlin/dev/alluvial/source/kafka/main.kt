@@ -1,13 +1,14 @@
 package dev.alluvial.source.kafka
 
 import dev.alluvial.api.StreamletId
+import dev.alluvial.runtime.SourceConfig
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
 
 
 fun main() {
-    val config: Map<String, Any> = mapOf(
+    val config: Map<String, String> = mapOf(
         ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG to "org.apache.kafka.common.serialization.ByteArrayDeserializer",
         ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG to "org.apache.kafka.common.serialization.ByteArrayDeserializer",
         ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG to "org.apache.kafka.common.serialization.ByteArraySerializer",
@@ -21,11 +22,14 @@ fun main() {
         "value.converter" to "io.confluent.connect.avro.AvroConverter",
         "value.converter.schema.registry.url" to "http://schema-registry:8081",
     )
-    val inlet = KafkaTopicInlet(
-        StreamletId("foo", "bar"),
-        "debezium.mysql.sakila.actor",
-        config,
+    val sourceConfig = SourceConfig(
+        kind = "kafka",
+        topicPrefix = "debezium.mysql",
+        config = config
     )
+    val source = KafkaSource(sourceConfig)
+    val inlet = source.getInlet(StreamletId("sakila", "actor"))
+
     repeat(100) {
         val record = inlet.read()
         println(record)

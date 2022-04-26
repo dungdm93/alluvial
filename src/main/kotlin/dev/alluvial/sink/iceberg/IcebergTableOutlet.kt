@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.json.JsonMapper
 import dev.alluvial.api.Outlet
 import dev.alluvial.api.StreamletId
-import dev.alluvial.sink.iceberg.data.SchemaMigrator
 import dev.alluvial.sink.iceberg.io.AlluvialTaskWriterFactory
 import org.apache.iceberg.io.TaskWriter
 import org.apache.kafka.connect.sink.SinkRecord
@@ -16,7 +15,6 @@ import org.apache.kafka.connect.data.Schema as KafkaSchema
 class IcebergTableOutlet(
     val id: StreamletId,
     val table: IcebergTable,
-    config: Map<String, Any>,
 ) : Outlet {
     companion object {
         private val logger = LoggerFactory.getLogger(IcebergTableOutlet::class.java)
@@ -60,23 +58,11 @@ class IcebergTableOutlet(
         writerFactory.setEqualityDeleteKafkaSchema(keySchema)
     }
 
-    fun migrate(keySchema: KafkaSchema, valueSchema: KafkaSchema) {
-        val schemaUpdater = table.updateSchema()
-
-        val migrator = SchemaMigrator(schemaUpdater)
-        migrator.visit(valueSchema, table.schema())
-        val keys = keySchema.fields().map { it.name() }.toSet()
-        if (keys != table.schema().identifierFieldNames())
-            schemaUpdater.setIdentifierFields(keys)
-
-        schemaUpdater.commit()
-    }
-
     /**
-     * @return position of last snapshot or null
+     * @return offsets of last snapshot or null
      * if outlet doesn't have any snapshot.
      */
-    fun committedPositions(): Map<Int, Long>? {
+    fun committedOffsets(): Map<Int, Long>? {
         val serialized = table.currentSnapshot()
             ?.summary()
             ?.get(ALLUVIAL_POSITION_PROP)

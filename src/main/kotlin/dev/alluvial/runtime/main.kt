@@ -24,6 +24,7 @@ fun parseConfig(args: Array<out String>): Config {
 
 fun main(vararg args: String) {
     val config = parseConfig(args)
-    val alluvial = Alluvial(config)
+    val alluvial = Alluvial()
+    alluvial.configure(config)
     alluvial.run()
 }

@@ -1,5 +1,7 @@
-package dev.alluvial.sink.iceberg.data
+package dev.alluvial.schema.debezium
 
+import dev.alluvial.sink.iceberg.data.isMigrateFrom
+import dev.alluvial.sink.iceberg.data.toIcebergSchema
 import org.apache.iceberg.PartitionSpec
 import org.apache.iceberg.Table
 import org.apache.iceberg.TestTables
@@ -14,7 +16,7 @@ import org.apache.iceberg.Schema as IcebergSchema
 import org.apache.kafka.connect.data.Schema as KafkaSchema
 
 
-internal class TestSchemaMigrator {
+internal class TestKafkaSchemaSchemaMigrator {
     @TempDir
     private lateinit var tmpDir: File
     private lateinit var table: Table
@@ -31,7 +33,7 @@ internal class TestSchemaMigrator {
         val iOriginal = table.schema()
 
         val su = table.updateSchema()
-        SchemaMigrator(su).visit(sAfter, iOriginal)
+        KafkaSchemaSchemaMigrator(su).visit(sAfter, iOriginal)
         su.commit()
 
         table.refresh()
