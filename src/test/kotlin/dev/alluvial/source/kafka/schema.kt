@@ -87,7 +87,7 @@ val DEBEZIUM_LOGICAL_TYPES_SCHEMA = mapOf(
     "dbz_nano_timestamp" to DBZ_NANO_TIMESTAMP_SCHEMA,
     "dbz_zoned_timestamp" to DBZ_ZONED_TIMESTAMP_SCHEMA,
     "dbz_enum" to DBZ_ENUM_SCHEMA,
-    "dbz_enum_set" to DBZ_ENUM_SET_SCHEMA,
+//    "dbz_enum_set" to DBZ_ENUM_SET_SCHEMA,
 //    "dbz_micro_duration" to DBZ_MICRO_DURATION_SCHEMA,
 //    "dbz_nano_duration" to DBZ_NANO_DURATION_SCHEMA,
 //    "dbz_interval" to DBZ_INTERVAL_SCHEMA,
