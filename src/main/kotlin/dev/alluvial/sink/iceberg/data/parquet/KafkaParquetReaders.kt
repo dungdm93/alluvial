@@ -1,16 +1,20 @@
 package dev.alluvial.sink.iceberg.data.parquet
 
+import dev.alluvial.utils.OffsetTimes
+import dev.alluvial.utils.TimePrecision
+import dev.alluvial.utils.ZonedDateTimes
+import io.debezium.time.ZonedTime
+import io.debezium.time.ZonedTimestamp
 import org.apache.iceberg.parquet.ParquetValueReader
 import org.apache.iceberg.parquet.ParquetValueReaders
+import org.apache.iceberg.parquet.ParquetValueReaders.PrimitiveReader
+import org.apache.iceberg.parquet.ParquetValueReaders.UnboxedReader
 import org.apache.parquet.column.ColumnDescriptor
-import org.apache.parquet.schema.LogicalTypeAnnotation.TimeLogicalTypeAnnotation
-import org.apache.parquet.schema.LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
 import org.apache.parquet.schema.Type
 import java.util.Date
 import java.util.concurrent.TimeUnit
 import org.apache.kafka.connect.data.Schema as KafkaSchema
 import org.apache.kafka.connect.data.Struct as KafkaStruct
-import org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit as ParquetTimeUnit
 
 object KafkaParquetReaders {
     fun strings(desc: ColumnDescriptor): ParquetValueReader<String> {
@@ -22,7 +26,15 @@ object KafkaParquetReaders {
     }
 
     fun <T> unboxed(desc: ColumnDescriptor): ParquetValueReader<T> {
-        return ParquetValueReaders.UnboxedReader(desc)
+        return UnboxedReader(desc)
+    }
+
+    fun tinyints(desc: ColumnDescriptor): ParquetValueReader<Byte> {
+        return ByteReader(desc)
+    }
+
+    fun shorts(desc: ColumnDescriptor): ParquetValueReader<Short> {
+        return ShortReader(desc)
     }
 
     fun list(
@@ -42,24 +54,56 @@ object KafkaParquetReaders {
         return ParquetValueReaders.MapReader(definitionLevel, repetitionLevel, keyWriter, valueWriter)
     }
 
-    fun date(desc: ColumnDescriptor): ParquetValueReader<Date> {
-        return DateReader(desc)
-    }
-
-    fun time(desc: ColumnDescriptor, logicalType: TimeLogicalTypeAnnotation): ParquetValueReader<Date> {
-        return TimeReader(desc, logicalType.unit)
-    }
-
-    fun timestamp(desc: ColumnDescriptor, logicalType: TimestampLogicalTypeAnnotation): ParquetValueReader<Date> {
-        return TimestampReader(desc, logicalType.unit)
-    }
-
     fun struct(
         types: List<Type>,
         fieldReaders: List<ParquetValueReader<*>?>,
         struct: KafkaSchema,
     ): ParquetValueReader<*> {
         return StructReader(types, fieldReaders, struct)
+    }
+
+    fun date(desc: ColumnDescriptor): ParquetValueReader<Date> {
+        return DateReader(desc)
+    }
+
+    fun timeAsDate(precision: TimePrecision, desc: ColumnDescriptor): ParquetValueReader<Date> {
+        return TimeAsDateReader(precision, desc)
+    }
+
+    fun timeAsInt(sourcePrecision: TimePrecision, targetPrecision: TimePrecision, desc: ColumnDescriptor):
+        ParquetValueReader<Int> {
+        return TimeAsIntReader(sourcePrecision, targetPrecision, desc)
+    }
+
+    fun timeAsLong(sourcePrecision: TimePrecision, targetPrecision: TimePrecision, desc: ColumnDescriptor):
+        ParquetValueReader<Long> {
+        return TimeAsLongReader(sourcePrecision, targetPrecision, desc)
+    }
+
+    fun zonedTimeAsString(
+        timePrecision: TimePrecision,
+        desc: ColumnDescriptor
+    ): ParquetValueReader<String> {
+        return ZonedTimeAsStringReader(timePrecision, desc)
+    }
+
+    fun timestampAsDate(precision: TimePrecision, desc: ColumnDescriptor): ParquetValueReader<Date> {
+        return TimestampAsDateReader(precision, desc)
+    }
+
+    fun timestampAsLong(
+        sourcePrecision: TimePrecision,
+        targetPrecision: TimePrecision,
+        desc: ColumnDescriptor
+    ): ParquetValueReader<Long> {
+        return TimestampAsLongReader(sourcePrecision, targetPrecision, desc)
+    }
+
+    fun zonedTimestampAsString(
+        targetPrecision: TimePrecision,
+        desc: ColumnDescriptor
+    ): ParquetValueReader<String> {
+        return ZonedTimestampAsStringReader(targetPrecision, desc)
     }
 
     private class StructReader(
@@ -86,13 +130,19 @@ object KafkaParquetReaders {
         }
     }
 
-    private val TIME_UNIT_MAP = mapOf(
-        ParquetTimeUnit.MILLIS to TimeUnit.MILLISECONDS,
-        ParquetTimeUnit.MICROS to TimeUnit.MICROSECONDS,
-        ParquetTimeUnit.NANOS to TimeUnit.NANOSECONDS,
-    )
+    private class ShortReader(desc: ColumnDescriptor) : UnboxedReader<Short>(desc) {
+        override fun read(ignored: Short?): Short {
+            return readInteger().toShort()
+        }
+    }
 
-    private class DateReader(desc: ColumnDescriptor) : ParquetValueReaders.UnboxedReader<Date>(desc) {
+    private class ByteReader(desc: ColumnDescriptor) : UnboxedReader<Byte>(desc) {
+        override fun read(ignored: Byte?): Byte {
+            return readInteger().toByte()
+        }
+    }
+
+    private class DateReader(desc: ColumnDescriptor) : UnboxedReader<Date>(desc) {
         override fun read(reuse: Date?): Date {
             val days = readInteger().toLong()
             val time = TimeUnit.DAYS.toMillis(days)
@@ -100,32 +150,105 @@ object KafkaParquetReaders {
         }
     }
 
-    private class TimeReader(desc: ColumnDescriptor, timeUnit: ParquetTimeUnit) :
-        ParquetValueReaders.UnboxedReader<Date>(desc) {
-        private val sourceUnit = TIME_UNIT_MAP[timeUnit]!!
+    abstract class ParquetTimeReader<T>(
+        protected val sourcePrecision: TimePrecision,
+        protected val targetPrecision: TimePrecision,
+        desc: ColumnDescriptor
+    ) : PrimitiveReader<T>(desc) {
+        override fun read(reuse: T?): T {
+            var time = if (sourcePrecision == TimePrecision.MILLIS)
+                column.nextInteger().toLong() else
+                column.nextLong()
 
-        override fun read(reuse: Date?): Date {
-            val timeOriginal = if (sourceUnit == TimeUnit.MILLISECONDS)
-                readInteger().toLong() else
-                readLong()
-            val timeMillis = TimeUnit.MILLISECONDS.convert(timeOriginal, sourceUnit)
-            return if (timeMillis == reuse?.time) reuse else Date(timeMillis)
+            time = targetPrecision.floorConvert(time, sourcePrecision)
+            return deserialize(time, reuse)
+        }
+
+        abstract fun deserialize(time: Long, reuse: Any?): T
+    }
+
+    private class TimeAsDateReader(
+        sourcePrecision: TimePrecision,
+        desc: ColumnDescriptor
+    ) : ParquetTimeReader<Date>(sourcePrecision, TimePrecision.MILLIS, desc) {
+        override fun deserialize(time: Long, reuse: Any?): Date {
+            return if (time == (reuse as? Date)?.time)
+                reuse else
+                Date(time)
         }
     }
 
-    private class TimestampReader(desc: ColumnDescriptor, timeUnit: ParquetTimeUnit) :
-        ParquetValueReaders.UnboxedReader<Date>(desc) {
-        private val sourceUnit = TIME_UNIT_MAP[timeUnit]!!
+    private class TimeAsIntReader(
+        sourcePrecision: TimePrecision,
+        targetPrecision: TimePrecision,
+        desc: ColumnDescriptor
+    ) : ParquetTimeReader<Int>(sourcePrecision, targetPrecision, desc) {
+        override fun deserialize(time: Long, reuse: Any?): Int = time.toInt()
+    }
 
-        override fun read(reuse: Date?): Date {
-            val timeOriginal = readLong()
-            var timeMillis = TimeUnit.MILLISECONDS.convert(timeOriginal, sourceUnit)
-            // represent a time before UNIX Epoch (1970-01-01T00:00:00+GMT)
-            // then, timeMicros will be negative
-            if (sourceUnit.convert(timeMillis, TimeUnit.MILLISECONDS) > timeOriginal) {
-                timeMillis--
+    private class TimeAsLongReader(
+        sourcePrecision: TimePrecision,
+        targetPrecision: TimePrecision,
+        desc: ColumnDescriptor
+    ) : ParquetTimeReader<Long>(sourcePrecision, targetPrecision, desc) {
+        override fun deserialize(time: Long, reuse: Any?): Long = time
+    }
+
+    private class ZonedTimeAsStringReader(
+        sourcePrecision: TimePrecision,
+        desc: ColumnDescriptor
+    ) : ParquetTimeReader<String>(sourcePrecision, sourcePrecision, desc) {
+        override fun deserialize(time: Long, reuse: Any?): String {
+            val offsetTime = OffsetTimes.ofUtcMidnightTime(time, sourcePrecision)
+            return ZonedTime.toIsoString(offsetTime, null)
+        }
+    }
+
+    abstract class ParquetTimestampReader<T>(
+        protected val sourcePrecision: TimePrecision,
+        protected val targetPrecision: TimePrecision,
+        desc: ColumnDescriptor
+    ) : PrimitiveReader<T>(desc) {
+        override fun read(reuse: T?): T {
+            var ts = column.nextLong()
+            ts = targetPrecision.floorConvert(ts, sourcePrecision)
+
+            return deserialize(ts, reuse)
+        }
+
+        abstract fun deserialize(ts: Long, reuse: Any?): T
+    }
+
+    private class TimestampAsDateReader(
+        sourcePrecision: TimePrecision,
+        desc: ColumnDescriptor
+    ) : ParquetTimestampReader<Date>(sourcePrecision, TimePrecision.MILLIS, desc) {
+        override fun deserialize(ts: Long, reuse: Any?): Date {
+            return if (ts == (reuse as? Date)?.time)
+                reuse else
+                Date(ts)
+        }
+    }
+
+    private class TimestampAsLongReader(
+        sourcePrecision: TimePrecision,
+        targetPrecision: TimePrecision,
+        desc: ColumnDescriptor
+    ) : ParquetTimestampReader<Long>(sourcePrecision, targetPrecision, desc) {
+        override fun deserialize(ts: Long, reuse: Any?) = ts
+    }
+
+    private class ZonedTimestampAsStringReader(
+        sourcePrecision: TimePrecision,
+        desc: ColumnDescriptor
+    ) : ParquetTimestampReader<String>(sourcePrecision, sourcePrecision, desc) {
+        override fun deserialize(ts: Long, reuse: Any?): String = when (ts) {
+            Long.MAX_VALUE -> "infinity"
+            Long.MIN_VALUE -> "-infinity"
+            else -> {
+                val zdt = ZonedDateTimes.ofEpochTime(ts, sourcePrecision)
+                ZonedTimestamp.toIsoString(zdt, null)
             }
-            return if (timeMillis == reuse?.time) reuse else Date(timeMillis)
         }
     }
 }

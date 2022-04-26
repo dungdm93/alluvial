@@ -3,6 +3,9 @@ package dev.alluvial.utils
 import dev.alluvial.utils.TimePrecision.*
 import org.apache.avro.LogicalType
 import org.apache.avro.LogicalTypes
+import org.apache.parquet.schema.LogicalTypeAnnotation
+import org.apache.parquet.schema.LogicalTypeAnnotation.TimeLogicalTypeAnnotation
+import org.apache.parquet.schema.LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -43,6 +46,23 @@ fun LogicalType.timePrecision(): TimePrecision {
         is LogicalTypes.TimestampMicros,
         is LogicalTypes.LocalTimestampMicros -> MICROS
         else -> throw IllegalArgumentException("Unknown time precision of logicalType: ${this.name}")
+    }
+}
+
+fun LogicalTypeAnnotation.timePrecision(): TimePrecision {
+    @Suppress("WHEN_ENUM_CAN_BE_NULL_IN_JAVA")
+    return when (this) {
+        is TimeLogicalTypeAnnotation -> when (unit) {
+            LogicalTypeAnnotation.TimeUnit.MILLIS -> MILLIS
+            LogicalTypeAnnotation.TimeUnit.MICROS -> MICROS
+            LogicalTypeAnnotation.TimeUnit.NANOS -> NANOS
+        }
+        is TimestampLogicalTypeAnnotation -> when (unit) {
+            LogicalTypeAnnotation.TimeUnit.MILLIS -> MILLIS
+            LogicalTypeAnnotation.TimeUnit.MICROS -> MICROS
+            LogicalTypeAnnotation.TimeUnit.NANOS -> NANOS
+        }
+        else -> throw IllegalArgumentException("This must be time/timestamp type annotation")
     }
 }
 
