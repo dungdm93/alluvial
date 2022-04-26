@@ -1,6 +1,6 @@
 package dev.alluvial.sink.iceberg.data.avro
 
-import dev.alluvial.sink.iceberg.data.KafkaSchemaUtil
+import dev.alluvial.sink.iceberg.data.toKafkaSchema
 import dev.alluvial.utils.TimePrecision.*
 import dev.alluvial.utils.timePrecision
 import org.apache.avro.LogicalTypes
@@ -38,7 +38,7 @@ class KafkaAvroReader(
     }
 
     constructor(expectedSchema: IcebergSchema, readSchema: AvroSchema) :
-        this(KafkaSchemaUtil.toKafkaSchema(expectedSchema), readSchema)
+        this(expectedSchema.toKafkaSchema(), readSchema)
 
     override fun setSchema(schema: AvroSchema) {
         this.fileSchema = AvroSchema.applyAliases(schema, readSchema)

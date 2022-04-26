@@ -77,7 +77,7 @@ internal class KafkaSchemaUtilTest {
     @Test
     fun kafkaPrimitive2IcebergType() {
         PRIMITIVE_TYPES.forEach { (k, v) ->
-            val c = KafkaSchemaUtil.toIcebergType(k)
+            val c = k.toIcebergType()
             expectThat(c).isSameInstanceAs(v)
         }
     }
@@ -87,7 +87,7 @@ internal class KafkaSchemaUtilTest {
         PRIMITIVE_TYPES.forEach { (k, v) ->
             val kafkaSchema = kafkaArrayOf(k)
             val icebergSchema = icebergListOf(k.isOptional, v)
-            val convertSchema = KafkaSchemaUtil.toIcebergType(kafkaSchema)
+            val convertSchema = kafkaSchema.toIcebergType()
             expectThat(convertSchema).isSameTypeAs(icebergSchema)
         }
     }
@@ -97,21 +97,21 @@ internal class KafkaSchemaUtilTest {
         PRIMITIVE_TYPES.forEach { (k, v) ->
             val kafkaSchema = kafkaMapOf(k)
             val icebergSchema = icebergMapOf(k.isOptional, v)
-            val convertSchema = KafkaSchemaUtil.toIcebergType(kafkaSchema)
+            val convertSchema = kafkaSchema.toIcebergType()
             expectThat(convertSchema).isSameTypeAs(icebergSchema)
         }
     }
 
     @Test
     fun kafkaStruct2IcebergType() {
-        expectThat(KafkaSchemaUtil.toIcebergType(STRUCT_OF_PRIMITIVE.first))
+        expectThat(STRUCT_OF_PRIMITIVE.first.toIcebergType())
             .isSameTypeAs(STRUCT_OF_PRIMITIVE.second)
     }
 
     @Test
     fun kafkaStruct2IcebergSchema() {
         val icebergSchema = IcebergSchema(STRUCT_OF_PRIMITIVE.second.asStructType().fields())
-        expectThat(KafkaSchemaUtil.toIcebergSchema(STRUCT_OF_PRIMITIVE.first))
+        expectThat(STRUCT_OF_PRIMITIVE.first.toIcebergSchema())
             .propertiesAreEqualTo(icebergSchema)
     }
 }

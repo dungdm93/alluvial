@@ -1,9 +1,9 @@
 package dev.alluvial.sink.iceberg.io
 
 import dev.alluvial.backport.iceberg.io.BaseFileWriterFactory
-import dev.alluvial.sink.iceberg.data.KafkaSchemaUtil
 import dev.alluvial.sink.iceberg.data.avro.KafkaAvroWriter
 import dev.alluvial.sink.iceberg.data.parquet.KafkaParquetWriter
+import dev.alluvial.sink.iceberg.data.toKafkaSchema
 import org.apache.iceberg.FileFormat
 import org.apache.iceberg.MetadataColumns.DELETE_FILE_ROW_FIELD_NAME
 import org.apache.iceberg.SortOrder
@@ -40,7 +40,7 @@ class AlluvialFileWriterFactory private constructor(
         if (dataKafkaSchema == null) {
             val dataSchema = dataSchema()
             Preconditions.checkNotNull(dataSchema, "Data schema must not be null")
-            dataKafkaSchema = KafkaSchemaUtil.toKafkaSchema(dataSchema)
+            dataKafkaSchema = dataSchema.toKafkaSchema()
         }
         return dataKafkaSchema!!
     }
@@ -49,7 +49,7 @@ class AlluvialFileWriterFactory private constructor(
         if (equalityDeleteKafkaSchema == null) {
             val equalityDeleteRowSchema = equalityDeleteRowSchema()
             Preconditions.checkNotNull(equalityDeleteRowSchema, "Equality delete row schema shouldn't be null")
-            equalityDeleteKafkaSchema = KafkaSchemaUtil.toKafkaSchema(equalityDeleteRowSchema)
+            equalityDeleteKafkaSchema = equalityDeleteRowSchema.toKafkaSchema()
         }
         return equalityDeleteKafkaSchema!!
     }
@@ -59,7 +59,7 @@ class AlluvialFileWriterFactory private constructor(
             val positionDeleteRowSchema = positionDeleteRowSchema()
             // wrap the optional row schema into the position delete schema that contains path and position
             val positionDeleteSchema = DeleteSchemaUtil.posDeleteSchema(positionDeleteRowSchema)
-            positionDeleteKafkaSchema = KafkaSchemaUtil.toKafkaSchema(positionDeleteSchema)
+            positionDeleteKafkaSchema = positionDeleteSchema.toKafkaSchema()
         }
         return positionDeleteKafkaSchema!!
     }

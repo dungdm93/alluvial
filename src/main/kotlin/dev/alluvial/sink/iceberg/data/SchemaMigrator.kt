@@ -4,7 +4,6 @@ import org.apache.iceberg.UpdateSchema
 import org.apache.iceberg.relocated.com.google.common.base.Joiner
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions
 import org.apache.iceberg.types.Type.PrimitiveType
-import org.apache.iceberg.types.TypeUtil
 import org.apache.iceberg.types.Types.*
 import org.slf4j.LoggerFactory
 import java.util.Deque
@@ -95,7 +94,7 @@ class SchemaMigrator(
         if (sField == null) return dropColumn(iField!!)
         if (iField == null) return addColumn(sField)
 
-        if (!typeCompatible(sField.schema(), iField.type())) {
+        if (!sField.isPromotionAllowed(iField)) {
             return replaceColumn(sField, iField)
         }
         withNode(iField.name()) {
@@ -110,7 +109,7 @@ class SchemaMigrator(
 
     private fun primitive(sPrimitive: KafkaSchema, iPrimitive: PrimitiveType) {
         // expect sPrimitive will be converted to iceberg primitive type, otherwise raise an IllegalArgumentException
-        val ePrimitive = KafkaSchemaUtil.toIcebergType(sPrimitive).asPrimitiveType()
+        val ePrimitive = sPrimitive.toIcebergType().asPrimitiveType()
         if (iPrimitive == ePrimitive) return
 
         val currentFieldName = currentFieldName()
@@ -126,7 +125,7 @@ class SchemaMigrator(
             currentFieldShortName else
             "$parentFieldName.${currentFieldShortName}"
         val sType = sField.schema()
-        val iType = KafkaSchemaUtil.toIcebergType(sType)
+        val iType = sType.toIcebergType()
 
         if (sType.isOptional) {
             logger.warn("Add optional column \"{}\" with type: {}", currentFieldName, iType)
@@ -148,30 +147,6 @@ class SchemaMigrator(
     private fun replaceColumn(sField: KafkaField, iField: IcebergField) {
         dropColumn(iField)
         addColumn(sField)
-    }
-
-    private fun typeCompatible(sSchema: KafkaSchema, iType: IcebergType): Boolean {
-        return when (iType.typeId()) {
-            IcebergTypeID.STRUCT -> sSchema.type() == KafkaTypeID.STRUCT
-            IcebergTypeID.MAP -> {
-                if (sSchema.type() != KafkaTypeID.MAP) return false
-                if (!typeCompatible(sSchema.valueSchema(), iType.asMapType().valueType())) return false
-                // map key CAN'T be changed.
-                // See org.apache.iceberg.SchemaUpdate.ApplyChanges.map
-                val sKeyType = KafkaSchemaUtil.toIcebergType(sSchema.keySchema())
-                return KafkaSchemaUtil.equalsIgnoreId(sKeyType, iType.asMapType().keyType())
-            }
-            IcebergTypeID.LIST -> sSchema.type() == KafkaTypeID.ARRAY &&
-                typeCompatible(sSchema.valueSchema(), iType.asListType().elementType())
-            // Primitive type
-            // Kafka's Schema has concept of logical type, e.g. org.apache.kafka.connect.data.Timestamp (INT64)
-            // and io.debezium.time.Timestamp (STRING) both translate to Iceberg's TIMESTAMP.
-            // So it's cannot static mapping between Kafka Schema type and Iceberg type.
-            else -> {
-                val eType = KafkaSchemaUtil.toIcebergType(sSchema)
-                eType.isPrimitiveType && TypeUtil.isPromotionAllowed(iType, eType.asPrimitiveType())
-            }
-        }
     }
 
     private fun updateDoc(doc: String?) {
