@@ -27,7 +27,7 @@ internal class TestSchemaMigrator {
     }
 
     private fun migrateAndValidate(sBefore: KafkaSchema, sAfter: KafkaSchema) {
-        createTable(KafkaSchemaUtil.toIcebergSchema(sBefore))
+        createTable(sBefore.toIcebergSchema())
         val iOriginal = table.schema()
 
         val su = table.updateSchema()
@@ -37,7 +37,7 @@ internal class TestSchemaMigrator {
         table.refresh()
         val iActual = table.schema()
 
-        createTable(KafkaSchemaUtil.toIcebergSchema(sAfter))
+        createTable(sAfter.toIcebergSchema())
         val iExpect = table.schema()
 
         expectThat(iActual).isMigrateFrom(iOriginal, iExpect)

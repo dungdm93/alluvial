@@ -3,7 +3,7 @@ package dev.alluvial.stream.debezium
 import dev.alluvial.api.StreamletId
 import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.sink.iceberg.IcebergTableOutlet
-import dev.alluvial.sink.iceberg.data.KafkaSchemaUtil
+import dev.alluvial.sink.iceberg.data.toIcebergSchema
 import dev.alluvial.source.kafka.KafkaSource
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.TopicPartition
@@ -58,7 +58,7 @@ class DebeziumStreamletFactory(
         require(rowSchema.type() == Schema.Type.STRUCT) { "ValueSchema.after must be a STRUCT" }
 
         val keys = keySchema.fields().map { it.name() }
-        val iSchema = KafkaSchemaUtil.toIcebergSchema(rowSchema, keys)
+        val iSchema = rowSchema.toIcebergSchema(keys)
 
         return sink.createOutlet(id, iSchema)
     }

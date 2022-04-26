@@ -1,8 +1,9 @@
 package dev.alluvial.sink.iceberg.data.parquet
 
 import dev.alluvial.sink.iceberg.data.AssertionsKafka.assertEquals
-import dev.alluvial.sink.iceberg.data.KafkaSchemaUtil
 import dev.alluvial.sink.iceberg.data.RandomKafkaStruct
+import dev.alluvial.sink.iceberg.data.toIcebergSchema
+import dev.alluvial.sink.iceberg.data.toKafkaSchema
 import dev.alluvial.source.kafka.DEBEZIUM_LOGICAL_TYPES_SCHEMA
 import dev.alluvial.source.kafka.KAFKA_LOGICAL_TYPES_SCHEMA
 import dev.alluvial.source.kafka.KAFKA_PRIMITIVES_SCHEMA
@@ -23,7 +24,7 @@ import org.apache.kafka.connect.data.Struct as KafkaStruct
 
 internal class KafkaParquetRWTest : DataTest() {
     override fun writeAndValidate(icebergSchema: IcebergSchema) {
-        val kafkaSchema = KafkaSchemaUtil.toKafkaSchema(icebergSchema)
+        val kafkaSchema = icebergSchema.toKafkaSchema()
         val expectedIcebergRecords = RandomGenericData.generate(icebergSchema, 100, 0L).toList()
         val expectedKafkaStructs = RandomKafkaStruct.convert(icebergSchema, expectedIcebergRecords).toList()
 
@@ -32,7 +33,7 @@ internal class KafkaParquetRWTest : DataTest() {
     }
 
     private fun writeAndValidate(kafkaSchema: KafkaSchema) {
-        val icebergSchema = KafkaSchemaUtil.toIcebergSchema(kafkaSchema)
+        val icebergSchema = kafkaSchema.toIcebergSchema()
         val expectedKafkaStructs = RandomKafkaStruct.generate(kafkaSchema, 100, 5).toList()
 
         val expectedIcebergRecords = validateKafkaWriter(icebergSchema, kafkaSchema, expectedKafkaStructs)

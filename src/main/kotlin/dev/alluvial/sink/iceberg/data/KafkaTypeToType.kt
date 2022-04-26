@@ -1,6 +1,8 @@
 package dev.alluvial.sink.iceberg.data
 
+import io.debezium.data.geometry.Geometry
 import org.apache.iceberg.types.Types
+import org.apache.kafka.connect.data.Decimal
 import org.apache.iceberg.types.Type as IcebergType
 import org.apache.kafka.connect.data.Field as KafkaField
 import org.apache.kafka.connect.data.Schema as KafkaSchema
@@ -66,7 +68,7 @@ class KafkaTypeToType : KafkaTypeVisitor<IcebergType>() {
             org.apache.kafka.connect.data.Decimal.LOGICAL_NAME -> {
                 val params = schema.parameters()
                 val precision = (params["precision"] ?: params["connect.decimal.precision"] ?: "38").toInt()
-                val scale = params.getOrDefault(org.apache.kafka.connect.data.Decimal.SCALE_FIELD, "10").toInt()
+                val scale = params.getOrDefault(Decimal.SCALE_FIELD, "10").toInt()
                 Types.DecimalType.of(precision, scale)
             }
 
@@ -89,12 +91,8 @@ class KafkaTypeToType : KafkaTypeVisitor<IcebergType>() {
             //    "io.debezium.data.geometry.Point"
             //    "io.debezium.data.geometry.Geometry"
             io.debezium.data.geometry.Geometry.LOGICAL_NAME -> Types.StructType.of(
-                Types.NestedField.of(
-                    getNextId(), false, io.debezium.data.geometry.Geometry.WKB_FIELD, Types.BinaryType.get()
-                ),
-                Types.NestedField.of(
-                    getNextId(), true, io.debezium.data.geometry.Geometry.SRID_FIELD, Types.IntegerType.get()
-                )
+                Types.NestedField.of(getNextId(), false, Geometry.WKB_FIELD, Types.BinaryType.get()),
+                Types.NestedField.of(getNextId(), true, Geometry.SRID_FIELD, Types.IntegerType.get())
             )
             //    "io.debezium.data.geometry.Geography"
             //    "io.debezium.data.Bits"

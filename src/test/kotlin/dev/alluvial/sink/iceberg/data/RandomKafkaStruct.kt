@@ -8,7 +8,7 @@ import org.apache.kafka.connect.data.Struct as KafkaStruct
 
 object RandomKafkaStruct {
     fun generate(iSchema: IcebergSchema, numRecords: Int, seed: Long): Iterable<KafkaStruct> {
-        val sSchema = KafkaSchemaUtil.toKafkaSchema(iSchema)
+        val sSchema = iSchema.toKafkaSchema()
         val generator = KafkaRandomDataGenerator.BasedOnIcebergSchema(seed, sSchema)
         return Iterable {
             iterator {
@@ -33,13 +33,13 @@ object RandomKafkaStruct {
     }
 
     fun convert(iSchema: IcebergSchema, records: Iterable<IcebergRecord>): Iterable<KafkaStruct> {
-        val sSchema = KafkaSchemaUtil.toKafkaSchema(iSchema)
+        val sSchema = iSchema.toKafkaSchema()
         val converter = KafkaStructConverter(sSchema)
         return records.map { converter.convert(iSchema, it) }
     }
 
     fun convert(iSchema: IcebergSchema, record: IcebergRecord): KafkaStruct {
-        val sSchema = KafkaSchemaUtil.toKafkaSchema(iSchema)
+        val sSchema = iSchema.toKafkaSchema()
         val converter = KafkaStructConverter(sSchema)
         return converter.convert(iSchema, record)
     }

@@ -1,6 +1,6 @@
 package dev.alluvial.sink.iceberg.data.parquet
 
-import dev.alluvial.sink.iceberg.data.KafkaSchemaUtil
+import dev.alluvial.sink.iceberg.data.toKafkaSchema
 import dev.alluvial.utils.TimePrecision.*
 import dev.alluvial.utils.timePrecision
 import org.apache.iceberg.Schema
@@ -18,7 +18,7 @@ import org.apache.kafka.connect.data.Schema.Type as KafkaType
 
 object KafkaParquetReader {
     fun buildReader(expectedSchema: Schema, fileSchema: MessageType): ParquetValueReader<*> {
-        val kafkaSchema = KafkaSchemaUtil.toKafkaSchema(expectedSchema)
+        val kafkaSchema = expectedSchema.toKafkaSchema()
         return buildReader(kafkaSchema, fileSchema)
     }
 
@@ -26,7 +26,9 @@ object KafkaParquetReader {
         return ReadBuilder(fileSchema).visit(sSchema, fileSchema)
     }
 
-    private class ReadBuilder(private val message: MessageType) : ParquetWithKafkaSchemaVisitor<ParquetValueReader<*>>() {
+    private class ReadBuilder(
+        private val message: MessageType
+    ) : ParquetWithKafkaSchemaVisitor<ParquetValueReader<*>>() {
         private fun newOption(fieldType: Type, reader: ParquetValueReader<*>?): ParquetValueReader<*> {
             val maxD = message.getMaxDefinitionLevel(*path(fieldType.name)) - 1
             return ParquetValueReaders.option(fieldType, maxD, reader)

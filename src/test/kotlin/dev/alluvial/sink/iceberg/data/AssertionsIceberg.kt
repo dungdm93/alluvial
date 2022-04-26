@@ -5,7 +5,6 @@ import org.apache.iceberg.relocated.com.google.common.base.Joiner
 import org.apache.iceberg.types.Type
 import org.apache.iceberg.types.Type.PrimitiveType
 import org.apache.iceberg.types.Type.TypeID.*
-import org.apache.iceberg.types.TypeUtil
 import org.apache.iceberg.types.Types.*
 import strikt.api.Assertion
 import strikt.assertions.isEqualTo
@@ -157,7 +156,7 @@ private class SchemaMigrateValidation(
 
     private fun field(expected: NestedField, actual: NestedField, origin: NestedField?) = withNode(actual) {
         // new or replaced field
-        if (origin == null || !typeCompatible(origin.type(), expected.type())) {
+        if (origin == null || !origin.type().isPromotionAllowed(expected.type())) {
             isSameFieldAs(expected)
         } else {
             get("id") { actual.fieldId() }.isEqualTo(origin.fieldId())
@@ -176,18 +175,5 @@ private class SchemaMigrateValidation(
         return if (fieldNames.isEmpty())
             null else
             dot.join(fieldNames.descendingIterator())
-    }
-
-    private fun typeCompatible(origin: Type, target: Type): Boolean {
-        return when (origin.typeId()) {
-            STRUCT -> target.typeId() == STRUCT
-            MAP -> target.typeId() == MAP
-                && KafkaSchemaUtil.equalsIgnoreId(origin.asMapType().keyType(), target.asMapType().keyType())
-                && typeCompatible(origin.asMapType().valueType(), target.asMapType().valueType())
-            LIST -> target.typeId() == LIST
-                && typeCompatible(origin.asListType().elementType(), target.asListType().elementType())
-            else -> target.isPrimitiveType
-                && TypeUtil.isPromotionAllowed(origin, target.asPrimitiveType())
-        }
     }
 }
