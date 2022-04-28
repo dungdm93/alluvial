@@ -68,13 +68,14 @@ class AlluvialTaskWriterFactory(private val table: Table) {
             .buildForFanoutPartition()
 
         val partitioner = if (table.spec().isPartitioned)
-            AlluvialTaskWriter.partitionerFor(table.spec(), table.schema()) else
+            AlluvialTaskWriter.partitionerFor(table.spec(), dataKafkaSchema!!, table.schema()) else
             AlluvialTaskWriter.unpartition
         return AlluvialTaskWriter(
             partitioningWriterFactory,
             table.spec(),
             table.io(),
             partitioner,
+            dataKafkaSchema!!,
             table.schema(),
             table.schema().identifierFieldIds()
         )

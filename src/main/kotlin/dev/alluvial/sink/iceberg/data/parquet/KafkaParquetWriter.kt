@@ -1,12 +1,10 @@
 package dev.alluvial.sink.iceberg.data.parquet
 
-import dev.alluvial.utils.TimePrecision.*
-import dev.alluvial.utils.timePrecision
+import dev.alluvial.sink.iceberg.data.logical.ParquetWriterContext
+import dev.alluvial.sink.iceberg.data.logical.logicalTypeConverter
 import org.apache.iceberg.parquet.ParquetValueWriter
 import org.apache.iceberg.parquet.ParquetValueWriters
-import org.apache.parquet.column.ColumnDescriptor
 import org.apache.parquet.schema.GroupType
-import org.apache.parquet.schema.LogicalTypeAnnotation
 import org.apache.parquet.schema.MessageType
 import org.apache.parquet.schema.PrimitiveType
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.*
@@ -75,8 +73,11 @@ object KafkaParquetWriter {
         ): ParquetValueWriter<*> {
             val desc = message.getColumnDescription(currentPath())
 
-            val writer = kafkaLogicalType(sPrimitive, primitive, desc)
-            if (writer != null) return writer
+            val converter = sPrimitive.logicalTypeConverter()
+            if (converter != null) {
+                val ctx = ParquetWriterContext.primitive(desc)
+                return converter.parquetWriter(sPrimitive, primitive, ctx)
+            }
 
             /** @link https://github.com/apache/parquet-format/blob/master/LogicalTypes.md */
             return when (primitive.primitiveTypeName) {
@@ -96,65 +97,6 @@ object KafkaParquetWriter {
                 }
                 FIXED_LEN_BYTE_ARRAY -> KafkaParquetWriters.bytes(desc)
                 else -> throw IllegalArgumentException("Unknown primitiveType=$primitive with logicalType=${primitive.logicalTypeAnnotation}")
-            }
-        }
-
-        private fun kafkaLogicalType(
-            sType: KafkaSchema,
-            type: PrimitiveType,
-            desc: ColumnDescriptor,
-        ): ParquetValueWriter<*>? {
-            val logicalType = type.logicalTypeAnnotation
-
-            @Suppress("RemoveRedundantQualifierName")
-            return when (sType.name()) {
-                /////////////// Debezium Logical Types ///////////////
-                io.debezium.time.Date.SCHEMA_NAME ->
-                    ParquetValueWriters.ints(desc)
-                io.debezium.time.Time.SCHEMA_NAME ->
-                    KafkaParquetWriters.timeAsInt(MILLIS, logicalType.timePrecision(), desc)
-                io.debezium.time.MicroTime.SCHEMA_NAME ->
-                    KafkaParquetWriters.timeAsLong(MICROS, logicalType.timePrecision(), desc)
-                io.debezium.time.NanoTime.SCHEMA_NAME ->
-                    KafkaParquetWriters.timeAsLong(NANOS, logicalType.timePrecision(), desc)
-                io.debezium.time.ZonedTime.SCHEMA_NAME ->
-                    KafkaParquetWriters.zonedTimeAsString(logicalType.timePrecision(), desc)
-                io.debezium.time.Timestamp.SCHEMA_NAME ->
-                    KafkaParquetWriters.timestampAsLong(MILLIS, logicalType.timePrecision(), desc)
-                io.debezium.time.MicroTimestamp.SCHEMA_NAME ->
-                    KafkaParquetWriters.timestampAsLong(MICROS, logicalType.timePrecision(), desc)
-                io.debezium.time.NanoTimestamp.SCHEMA_NAME ->
-                    KafkaParquetWriters.timestampAsLong(NANOS, logicalType.timePrecision(), desc)
-                io.debezium.time.ZonedTimestamp.SCHEMA_NAME ->
-                    KafkaParquetWriters.zonedTimestampAsString(logicalType.timePrecision(), desc)
-                io.debezium.time.Year.SCHEMA_NAME ->
-                    ParquetValueWriters.ints(desc)
-                io.debezium.data.EnumSet.LOGICAL_NAME -> TODO()
-                io.debezium.data.Enum.LOGICAL_NAME ->
-                    ParquetValueWriters.strings(desc)
-
-                /////////////// Kafka Logical Types ///////////////
-                org.apache.kafka.connect.data.Decimal.LOGICAL_NAME -> {
-                    val decimal = logicalType as LogicalTypeAnnotation.DecimalLogicalTypeAnnotation
-                    when (type.asPrimitiveType().primitiveTypeName) {
-                        INT32 -> ParquetValueWriters.decimalAsInteger(desc, decimal.precision, decimal.scale)
-                        INT64 -> ParquetValueWriters.decimalAsLong(desc, decimal.precision, decimal.scale)
-                        BINARY,
-                        FIXED_LEN_BYTE_ARRAY -> ParquetValueWriters.decimalAsFixed(
-                            desc, decimal.precision, decimal.scale
-                        )
-                        else -> throw UnsupportedOperationException(
-                            "Unsupported base type for decimal: ${type.asPrimitiveType().primitiveTypeName}"
-                        )
-                    }
-                }
-                org.apache.kafka.connect.data.Date.LOGICAL_NAME ->
-                    KafkaParquetWriters.date(desc)
-                org.apache.kafka.connect.data.Time.LOGICAL_NAME ->
-                    KafkaParquetWriters.timeAsDate(logicalType.timePrecision(), desc)
-                org.apache.kafka.connect.data.Timestamp.LOGICAL_NAME ->
-                    KafkaParquetWriters.timestampAsDate(logicalType.timePrecision(), desc)
-                else -> null
             }
         }
     }

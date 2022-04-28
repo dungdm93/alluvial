@@ -1,14 +1,12 @@
 package dev.alluvial.sink.iceberg.data.parquet
 
+import dev.alluvial.sink.iceberg.data.logical.ParquetReaderContext
+import dev.alluvial.sink.iceberg.data.logical.logicalTypeConverter
 import dev.alluvial.sink.iceberg.data.toKafkaSchema
-import dev.alluvial.utils.TimePrecision.*
-import dev.alluvial.utils.timePrecision
 import org.apache.iceberg.Schema
 import org.apache.iceberg.parquet.ParquetValueReader
 import org.apache.iceberg.parquet.ParquetValueReaders
-import org.apache.parquet.column.ColumnDescriptor
 import org.apache.parquet.schema.GroupType
-import org.apache.parquet.schema.LogicalTypeAnnotation.DecimalLogicalTypeAnnotation
 import org.apache.parquet.schema.MessageType
 import org.apache.parquet.schema.PrimitiveType
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.*
@@ -84,8 +82,11 @@ object KafkaParquetReader {
         ): ParquetValueReader<*> {
             val desc = message.getColumnDescription(currentPath())
 
-            val reader = kafkaLogicalType(sPrimitive, primitive, desc)
-            if (reader != null) return reader
+            val converter = sPrimitive.logicalTypeConverter()
+            if (converter != null) {
+                val ctx = ParquetReaderContext.primitive(desc)
+                return converter.parquetReader(sPrimitive, primitive, ctx)
+            }
 
             /** @link https://github.com/apache/parquet-format/blob/master/LogicalTypes.md */
             return when (primitive.primitiveTypeName) {
@@ -105,63 +106,6 @@ object KafkaParquetReader {
                 }
                 FIXED_LEN_BYTE_ARRAY -> KafkaParquetReaders.byteArrays(desc)
                 else -> throw IllegalArgumentException("Unknown primitiveType=$primitive")
-            }
-        }
-
-        private fun kafkaLogicalType(
-            sType: KafkaSchema,
-            type: PrimitiveType,
-            desc: ColumnDescriptor
-        ): ParquetValueReader<*>? {
-            val logicalType = type.logicalTypeAnnotation
-
-            @Suppress("RemoveRedundantQualifierName")
-            return when (sType.name()) {
-                /////////////// Debezium Logical Types ///////////////
-                io.debezium.time.Date.SCHEMA_NAME ->
-                    KafkaParquetReaders.unboxed<Int>(desc)
-                io.debezium.time.Time.SCHEMA_NAME ->
-                    KafkaParquetReaders.timeAsInt(logicalType.timePrecision(), MILLIS, desc)
-                io.debezium.time.MicroTime.SCHEMA_NAME ->
-                    KafkaParquetReaders.timeAsLong(logicalType.timePrecision(), MICROS, desc)
-                io.debezium.time.NanoTime.SCHEMA_NAME ->
-                    KafkaParquetReaders.timeAsLong(logicalType.timePrecision(), NANOS, desc)
-                io.debezium.time.ZonedTime.SCHEMA_NAME ->
-                    KafkaParquetReaders.zonedTimeAsString(logicalType.timePrecision(), desc)
-                io.debezium.time.Timestamp.SCHEMA_NAME ->
-                    KafkaParquetReaders.timestampAsLong(logicalType.timePrecision(), MILLIS, desc)
-                io.debezium.time.MicroTimestamp.SCHEMA_NAME ->
-                    KafkaParquetReaders.timestampAsLong(logicalType.timePrecision(), MICROS, desc)
-                io.debezium.time.NanoTimestamp.SCHEMA_NAME ->
-                    KafkaParquetReaders.timestampAsLong(logicalType.timePrecision(), NANOS, desc)
-                io.debezium.time.ZonedTimestamp.SCHEMA_NAME ->
-                    KafkaParquetReaders.zonedTimestampAsString(logicalType.timePrecision(), desc)
-                io.debezium.time.Year.SCHEMA_NAME ->
-                    KafkaParquetReaders.unboxed<Int>(desc)
-                io.debezium.data.Enum.LOGICAL_NAME ->
-                    KafkaParquetReaders.strings(desc)
-                io.debezium.data.EnumSet.LOGICAL_NAME -> TODO()
-
-                /////////////// Kafka Logical Types ///////////////
-                org.apache.kafka.connect.data.Decimal.LOGICAL_NAME -> {
-                    val decimal = logicalType as DecimalLogicalTypeAnnotation
-                    when (type.primitiveTypeName) {
-                        INT32 -> ParquetValueReaders.IntegerAsDecimalReader(desc, decimal.scale)
-                        INT64 -> ParquetValueReaders.LongAsDecimalReader(desc, decimal.scale)
-                        BINARY,
-                        FIXED_LEN_BYTE_ARRAY -> ParquetValueReaders.BinaryAsDecimalReader(desc, decimal.scale)
-                        else -> throw UnsupportedOperationException(
-                            "Unsupported base type for decimal: ${type.primitiveTypeName}"
-                        )
-                    }
-                }
-                org.apache.kafka.connect.data.Date.LOGICAL_NAME ->
-                    KafkaParquetReaders.date(desc)
-                org.apache.kafka.connect.data.Time.LOGICAL_NAME ->
-                    KafkaParquetReaders.timeAsDate(logicalType.timePrecision(), desc)
-                org.apache.kafka.connect.data.Timestamp.LOGICAL_NAME ->
-                    KafkaParquetReaders.timestampAsDate(logicalType.timePrecision(), desc)
-                else -> null
             }
         }
     }

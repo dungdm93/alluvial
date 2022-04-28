@@ -1,21 +1,11 @@
 package dev.alluvial.sink.iceberg.data.avro
 
-import dev.alluvial.utils.OffsetTimes
 import dev.alluvial.utils.TimePrecision
 import dev.alluvial.utils.TimePrecision.MILLIS
 import dev.alluvial.utils.TimePrecision.NANOS
-import dev.alluvial.utils.ZonedDateTimes
-import io.debezium.time.ZonedTime
-import io.debezium.time.ZonedTimestamp
 import org.apache.avro.io.Decoder
 import org.apache.avro.io.ResolvingDecoder
 import org.apache.iceberg.avro.ValueReader
-import org.apache.iceberg.avro.ValueReaders
-import java.math.BigDecimal
-import java.math.BigInteger
-import java.math.MathContext
-import java.util.Date
-import java.util.concurrent.TimeUnit
 import org.apache.kafka.connect.data.Schema as KafkaSchema
 import org.apache.kafka.connect.data.Struct as KafkaStruct
 
@@ -48,62 +38,14 @@ object KafkaValueReaders {
         return ArrayMapReader(keyReader, valueReader)
     }
 
-    fun decimal(bytesReader: ValueReader<ByteArray>, precision: Int, scale: Int): ValueReader<BigDecimal> {
-        return DecimalReader(bytesReader, precision, scale)
-    }
-
-    fun date(): ValueReader<Date> {
-        return DateReader
-    }
-
-    fun timeAsDate(precision: TimePrecision): ValueReader<Date> {
-        return TimeAsDateReader(precision)
-    }
-
-    fun timeAsInt(sourcePrecision: TimePrecision, targetPrecision: TimePrecision): ValueReader<Int> {
-        return TimeAsIntReader(sourcePrecision, targetPrecision)
-    }
-
-    fun timeAsLong(sourcePrecision: TimePrecision, targetPrecision: TimePrecision): ValueReader<Long> {
-        return TimeAsLongReader(sourcePrecision, targetPrecision)
-    }
-
-    fun zonedTimeAsString(timePrecision: TimePrecision): ValueReader<String> {
-        return ZonedTimeAsStringReader(timePrecision)
-    }
-
-    fun timestampAsDate(precision: TimePrecision): ValueReader<Date> {
-        return TimestampAsDateReader(precision)
-    }
-
-    fun timestampAsLong(sourcePrecision: TimePrecision, targetPrecision: TimePrecision): ValueReader<Long> {
-        return TimestampAsLongReader(sourcePrecision, targetPrecision)
-    }
-
-    fun zonedTimestampAsString(targetPrecision: TimePrecision): ValueReader<String> {
-        return ZonedTimestampAsStringReader(targetPrecision)
-    }
-
-    fun arrayAsString(): ValueReader<String> {
-        return ArrayAsStringReader
-    }
-
-    fun geometry(schema: KafkaSchema): ValueReader<KafkaStruct> {
-        return struct(
-            listOf(io.debezium.data.geometry.Geometry.WKB_FIELD, io.debezium.data.geometry.Geometry.SRID_FIELD),
-            listOf(ValueReaders.bytes(), ValueReaders.union(listOf(ValueReaders.nulls(), ValueReaders.ints()))),
-            schema,
-        )
-    }
-
-    class ByteReader<N : Number>(private val delegator: ValueReader<N>) : ValueReader<Byte> {
+    private class ByteReader<N : Number>(private val delegator: ValueReader<N>) : ValueReader<Byte> {
         override fun read(decoder: Decoder, reuse: Any?): Byte {
             val number = delegator.read(decoder, reuse)
             return number.toByte()
         }
     }
 
-    class ShortReader<N : Number>(private val delegator: ValueReader<N>) : ValueReader<Short> {
+    private class ShortReader<N : Number>(private val delegator: ValueReader<N>) : ValueReader<Short> {
         override fun read(decoder: Decoder, reuse: Any?): Short {
             val number = delegator.read(decoder, reuse)
             return number.toShort()
@@ -233,27 +175,6 @@ object KafkaValueReaders {
         }
     }
 
-    private class DecimalReader(
-        private val bytesReader: ValueReader<ByteArray>,
-        precision: Int,
-        private val scale: Int,
-    ) : ValueReader<BigDecimal> {
-        private val mathContext = MathContext(precision)
-
-        override fun read(decoder: Decoder, reuse: Any?): BigDecimal {
-            val bytes = bytesReader.read(decoder, null)
-            return BigDecimal(BigInteger(bytes), scale, mathContext)
-        }
-    }
-
-    private object DateReader : ValueReader<Date> {
-        override fun read(decoder: Decoder, reuse: Any?): Date {
-            val days = decoder.readInt().toLong()
-            val time = TimeUnit.DAYS.toMillis(days)
-            return if (time == (reuse as? Date)?.time) reuse else Date(time)
-        }
-    }
-
     abstract class TimeReader<T>(
         protected val sourcePrecision: TimePrecision,
         protected val targetPrecision: TimePrecision,
@@ -276,33 +197,6 @@ object KafkaValueReaders {
         abstract fun deserialize(time: Long, reuse: Any?): T
     }
 
-    private class TimeAsDateReader(sourcePrecision: TimePrecision) :
-        TimeReader<Date>(sourcePrecision, MILLIS) {
-        override fun deserialize(time: Long, reuse: Any?): Date {
-            return if (time == (reuse as? Date)?.time)
-                reuse else
-                Date(time)
-        }
-    }
-
-    private class TimeAsIntReader(sourcePrecision: TimePrecision, targetPrecision: TimePrecision) :
-        TimeReader<Int>(sourcePrecision, targetPrecision) {
-        override fun deserialize(time: Long, reuse: Any?): Int = time.toInt()
-    }
-
-    private class TimeAsLongReader(sourcePrecision: TimePrecision, targetPrecision: TimePrecision) :
-        TimeReader<Long>(sourcePrecision, targetPrecision) {
-        override fun deserialize(time: Long, reuse: Any?): Long = time
-    }
-
-    private class ZonedTimeAsStringReader(sourcePrecision: TimePrecision) :
-        TimeReader<String>(sourcePrecision, sourcePrecision) {
-        override fun deserialize(time: Long, reuse: Any?): String {
-            val offsetTime = OffsetTimes.ofUtcMidnightTime(time, sourcePrecision)
-            return ZonedTime.toIsoString(offsetTime, null)
-        }
-    }
-
     abstract class TimestampReader<T>(
         protected val sourcePrecision: TimePrecision,
         protected val targetPrecision: TimePrecision,
@@ -320,40 +214,5 @@ object KafkaValueReaders {
         }
 
         abstract fun deserialize(ts: Long, reuse: Any?): T
-    }
-
-    private class TimestampAsDateReader(sourcePrecision: TimePrecision) :
-        TimestampReader<Date>(sourcePrecision, MILLIS) {
-        override fun deserialize(ts: Long, reuse: Any?): Date {
-            return if (ts == (reuse as? Date)?.time)
-                reuse else
-                Date(ts)
-        }
-    }
-
-    private class TimestampAsLongReader(sourcePrecision: TimePrecision, targetPrecision: TimePrecision) :
-        TimestampReader<Long>(sourcePrecision, targetPrecision) {
-        override fun deserialize(ts: Long, reuse: Any?) = ts
-    }
-
-    private class ZonedTimestampAsStringReader(sourcePrecision: TimePrecision) :
-        TimestampReader<String>(sourcePrecision, sourcePrecision) {
-        override fun deserialize(ts: Long, reuse: Any?): String = when (ts) {
-            Long.MAX_VALUE -> "infinity"
-            Long.MIN_VALUE -> "-infinity"
-            else -> {
-                val zdt = ZonedDateTimes.ofEpochTime(ts, sourcePrecision)
-                ZonedTimestamp.toIsoString(zdt, null)
-            }
-        }
-    }
-
-    private object ArrayAsStringReader : ValueReader<String> {
-        private val delegatedReader = ValueReaders.array(ValueReaders.strings())
-
-        override fun read(decoder: Decoder, reuse: Any?): String {
-            val list = delegatedReader.read(decoder, reuse)
-            return list.joinToString(",")
-        }
     }
 }

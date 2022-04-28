@@ -41,7 +41,7 @@ internal class TestAlluvialFileWriterFactory(fileFormat: FileFormat, partitioned
         val schema = table.schema()
         val set = StructLikeSet.create(schema.asStruct())
         for (row in rows) {
-            val wrapper = StructWrapper(schema)
+            val wrapper = StructWrapper(row.schema(), schema)
             set.add(wrapper.wrap(row))
         }
         return set

@@ -1,8 +1,7 @@
 package dev.alluvial.sink.iceberg.data
 
-import io.debezium.data.geometry.Geometry
-import org.apache.iceberg.types.Types
-import org.apache.kafka.connect.data.Decimal
+import dev.alluvial.sink.iceberg.data.logical.logicalTypeConverter
+import org.apache.iceberg.types.Types.*
 import org.apache.iceberg.types.Type as IcebergType
 import org.apache.kafka.connect.data.Field as KafkaField
 import org.apache.kafka.connect.data.Schema as KafkaSchema
@@ -26,7 +25,7 @@ class KafkaTypeToType : KafkaTypeVisitor<IcebergType>() {
             fields.forEachIndexed { idx, field ->
                 val fieldId = getNextId()
                 val fieldSchema = fieldResults[idx]
-                val icebergField = Types.NestedField.of(
+                val icebergField = NestedField.of(
                     fieldId,
                     field.schema().isOptional,
                     field.name(),
@@ -36,7 +35,7 @@ class KafkaTypeToType : KafkaTypeVisitor<IcebergType>() {
                 add(icebergField)
             }
         }
-        return Types.StructType.of(icebergFields)
+        return StructType.of(icebergFields)
     }
 
     override fun field(field: KafkaField, fieldSchema: IcebergType): IcebergType {
@@ -47,72 +46,34 @@ class KafkaTypeToType : KafkaTypeVisitor<IcebergType>() {
         val keyId = getNextId()
         val valueId = getNextId()
         return if (schema.valueSchema().isOptional)
-            Types.MapType.ofOptional(keyId, valueId, keyResult, valueResult) else
-            Types.MapType.ofRequired(keyId, valueId, keyResult, valueResult)
+            MapType.ofOptional(keyId, valueId, keyResult, valueResult) else
+            MapType.ofRequired(keyId, valueId, keyResult, valueResult)
     }
 
     override fun array(schema: KafkaSchema, elementResult: IcebergType): IcebergType {
         val elementId = getNextId()
         return if (schema.valueSchema().isOptional)
-            Types.ListType.ofOptional(elementId, elementResult) else
-            Types.ListType.ofRequired(elementId, elementResult)
+            ListType.ofOptional(elementId, elementResult) else
+            ListType.ofRequired(elementId, elementResult)
     }
 
     override fun primitive(schema: KafkaSchema): IcebergType {
-        @Suppress("RemoveRedundantQualifierName")
-        return when (schema.name()) {
-            /////////////// Kafka Logical Types ///////////////
-            org.apache.kafka.connect.data.Date.LOGICAL_NAME -> Types.DateType.get()
-            org.apache.kafka.connect.data.Time.LOGICAL_NAME -> Types.TimeType.get()
-            org.apache.kafka.connect.data.Timestamp.LOGICAL_NAME -> Types.TimestampType.withoutZone()
-            org.apache.kafka.connect.data.Decimal.LOGICAL_NAME -> {
-                val params = schema.parameters()
-                val precision = (params["precision"] ?: params["connect.decimal.precision"] ?: "38").toInt()
-                val scale = params.getOrDefault(Decimal.SCALE_FIELD, "10").toInt()
-                Types.DecimalType.of(precision, scale)
-            }
+        val converter = schema.logicalTypeConverter()
+        if (converter != null) {
+            return converter.toIcebergType(this::getNextId, schema)
+        }
 
-            /////////////// Debezium Logical Types ///////////////
-            io.debezium.time.Date.SCHEMA_NAME -> Types.DateType.get()
-            io.debezium.time.Time.SCHEMA_NAME,
-            io.debezium.time.MicroTime.SCHEMA_NAME,
-            io.debezium.time.NanoTime.SCHEMA_NAME,
-            io.debezium.time.ZonedTime.SCHEMA_NAME -> Types.TimeType.get()
-            io.debezium.time.Timestamp.SCHEMA_NAME,
-            io.debezium.time.MicroTimestamp.SCHEMA_NAME,
-            io.debezium.time.NanoTimestamp.SCHEMA_NAME -> Types.TimestampType.withoutZone()
-            io.debezium.time.ZonedTimestamp.SCHEMA_NAME -> Types.TimestampType.withZone()
-            io.debezium.time.Year.SCHEMA_NAME -> Types.IntegerType.get()
-            io.debezium.data.Enum.LOGICAL_NAME -> Types.StringType.get()
-            io.debezium.data.EnumSet.LOGICAL_NAME -> Types.ListType.ofRequired(getNextId(), Types.StringType.get())
-            //    "io.debezium.time.MicroDuration"
-            //    "io.debezium.time.NanoDuration"
-            //    "io.debezium.time.Interval"
-            //    "io.debezium.data.geometry.Point"
-            //    "io.debezium.data.geometry.Geometry"
-            io.debezium.data.geometry.Geometry.LOGICAL_NAME -> Types.StructType.of(
-                Types.NestedField.of(getNextId(), false, Geometry.WKB_FIELD, Types.BinaryType.get()),
-                Types.NestedField.of(getNextId(), true, Geometry.SRID_FIELD, Types.IntegerType.get())
-            )
-            //    "io.debezium.data.geometry.Geography"
-            //    "io.debezium.data.Bits"
-            //    "io.debezium.data.Json"
-            //    "io.debezium.data.Xml"
-            //    "io.debezium.data.Uuid"
-            //    "io.debezium.data.Ltree"
-            //    "io.debezium.data.VariableScaleDecimal"
-            else -> when (schema.type()) {
-                KafkaType.INT8,
-                KafkaType.INT16,
-                KafkaType.INT32 -> Types.IntegerType.get()
-                KafkaType.INT64 -> Types.LongType.get()
-                KafkaType.FLOAT32 -> Types.FloatType.get()
-                KafkaType.FLOAT64 -> Types.DoubleType.get()
-                KafkaType.BOOLEAN -> Types.BooleanType.get()
-                KafkaType.STRING -> Types.StringType.get()
-                KafkaType.BYTES -> Types.BinaryType.get()
-                else -> throw IllegalArgumentException("$schema is not primitive")
-            }
+        return when (schema.type()) {
+            KafkaType.INT8,
+            KafkaType.INT16,
+            KafkaType.INT32 -> IntegerType.get()
+            KafkaType.INT64 -> LongType.get()
+            KafkaType.FLOAT32 -> FloatType.get()
+            KafkaType.FLOAT64 -> DoubleType.get()
+            KafkaType.BOOLEAN -> BooleanType.get()
+            KafkaType.STRING -> StringType.get()
+            KafkaType.BYTES -> BinaryType.get()
+            else -> throw IllegalArgumentException("$schema is not primitive")
         }
     }
 }
