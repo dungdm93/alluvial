@@ -1,11 +1,18 @@
 package dev.alluvial.utils
 
+import com.fasterxml.jackson.core.JsonGenerator
+import com.fasterxml.jackson.core.JsonParser
+import com.fasterxml.jackson.databind.DeserializationContext
+import com.fasterxml.jackson.databind.SerializerProvider
+import com.fasterxml.jackson.databind.deser.std.StdDeserializer
+import com.fasterxml.jackson.databind.ser.std.StdSerializer
 import dev.alluvial.utils.TimePrecision.*
 import org.apache.avro.LogicalType
 import org.apache.avro.LogicalTypes
 import org.apache.parquet.schema.LogicalTypeAnnotation
 import org.apache.parquet.schema.LogicalTypeAnnotation.TimeLogicalTypeAnnotation
 import org.apache.parquet.schema.LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -14,6 +21,7 @@ import java.time.OffsetTime
 import java.time.ZoneOffset
 import java.time.ZoneOffset.UTC
 import java.time.ZonedDateTime
+import java.util.regex.Pattern
 
 enum class TimePrecision(
     val scale: Long
@@ -148,5 +156,79 @@ object Instants {
         val epochSecond = instant.epochSecond
         val nanoOfSecond = instant.nano
         return Math.multiplyExact(epochSecond, precision.ofSecond) + nanoOfSecond / precision.scale
+    }
+}
+
+private val pattern: Pattern = Pattern.compile(
+    """\s*(?:(?<hours>\d+)\s*(?:hours?|hrs?|h))?""" +
+        """\s*(?:(?<minutes>\d+)\s*(?:minutes?|mins?|m))?""" +
+        """\s*(?:(?<seconds>\d+)\s*(?:seconds?|secs?|s))?""" +
+        """\s*(?:(?<millis>\d+)\s*(?:milliseconds?|millis?|ms))?""" +
+        """\s*(?:(?<micros>\d+)\s*(?:microseconds?|micros?|us|µs))?""" +
+        """\s*(?:(?<nanos>\d+)\s*(?:nanoseconds?|nanos?|ns))?""" +
+        """\s*""", Pattern.CASE_INSENSITIVE
+)
+
+fun String.toDuration(): Duration {
+    val m = pattern.matcher(this)
+    if (!m.matches()) throw IllegalArgumentException("Not valid duration: $this")
+
+    val hours = m.group("hours")?.toInt() ?: 0
+    val mins = m.group("minutes")?.toInt() ?: 0
+    val secs = m.group("seconds")?.toInt() ?: 0
+
+    val millis = m.group("millis")?.toInt() ?: 0
+    val micros = m.group("micros")?.toInt() ?: 0
+    val nanos = m.group("nanos")?.toInt() ?: 0
+
+    var totalSecs = hours.toLong()
+    totalSecs = totalSecs * 60 + mins
+    totalSecs = totalSecs * 60 + secs
+
+    var totalNanos = millis.toLong()
+    totalNanos = totalNanos * 1000 + micros
+    totalNanos = totalNanos * 1000 + nanos
+
+    return Duration.ofSeconds(totalSecs, totalNanos)
+}
+
+fun Duration.toHumanString(): String {
+    var totalSecs = this.seconds
+    var totalNanos = this.nano
+
+    return buildString {
+        val secs = totalSecs % 60
+        totalSecs /= 60
+        val mins = totalSecs % 60
+        totalSecs /= 60
+        val hours = totalSecs
+
+        if (hours > 0) append("${hours}h")
+        if (mins > 0) append("${mins}m")
+        if (secs > 0) append("${secs}s")
+
+        val nanos = totalNanos % 1000
+        totalNanos /= 1000
+        val micros = totalNanos % 1000
+        totalNanos /= 1000
+        val millis = totalNanos
+
+        if (millis > 0) append("${millis}ms")
+        if (micros > 0) append("${micros}us")
+        if (nanos > 0) append("${nanos}ns")
+    }
+}
+
+class DurationSerializer : StdSerializer<Duration>(Duration::class.java) {
+    override fun serialize(value: Duration, gen: JsonGenerator, provider: SerializerProvider) {
+        val str = value.toHumanString()
+        gen.writeString(str)
+    }
+}
+
+class DurationDeserializer : StdDeserializer<Duration>(Duration::class.java) {
+    override fun deserialize(parser: JsonParser, ctx: DeserializationContext): Duration {
+        val str = ctx.readValue(parser, String::class.java)
+        return str.toDuration()
     }
 }
