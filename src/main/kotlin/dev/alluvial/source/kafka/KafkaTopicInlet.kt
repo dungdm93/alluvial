@@ -3,7 +3,6 @@ package dev.alluvial.source.kafka
 import dev.alluvial.api.Inlet
 import dev.alluvial.api.StreamletId
 import org.apache.kafka.clients.consumer.Consumer
-import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.connect.sink.SinkRecord
@@ -16,23 +15,19 @@ import java.util.Queue
 class KafkaTopicInlet(
     val id: StreamletId,
     val topic: String,
-    config: Map<String, Any>,
+    private val consumer: Consumer<ByteArray, ByteArray>,
+    private val converter: KafkaConverter,
 ) : Inlet {
     companion object {
         private val logger = LoggerFactory.getLogger(KafkaTopicInlet::class.java)
     }
 
-    private val consumer: Consumer<ByteArray, ByteArray>
-    private val converter: KafkaConverter
     private val partitions: Set<TopicPartition>
     private val partitionQueues = mutableMapOf<Int, Queue<SinkRecord>>()
     private val heap = PriorityQueue(Comparator.comparing(SinkRecord::timestamp))
     private val requestTimeout = Duration.ofSeconds(1)
 
     init {
-        consumer = KafkaConsumer(config)
-        converter = KafkaConverter(config)
-
         partitions = consumer.partitionsFor(topic).map {
             TopicPartition(it.topic(), it.partition())
         }.toSet()

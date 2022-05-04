@@ -1,6 +1,9 @@
 package dev.alluvial.stream.debezium
 
 import dev.alluvial.api.StreamletId
+import dev.alluvial.runtime.SinkConfig
+import dev.alluvial.runtime.SourceConfig
+import dev.alluvial.schema.debezium.KafkaSchemaTableCreator
 import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.source.kafka.KafkaSource
 
@@ -12,9 +15,13 @@ fun createSource(): KafkaSource {
         "value.converter" to "io.confluent.connect.avro.AvroConverter",
         "key.converter.schema.registry.url" to "http://schema-registry:8081",
         "value.converter.schema.registry.url" to "http://schema-registry:8081",
-        KafkaSource.TOPIC_PREFIX_PROP to "debezium.mysql",
     )
-    return KafkaSource(config)
+    val sourceConfig = SourceConfig(
+        kind = "kafka",
+        topicPrefix = "debezium.mysql",
+        config = config
+    )
+    return KafkaSource(sourceConfig)
 }
 
 fun createSink(): IcebergSink {
@@ -22,14 +29,19 @@ fun createSink(): IcebergSink {
         "catalog-type" to "hadoop",
         "warehouse" to "/tmp/warehouse",
     )
-    return IcebergSink(config)
+    val sinkConfig = SinkConfig(
+        kind = "iceberg",
+        catalog = config
+    )
+    return IcebergSink(sinkConfig)
 }
 
 fun main() {
     val id = StreamletId("sakila", "film")
     val source = createSource()
     val sink = createSink()
-    val streamletFactory = DebeziumStreamletFactory(source, sink)
+    val tableCreator = KafkaSchemaTableCreator(source, sink)
+    val streamletFactory = DebeziumStreamletFactory(source, sink, tableCreator)
     val streamlet = streamletFactory.createStreamlet(id)
 
     streamlet.run()

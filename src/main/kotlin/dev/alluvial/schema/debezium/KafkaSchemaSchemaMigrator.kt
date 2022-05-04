@@ -1,5 +1,7 @@
-package dev.alluvial.sink.iceberg.data
+package dev.alluvial.schema.debezium
 
+import dev.alluvial.sink.iceberg.data.isPromotionAllowed
+import dev.alluvial.sink.iceberg.data.toIcebergType
 import org.apache.iceberg.UpdateSchema
 import org.apache.iceberg.relocated.com.google.common.base.Joiner
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions
@@ -16,11 +18,11 @@ import org.apache.kafka.connect.data.Field as KafkaField
 import org.apache.kafka.connect.data.Schema as KafkaSchema
 import org.apache.kafka.connect.data.Schema.Type as KafkaTypeID
 
-class SchemaMigrator(
+class KafkaSchemaSchemaMigrator(
     private val schemaUpdater: UpdateSchema,
 ) {
     companion object {
-        private val logger = LoggerFactory.getLogger(SchemaMigrator::class.java)
+        private val logger = LoggerFactory.getLogger(KafkaSchemaSchemaMigrator::class.java)
         private val DOT = Joiner.on(".")
     }
 

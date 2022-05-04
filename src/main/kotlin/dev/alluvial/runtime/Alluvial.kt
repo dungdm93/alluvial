@@ -2,6 +2,7 @@ package dev.alluvial.runtime
 
 import dev.alluvial.api.Streamlet.Status.*
 import dev.alluvial.api.StreamletId
+import dev.alluvial.schema.debezium.KafkaSchemaTableCreator
 import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.source.kafka.KafkaSource
 import dev.alluvial.stream.debezium.DebeziumStreamlet
@@ -21,14 +22,14 @@ import java.util.concurrent.ConcurrentMap
 import kotlin.concurrent.thread
 import kotlin.time.Duration.Companion.minutes
 
-class Alluvial(config: Config) : Runnable {
+class Alluvial : Runnable {
     companion object {
         private val logger = LoggerFactory.getLogger(Alluvial::class.java)
     }
 
-    private val source = KafkaSource(config.source.props)
-    private val sink = IcebergSink(config.sink.props)
-    private val streamletFactory = DebeziumStreamletFactory(source, sink)
+    private lateinit var source: KafkaSource
+    private lateinit var sink: IcebergSink
+    private lateinit var streamletFactory: DebeziumStreamletFactory
     private val streamlets: ConcurrentMap<StreamletId, DebeziumStreamlet> = ConcurrentHashMap()
     private val streamletIdleTimeout = 15.minutes.inWholeMilliseconds
     private val time = Clock.systemUTC()
@@ -37,6 +38,13 @@ class Alluvial(config: Config) : Runnable {
         logger.warn("Shutdown Hook: closing streamlets")
         streamlets.values.forEach(DebeziumStreamlet::close)
         streamlets.clear()
+    }
+
+    fun configure(config: Config) {
+        source = KafkaSource(config.source)
+        sink = IcebergSink(config.sink)
+        val tableCreator = KafkaSchemaTableCreator(source, sink)
+        streamletFactory = DebeziumStreamletFactory(source, sink, tableCreator)
     }
 
     override fun run(): Unit = runBlocking {
@@ -97,11 +105,11 @@ class Alluvial(config: Config) : Runnable {
 
     private fun currentLagOf(id: StreamletId): Long {
         val latestOffsets = source.latestOffsets(id)
-        val committedPositions = sink.committedPositions(id)
+        val committedOffsets = sink.committedOffsets(id)
 
         var lag = 0L
         latestOffsets.forEach { (partition, latestOffset) ->
-            val committedPosition = committedPositions?.get(partition) ?: 0
+            val committedPosition = committedOffsets?.get(partition) ?: 0
             lag += latestOffset - committedPosition
         }
         return lag

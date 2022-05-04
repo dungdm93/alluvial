@@ -1,7 +1,7 @@
 package dev.alluvial.source.kafka
 
 import dev.alluvial.api.StreamletId
-import org.apache.kafka.clients.CommonClientConfigs
+import dev.alluvial.runtime.SourceConfig
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.admin.OffsetSpec
 import org.apache.kafka.clients.consumer.ConsumerConfig
@@ -12,20 +12,10 @@ import org.slf4j.LoggerFactory
 
 
 @Suppress("MemberVisibilityCanBePrivate")
-class KafkaSource(config: Map<String, Any>) {
+class KafkaSource(sourceConfig: SourceConfig) {
     companion object {
         private val logger = LoggerFactory.getLogger(KafkaSource::class.java)
-
-        const val TOPIC_PREFIX_PROP = "alluvial.source.kafka.topic-prefix"
-    }
-
-    private val config: Map<String, Any>
-    private val adminClient: Admin
-    private val consumerGroupId: String
-    private val topicPrefix: String
-
-    init {
-        this.config = config + mapOf(
+        private val DEFAULT_CONFIG = mapOf(
             ConsumerConfig.AUTO_OFFSET_RESET_CONFIG to "earliest",
             ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG to "false",
             ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG to "org.apache.kafka.common.serialization.ByteArraySerializer",
@@ -33,10 +23,12 @@ class KafkaSource(config: Map<String, Any>) {
             ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG to "org.apache.kafka.common.serialization.ByteArraySerializer",
             ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG to "org.apache.kafka.common.serialization.ByteArrayDeserializer",
         )
-        this.topicPrefix = (config[TOPIC_PREFIX_PROP] as String).removeSuffix(".")
-        this.adminClient = Admin.create(config)
-        this.consumerGroupId = config[CommonClientConfigs.GROUP_ID_CONFIG] as String
     }
+
+    private val config = sourceConfig.config + DEFAULT_CONFIG
+    private val topicPrefix = sourceConfig.topicPrefix
+    private val adminClient = Admin.create(config)
+    private val converter = KafkaConverter(config)
 
     fun availableStreams(): List<StreamletId> {
         val topics = adminClient.listTopics().names().get()
@@ -46,7 +38,9 @@ class KafkaSource(config: Map<String, Any>) {
 
     fun getInlet(id: StreamletId): KafkaTopicInlet {
         val topic = topicOf(id)
-        return KafkaTopicInlet(id, topic, config)
+        val consumer = newConsumer<ByteArray, ByteArray>()
+        val converter = getConverter()
+        return KafkaTopicInlet(id, topic, consumer, converter)
     }
 
     fun latestOffsets(id: StreamletId): Map<Int, Long> {
@@ -64,12 +58,15 @@ class KafkaSource(config: Map<String, Any>) {
         }.toMap()
     }
 
-    fun createConsumer(): KafkaConsumer<ByteArray, ByteArray> {
-        return KafkaConsumer<ByteArray, ByteArray>(config)
+    fun <K, V> newConsumer(overrideConfig: Map<String, Any>? = null): KafkaConsumer<K, V> {
+        val config = if (overrideConfig == null)
+            this.config else
+            this.config + overrideConfig
+        return KafkaConsumer(config)
     }
 
-    fun createConverter(): KafkaConverter {
-        return KafkaConverter(config)
+    fun getConverter(): KafkaConverter {
+        return converter
     }
 
     fun idOf(topic: String): StreamletId? {

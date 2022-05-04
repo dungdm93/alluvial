@@ -1,21 +1,24 @@
 package dev.alluvial.sink.iceberg
 
 import dev.alluvial.api.StreamletId
+import dev.alluvial.runtime.SinkConfig
 import org.apache.hadoop.conf.Configuration
 import org.apache.iceberg.CachingCatalog
 import org.apache.iceberg.CatalogProperties.*
 import org.apache.iceberg.CatalogUtil
-import org.apache.iceberg.TableProperties
+import org.apache.iceberg.Schema
 import org.apache.iceberg.catalog.Catalog
+import org.apache.iceberg.catalog.Catalog.TableBuilder
 import org.apache.iceberg.catalog.TableIdentifier
 import org.apache.iceberg.exceptions.NoSuchTableException
 import org.apache.iceberg.util.PropertyUtil
 import org.slf4j.LoggerFactory
-import org.apache.iceberg.Schema as IcebergSchema
 
-class IcebergSink(config: Map<String, Any>) {
+@Suppress("MemberVisibilityCanBePrivate")
+class IcebergSink(sinkConfig: SinkConfig) {
     companion object {
         private val logger = LoggerFactory.getLogger(IcebergSink::class.java)
+        private const val CATALOG_TYPE = "catalog-type"
         private val NAMED_CATALOG = mapOf(
             "hadoop" to "org.apache.iceberg.hadoop.HadoopCatalog",
             "hive" to "org.apache.iceberg.hive.HiveCatalog",
@@ -24,65 +27,55 @@ class IcebergSink(config: Map<String, Any>) {
             "dynamodb" to "org.apache.iceberg.aws.dynamodb.DynamoDbCatalog",
             "nessie" to "org.apache.iceberg.nessie.NessieCatalog",
         )
-
-        const val LOCATION_BASE_PROP = "alluvial.sink.iceberg.location-base"
     }
 
-    private val properties: Map<String, String>
     private val catalog: Catalog
-    private val cacheEnabled: Boolean
-    private val locationBase: String?
 
     init {
-        this.properties = config.mapValues { (_, v) -> v.toString() }
+        val properties = sinkConfig.catalog
 
-        this.cacheEnabled = PropertyUtil.propertyAsBoolean(properties, CACHE_ENABLED, CACHE_ENABLED_DEFAULT)
+        val cacheEnabled = PropertyUtil.propertyAsBoolean(properties, CACHE_ENABLED, CACHE_ENABLED_DEFAULT)
         val cacheExpirationIntervalMs = PropertyUtil.propertyAsLong(
             properties,
             CACHE_EXPIRATION_INTERVAL_MS,
             CACHE_EXPIRATION_INTERVAL_MS_DEFAULT
         )
-        val catalogImpl = NAMED_CATALOG.getOrDefault(properties["catalog-type"], properties[CATALOG_IMPL])
+        val catalogImpl = NAMED_CATALOG.getOrDefault(properties[CATALOG_TYPE], properties[CATALOG_IMPL])
         requireNotNull(catalogImpl) { "catalogImpl must not be null" }
 
         val catalog = CatalogUtil.loadCatalog(catalogImpl, "iceberg", properties, Configuration())
         this.catalog = if (cacheEnabled)
             CachingCatalog.wrap(catalog, cacheExpirationIntervalMs) else
             catalog
-
-        this.locationBase = properties[LOCATION_BASE_PROP]?.removeSuffix("/")
     }
 
     fun getOutlet(id: StreamletId): IcebergTableOutlet? {
         return try {
-            val identifier = TableIdentifier.of(id.schema, id.table)
-            val table = catalog.loadTable(identifier)
-            IcebergTableOutlet(id, table, properties)
+            val tableId = tableIdentifierOf(id)
+            val table = catalog.loadTable(tableId)
+            IcebergTableOutlet(id, table)
         } catch (e: NoSuchTableException) {
             null
         }
     }
 
-    fun createOutlet(id: StreamletId, schema: IcebergSchema): IcebergTableOutlet {
-        val tableId = TableIdentifier.of(id.schema, id.table)
-        val tableBuilder = catalog.buildTable(tableId, schema)
-            .withProperty(TableProperties.FORMAT_VERSION, "2")
-
-        // TODO other table attributes
-        if (locationBase != null)
-            tableBuilder.withLocation("$locationBase/${id.schema}/${id.table}")
-
-        val table = tableBuilder.create()
-        return IcebergTableOutlet(id, table, properties)
+    fun newTableBuilder(id: StreamletId, schema: Schema): TableBuilder {
+        val tableId = tableIdentifierOf(id)
+        return catalog.buildTable(tableId, schema)
     }
 
-    fun committedPositions(id: StreamletId): Map<Int, Long>? {
+    fun committedOffsets(id: StreamletId): Map<Int, Long>? {
         val outlet = getOutlet(id)
-        return outlet?.committedPositions()
+        return outlet?.committedOffsets()
     }
 
-    fun committedTimestamp(id: StreamletId): Long? {
-        val outlet = getOutlet(id)
-        return outlet?.committedTimestamp()
+    fun idOf(tableId: TableIdentifier): StreamletId {
+        val ns = tableId.namespace().levels()
+        assert(ns.size == 1) { "table' schema must be in ONE level, got ${ns.size} of $ns" }
+        return StreamletId(ns.first(), tableId.name())
+    }
+
+    fun tableIdentifierOf(id: StreamletId): TableIdentifier {
+        return TableIdentifier.of(id.schema, id.table)
     }
 }
