@@ -12,20 +12,22 @@ import java.util.ArrayDeque
 import java.util.PriorityQueue
 import java.util.Queue
 
+@Suppress("MemberVisibilityCanBePrivate")
 class KafkaTopicInlet(
     val id: StreamletId,
     val topic: String,
     private val consumer: Consumer<ByteArray, ByteArray>,
     private val converter: KafkaConverter,
+    private val pollTimeout: Duration,
 ) : Inlet {
     companion object {
         private val logger = LoggerFactory.getLogger(KafkaTopicInlet::class.java)
     }
 
+    @Suppress("JoinDeclarationAndAssignment")
     private val partitions: Set<TopicPartition>
     private val partitionQueues = mutableMapOf<Int, Queue<SinkRecord>>()
     private val heap = PriorityQueue(Comparator.comparing(SinkRecord::timestamp))
-    private val requestTimeout = Duration.ofSeconds(1)
 
     init {
         partitions = consumer.partitionsFor(topic).map {
@@ -60,10 +62,10 @@ class KafkaTopicInlet(
     }
 
     private fun pullFromBrokers() {
-        var consumerRecords = consumer.poll(requestTimeout)
+        var consumerRecords = consumer.poll(pollTimeout)
         while (consumer.assignment().isEmpty() && consumerRecords.isEmpty) {
             logger.info("Waiting for partitions assigned to the consumer")
-            consumerRecords = consumer.poll(requestTimeout)
+            consumerRecords = consumer.poll(pollTimeout)
         }
 
         consumerRecords.partitions().forEach { tp ->

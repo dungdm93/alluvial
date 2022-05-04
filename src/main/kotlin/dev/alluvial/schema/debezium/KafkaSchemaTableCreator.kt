@@ -2,6 +2,7 @@ package dev.alluvial.schema.debezium
 
 import dev.alluvial.api.StreamletId
 import dev.alluvial.api.TableCreator
+import dev.alluvial.runtime.TableCreationConfig
 import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.sink.iceberg.data.toIcebergSchema
 import dev.alluvial.source.kafka.KafkaSource
@@ -18,8 +19,11 @@ import org.apache.iceberg.Schema as IcebergSchema
 class KafkaSchemaTableCreator(
     private val source: KafkaSource,
     private val sink: IcebergSink,
+    private val tableCreationConfig: TableCreationConfig,
 ) : TableCreator {
-    private val locationBase: String? = null
+    companion object {
+        const val TABLE_FORMAT_VERSION = "2"
+    }
 
     override fun createTable(id: StreamletId): Table {
         val consumer = source.newConsumer<ByteArray, ByteArray>()
@@ -60,11 +64,11 @@ class KafkaSchemaTableCreator(
     private fun buildTable(id: StreamletId, record: SinkRecord): Table {
         val iSchema = icebergSchemaFrom(record)
         val tableBuilder = sink.newTableBuilder(id, iSchema)
-            .withProperty(TableProperties.FORMAT_VERSION, "2")
+            .withProperty(TableProperties.FORMAT_VERSION, TABLE_FORMAT_VERSION)
 
-        // TODO other table attributes
-        if (locationBase != null)
-            tableBuilder.withLocation("$locationBase/${id.schema}/${id.table}")
+        tableBuilder.withProperties(tableCreationConfig.properties)
+        if (tableCreationConfig.baseLocation != null)
+            tableBuilder.withLocation("${tableCreationConfig.baseLocation}/${id.schema}/${id.table}")
 
         return tableBuilder.create()
     }

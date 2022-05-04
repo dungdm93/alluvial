@@ -3,6 +3,7 @@ package dev.alluvial.sink.iceberg.io
 import dev.alluvial.backport.iceberg.io.PartitioningWriterFactory
 import org.apache.iceberg.FileFormat
 import org.apache.iceberg.Table
+import org.apache.iceberg.TableProperties.*
 import org.apache.iceberg.io.OutputFileFactory
 import org.apache.iceberg.io.TaskWriter
 import org.apache.kafka.connect.sink.SinkRecord
@@ -20,6 +21,16 @@ class AlluvialTaskWriterFactory(private val table: Table) {
     private var dataKafkaSchema: KafkaSchema? = null
     private var equalityDeleteKafkaSchema: KafkaSchema? = null
     private var positionDeleteKafkaSchema: KafkaSchema? = null
+    private val fileFormat = table.properties()
+        .getOrDefault(
+            DEFAULT_FILE_FORMAT,
+            DEFAULT_FILE_FORMAT_DEFAULT.uppercase()
+        ).let(FileFormat::valueOf)
+    private val targetFileSizeInBytes = table.properties()
+        .getOrDefault(
+            WRITE_TARGET_FILE_SIZE_BYTES,
+            WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT.toString()
+        ).toLong()
 
     fun setDataKafkaSchema(schema: KafkaSchema) {
         dataKafkaSchema = schema
@@ -34,9 +45,6 @@ class AlluvialTaskWriterFactory(private val table: Table) {
     }
 
     fun create(): TaskWriter<SinkRecord> {
-        val fileFormat = FileFormat.AVRO
-        val targetFileSizeInBytes = 128L * 1024 * 1024
-
         val fileWriterFactory = AlluvialFileWriterFactory.buildFor(table) {
             dataFileFormat = fileFormat
             dataKafkaSchema = this@AlluvialTaskWriterFactory.dataKafkaSchema

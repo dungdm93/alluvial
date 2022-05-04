@@ -27,6 +27,7 @@ class KafkaSource(sourceConfig: SourceConfig) {
 
     private val config = sourceConfig.config + DEFAULT_CONFIG
     private val topicPrefix = sourceConfig.topicPrefix
+    private val pollTimeout = sourceConfig.pollTimeout
     private val adminClient = Admin.create(config)
     private val converter = KafkaConverter(config)
 
@@ -40,7 +41,7 @@ class KafkaSource(sourceConfig: SourceConfig) {
         val topic = topicOf(id)
         val consumer = newConsumer<ByteArray, ByteArray>()
         val converter = getConverter()
-        return KafkaTopicInlet(id, topic, consumer, converter)
+        return KafkaTopicInlet(id, topic, consumer, converter, pollTimeout)
     }
 
     fun latestOffsets(id: StreamletId): Map<Int, Long> {

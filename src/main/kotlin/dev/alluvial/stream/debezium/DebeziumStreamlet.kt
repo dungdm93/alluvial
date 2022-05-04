@@ -4,13 +4,13 @@ import dev.alluvial.api.SchemaHandler
 import dev.alluvial.api.Streamlet
 import dev.alluvial.api.Streamlet.Status.*
 import dev.alluvial.api.StreamletId
+import dev.alluvial.runtime.StreamConfig
 import dev.alluvial.sink.iceberg.IcebergTableOutlet
 import dev.alluvial.source.kafka.KafkaTopicInlet
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import java.time.Clock
 import kotlin.math.max
-import kotlin.time.Duration.Companion.minutes
 
 @Suppress("MemberVisibilityCanBePrivate")
 class DebeziumStreamlet(
@@ -18,6 +18,7 @@ class DebeziumStreamlet(
     val inlet: KafkaTopicInlet,
     val outlet: IcebergTableOutlet,
     val schemaHandler: SchemaHandler,
+    streamConfig: StreamConfig,
 ) : Streamlet {
     companion object {
         private val logger = LoggerFactory.getLogger(DebeziumStreamlet::class.java)
@@ -26,8 +27,8 @@ class DebeziumStreamlet(
     private val offsets = mutableMapOf<Int, Long>()
     private var lastRecordTimestamp = Long.MIN_VALUE
     private val clock = Clock.systemUTC()
-    var commitBatchSize = 1000
-    var commitTimespanMs = 10.minutes.inWholeMilliseconds
+    private val commitBatchSize = streamConfig.commitBatchSize
+    private val commitTimespanMs = streamConfig.commitTimespan.toMillis()
 
     @Volatile
     override var status = CREATED
