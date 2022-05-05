@@ -6,6 +6,7 @@ import org.apache.iceberg.Table
 import org.apache.iceberg.TableProperties.*
 import org.apache.iceberg.io.OutputFileFactory
 import org.apache.iceberg.io.TaskWriter
+import org.apache.iceberg.util.PropertyUtil
 import org.apache.kafka.connect.sink.SinkRecord
 import java.time.Instant
 import java.time.ZoneOffset
@@ -21,16 +22,16 @@ class AlluvialTaskWriterFactory(private val table: Table) {
     private var dataKafkaSchema: KafkaSchema? = null
     private var equalityDeleteKafkaSchema: KafkaSchema? = null
     private var positionDeleteKafkaSchema: KafkaSchema? = null
-    private val fileFormat = table.properties()
-        .getOrDefault(
-            DEFAULT_FILE_FORMAT,
-            DEFAULT_FILE_FORMAT_DEFAULT.uppercase()
-        ).let(FileFormat::valueOf)
-    private val targetFileSizeInBytes = table.properties()
-        .getOrDefault(
-            WRITE_TARGET_FILE_SIZE_BYTES,
-            WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT.toString()
-        ).toLong()
+    private val fileFormat = PropertyUtil.propertyAsString(
+        table.properties(),
+        DEFAULT_FILE_FORMAT,
+        DEFAULT_FILE_FORMAT_DEFAULT.uppercase()
+    ).let(FileFormat::valueOf)
+    private val targetFileSizeInBytes = PropertyUtil.propertyAsLong(
+        table.properties(),
+        WRITE_TARGET_FILE_SIZE_BYTES,
+        WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT
+    )
 
     fun setDataKafkaSchema(schema: KafkaSchema) {
         dataKafkaSchema = schema
