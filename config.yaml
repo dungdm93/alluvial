@@ -8,13 +8,29 @@ source:
     value.converter: io.confluent.connect.avro.AvroConverter
     key.converter.schema.registry.url: http://schema-registry:8081
     value.converter.schema.registry.url: http://schema-registry:8081
+    poll.timeout.ms: 1000
 
 sink:
   kind: iceberg
   catalog:
     catalog-type: hadoop
     warehouse: /tmp/warehouse
+  tableCreation:
+    properties:
+      write.format.default: AVRO
+      write.target-file-size-bytes: 134217728  # 128MB
+    partitionSpec:
+      # Example: Table "actor" is partitioned by column "actor_id" using "void" transformation
+      actor:
+        - column: actor_id
+          transform: void
+      address:
+        - column: address_id
+          transform: bucket[10]
 
 stream:
   kind: debezium
-  props: { }
+  streamletIdleTimeout: "15m"
+  streamletExamineInterval: "3m"
+  commitBatchSize: 1000
+  commitTimespan: "10m"

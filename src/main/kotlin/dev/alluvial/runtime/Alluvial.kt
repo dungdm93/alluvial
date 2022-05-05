@@ -17,10 +17,11 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.supervisorScope
 import org.slf4j.LoggerFactory
 import java.time.Clock
+import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import kotlin.concurrent.thread
-import kotlin.time.Duration.Companion.minutes
+import kotlin.time.toKotlinDuration
 
 class Alluvial : Runnable {
     companion object {
@@ -30,8 +31,9 @@ class Alluvial : Runnable {
     private lateinit var source: KafkaSource
     private lateinit var sink: IcebergSink
     private lateinit var streamletFactory: DebeziumStreamletFactory
+    private lateinit var streamletIdleTimeout: Duration
+    private lateinit var streamletExamineInterval: Duration
     private val streamlets: ConcurrentMap<StreamletId, DebeziumStreamlet> = ConcurrentHashMap()
-    private val streamletIdleTimeout = 15.minutes.inWholeMilliseconds
     private val time = Clock.systemUTC()
 
     private val terminateStreamletsHook = thread(start = false, name = "terminate-streamlets") {
@@ -43,8 +45,10 @@ class Alluvial : Runnable {
     fun configure(config: Config) {
         source = KafkaSource(config.source)
         sink = IcebergSink(config.sink)
-        val tableCreator = KafkaSchemaTableCreator(source, sink)
-        streamletFactory = DebeziumStreamletFactory(source, sink, tableCreator)
+        val tableCreator = KafkaSchemaTableCreator(source, sink, config.sink.tableCreation)
+        streamletFactory = DebeziumStreamletFactory(source, sink, tableCreator, config.stream)
+        streamletIdleTimeout = config.stream.streamletIdleTimeout
+        streamletExamineInterval = config.stream.streamletExamineInterval
     }
 
     override fun run(): Unit = runBlocking {
@@ -52,7 +56,7 @@ class Alluvial : Runnable {
 
         val channel = Channel<StreamletId>()
 
-        scheduleInterval(3.minutes, Dispatchers.Default) {
+        scheduleInterval(streamletExamineInterval.toKotlinDuration(), Dispatchers.Default) {
             examineStreamlets(channel)
         }
 
@@ -83,14 +87,15 @@ class Alluvial : Runnable {
             return
         }
         val streamlet = streamlets[id]!!
+        val streamletIdleTimeoutMs = streamletIdleTimeout.toMillis()
         when (streamlet.status) {
             CREATED -> logger.warn("Streamlet {} is still in CREATED state, something may be wrong!!!", id)
             RUNNING -> logger.info("Streamlet {} is RUNNING", id)
             SUSPENDED -> {
                 val lag = streamlet.inlet.currentLag()
                 val committedTime = streamlet.outlet.committedTimestamp() ?: Long.MIN_VALUE
-                if (lag <= 0 && committedTime < time.millis() - streamletIdleTimeout) {
-                    logger.info("No more message in {} for {}ms => close streamlet", id, streamletIdleTimeout)
+                if (lag <= 0 && committedTime < time.millis() - streamletIdleTimeoutMs) {
+                    logger.info("No more message in {} for {}ms => close streamlet", id, streamletIdleTimeoutMs)
                     streamlet.close()
                     streamlets.remove(id)
                 } else if (streamlet.shouldRun()) {
