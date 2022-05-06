@@ -16,6 +16,7 @@ sink:
     catalog-type: hadoop
     warehouse: /tmp/warehouse
   tableCreation:
+#    baseLocation: alluvial
     properties:
       write.format.default: AVRO
       write.target-file-size-bytes: 134217728  # 128MB
@@ -27,6 +28,35 @@ sink:
       address:
         - column: address_id
           transform: bucket[10]
+      category:
+        - column: name
+          transform: truncate[2]
+      city:
+        - column: country_id
+          transform: identity
+      film:
+        - column: last_update
+          transform: month
+      film_actor:
+        - column: last_update
+          transform: day
+      payment:
+        - column: last_update
+          transform: hour
+      # Partitioned by multiple columns
+      customer:
+        - column: last_update
+          transform: year
+        - column: first_name
+          transform: truncate[2]
+        - column: last_name
+          transform: bucket[3]
+      # Partitioned by multiple columns using the same transformation
+      staff:
+        - column: first_name
+          transform: truncate[2]
+        - column: last_name
+          transform: truncate[2]
 
 stream:
   kind: debezium
