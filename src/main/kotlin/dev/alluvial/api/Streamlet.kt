@@ -7,7 +7,7 @@ interface Streamlet : Closeable {
         CREATED, RUNNING, SUSPENDED, FAILED
     }
 
-    val id: StreamletId
+    val name: String
     var status: Status
     fun run()
     fun shouldRun(): Boolean

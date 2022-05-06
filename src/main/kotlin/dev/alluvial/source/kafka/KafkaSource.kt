@@ -1,7 +1,8 @@
 package dev.alluvial.source.kafka
 
-import dev.alluvial.api.StreamletId
 import dev.alluvial.runtime.SourceConfig
+import dev.alluvial.source.kafka.naming.NamingAdjusterManager
+import org.apache.iceberg.catalog.TableIdentifier
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.admin.OffsetSpec
 import org.apache.kafka.clients.consumer.ConsumerConfig
@@ -10,8 +11,6 @@ import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
 import org.slf4j.LoggerFactory
 
-
-@Suppress("MemberVisibilityCanBePrivate")
 class KafkaSource(sourceConfig: SourceConfig) {
     companion object {
         private val logger = LoggerFactory.getLogger(KafkaSource::class.java)
@@ -26,26 +25,28 @@ class KafkaSource(sourceConfig: SourceConfig) {
     }
 
     private val config = sourceConfig.config + DEFAULT_CONFIG
-    private val topicPrefix = sourceConfig.topicPrefix
+    private val topicPrefix = sourceConfig.topicPrefix.trimEnd('.') + "."
     private val pollTimeout = sourceConfig.pollTimeout
     private val adminClient = Admin.create(config)
     private val converter = KafkaConverter(config)
+    private val naming = NamingAdjusterManager(sourceConfig.namingAdjusters)
 
-    fun availableStreams(): List<StreamletId> {
+    fun availableTopics(): List<String> {
         val topics = adminClient.listTopics().names().get()
-        return topics.filter { it.startsWith("${topicPrefix}.") }
-            .mapNotNull(::idOf)
+        return topics.filter {
+            if (!it.startsWith(topicPrefix)) return@filter false
+            val str = it.substring(topicPrefix.length)
+            str.contains('.')
+        }
     }
 
-    fun getInlet(id: StreamletId): KafkaTopicInlet {
-        val topic = topicOf(id)
+    fun getInlet(topic: String): KafkaTopicInlet {
         val consumer = newConsumer<ByteArray, ByteArray>()
         val converter = getConverter()
-        return KafkaTopicInlet(id, topic, consumer, converter, pollTimeout)
+        return KafkaTopicInlet(topic, consumer, converter, pollTimeout)
     }
 
-    fun latestOffsets(id: StreamletId): Map<Int, Long> {
-        val topic = topicOf(id)
+    fun latestOffsets(topic: String): Map<Int, Long> {
         val partitions = adminClient.describeTopics(listOf(topic))
             .all().get()[topic]!!
             .partitions()
@@ -70,17 +71,19 @@ class KafkaSource(sourceConfig: SourceConfig) {
         return converter
     }
 
-    fun idOf(topic: String): StreamletId? {
-        val parts = topic.removePrefix("${topicPrefix}.")
+    fun tableIdOf(topic: String): TableIdentifier {
+        val parts = topic.removePrefix(topicPrefix)
             .split(".")
-        if (parts.size != 2) {
-            logger.warn("Ignore topic {}: not matching with pattern {}.<schemaName>.<tableName>", topic, topicPrefix)
-            return null
+        if (parts.size < 2) {
+            val msg = "topic $topic: not matching with pattern $topicPrefix<schemaName>.<tableName>"
+            throw IllegalArgumentException(msg)
         }
-        return StreamletId(parts[0], parts[1])
-    }
 
-    fun topicOf(id: StreamletId): String {
-        return "${topicPrefix}.${id.schema}.${id.table}"
+        var table = parts.last()
+        var ns = parts.dropLast(1)
+        ns = naming.adjustNamespace(ns)
+        table = naming.adjustTable(ns, table)
+
+        return TableIdentifier.of(*ns.toTypedArray(), table)
     }
 }

@@ -16,6 +16,7 @@ data class SourceConfig(
     val kind: String,
     val topicPrefix: String,
     val config: Map<String, String>,
+    val namingAdjusters: List<Map<String, Any>> = emptyList(),
 ) {
     @Transient
     val pollTimeout: Duration
@@ -43,11 +44,11 @@ data class StreamConfig(
 
     @JsonSerialize(using = DurationSerializer::class)
     @JsonDeserialize(using = DurationDeserializer::class)
-    val streamletIdleTimeout: Duration = Duration.ofMinutes(15),
+    val examineInterval: Duration = Duration.ofMinutes(3),
 
     @JsonSerialize(using = DurationSerializer::class)
     @JsonDeserialize(using = DurationDeserializer::class)
-    val streamletExamineInterval: Duration = Duration.ofMinutes(3),
+    val idleTimeout: Duration = Duration.ofMinutes(15),
 
     @JsonSerialize(using = DurationSerializer::class)
     @JsonDeserialize(using = DurationDeserializer::class)

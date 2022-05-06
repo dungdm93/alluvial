@@ -1,7 +1,6 @@
 package dev.alluvial.runtime
 
 import dev.alluvial.api.Streamlet.Status.*
-import dev.alluvial.api.StreamletId
 import dev.alluvial.schema.debezium.KafkaSchemaTableCreator
 import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.source.kafka.KafkaSource
@@ -15,13 +14,12 @@ import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.supervisorScope
+import org.apache.iceberg.catalog.TableIdentifier
 import org.slf4j.LoggerFactory
-import java.time.Clock
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import kotlin.concurrent.thread
-import kotlin.time.toKotlinDuration
 
 class Alluvial : Runnable {
     companion object {
@@ -31,12 +29,11 @@ class Alluvial : Runnable {
     private lateinit var source: KafkaSource
     private lateinit var sink: IcebergSink
     private lateinit var streamletFactory: DebeziumStreamletFactory
-    private lateinit var streamletIdleTimeout: Duration
-    private lateinit var streamletExamineInterval: Duration
-    private val streamlets: ConcurrentMap<StreamletId, DebeziumStreamlet> = ConcurrentHashMap()
-    private val time = Clock.systemUTC()
+    private lateinit var examineInterval: Duration
+    private val streamlets: ConcurrentMap<String, DebeziumStreamlet> = ConcurrentHashMap()
+    private val topic2Table = mutableMapOf<String, TableIdentifier>()
 
-    private val terminateStreamletsHook = thread(start = false, name = "terminate-streamlets") {
+    private val terminateStreamletsHook = thread(start = false, name = "terminator") {
         logger.warn("Shutdown Hook: closing streamlets")
         streamlets.values.forEach(DebeziumStreamlet::close)
         streamlets.clear()
@@ -47,83 +44,81 @@ class Alluvial : Runnable {
         sink = IcebergSink(config.sink)
         val tableCreator = KafkaSchemaTableCreator(source, sink, config.sink.tableCreation)
         streamletFactory = DebeziumStreamletFactory(source, sink, tableCreator, config.stream)
-        streamletIdleTimeout = config.stream.streamletIdleTimeout
-        streamletExamineInterval = config.stream.streamletExamineInterval
+        examineInterval = config.stream.examineInterval
     }
 
     override fun run(): Unit = runBlocking {
         Runtime.getRuntime().addShutdownHook(terminateStreamletsHook)
 
-        val channel = Channel<StreamletId>()
+        val channel = Channel<String>()
 
-        scheduleInterval(streamletExamineInterval.toKotlinDuration(), Dispatchers.Default) {
+        scheduleInterval(examineInterval.toMillis(), Dispatchers.Default) {
             examineStreamlets(channel)
         }
 
         supervisorScope {
-            for (id in channel) {
-                val streamlet = getOrCreateStreamlet(id)
+            for (topic in channel) {
+                val streamlet = getOrCreateStreamlet(topic)
                 launch(Dispatchers.IO) {
-                    logger.info("Launching streamlet {}", id)
+                    logger.info("Launching streamlet {}", streamlet.name)
                     streamlet.run()
                 }
             }
         }
     }
 
-    private suspend fun examineStreamlets(channel: SendChannel<StreamletId>) {
+    private suspend fun examineStreamlets(channel: SendChannel<String>) {
         logger.info("Start examine streamlets")
-        val ids = source.availableStreams()
+        val topics = source.availableTopics()
 
-        logger.info("Found {} streamlet available", ids.size)
-        for (id in ids) {
-            examineStreamlet(id, channel)
+        logger.info("Found {} topics available", topics.size)
+        for (topic in topics) {
+            examineStreamlet(topic, channel)
         }
     }
 
-    private suspend fun examineStreamlet(id: StreamletId, channel: SendChannel<StreamletId>) {
-        if (id !in streamlets) {
-            if (currentLagOf(id) > 0) channel.send(id)
+    private suspend fun examineStreamlet(topic: String, channel: SendChannel<String>) {
+        val tableId = topic2Table.computeIfAbsent(topic) { source.tableIdOf(topic) }
+        if (topic !in streamlets) {
+            if (currentLagOf(topic, tableId) > 0) channel.send(topic)
             return
         }
-        val streamlet = streamlets[id]!!
-        val streamletIdleTimeoutMs = streamletIdleTimeout.toMillis()
+        val streamlet = streamlets[topic]!!
         when (streamlet.status) {
-            CREATED -> logger.warn("Streamlet {} is still in CREATED state, something may be wrong!!!", id)
-            RUNNING -> logger.info("Streamlet {} is RUNNING", id)
+            CREATED -> logger.warn("Streamlet {} is still in CREATED state, something may be wrong!!!", streamlet.name)
+            RUNNING -> logger.info("Streamlet {} is RUNNING", streamlet.name)
             SUSPENDED -> {
-                val lag = streamlet.inlet.currentLag()
-                val committedTime = streamlet.outlet.committedTimestamp() ?: Long.MIN_VALUE
-                if (lag <= 0 && committedTime < time.millis() - streamletIdleTimeoutMs) {
-                    logger.info("No more message in {} for {}ms => close streamlet", id, streamletIdleTimeoutMs)
+                if (streamlet.canTerminate()) {
+                    logger.info("Close streamlet {}: No more message for awhile", streamlet.name)
                     streamlet.close()
-                    streamlets.remove(id)
+                    streamlets.remove(topic)
                 } else if (streamlet.shouldRun()) {
-                    channel.send(id)
+                    channel.send(topic)
                 } else {
-                    logger.info("Streamlet {} still SUSPENDED for next examination", id)
+                    logger.info("Streamlet {} still SUSPENDED for next examination", streamlet.name)
                 }
             }
-            FAILED -> logger.error("Streamlet {} is FAILED", id) // TODO add retry mechanism
+            FAILED -> logger.error("Streamlet {} is FAILED", streamlet.name) // TODO add retry mechanism
         }
     }
 
-    private fun currentLagOf(id: StreamletId): Long {
-        val latestOffsets = source.latestOffsets(id)
-        val committedOffsets = sink.committedOffsets(id)
+    private fun currentLagOf(topic: String, tableId: TableIdentifier): Long {
+        val latestOffsets = source.latestOffsets(topic)
+        val committedOffsets = sink.committedOffsets(tableId)
 
         var lag = 0L
         latestOffsets.forEach { (partition, latestOffset) ->
-            val committedPosition = committedOffsets?.get(partition) ?: 0
+            val committedPosition = committedOffsets[partition] ?: 0
             lag += latestOffset - committedPosition
         }
         return lag
     }
 
-    private fun getOrCreateStreamlet(id: StreamletId): DebeziumStreamlet {
-        return streamlets.computeIfAbsent(id) {
+    private fun getOrCreateStreamlet(topic: String): DebeziumStreamlet {
+        val tableId = topic2Table[topic]!!
+        return streamlets.computeIfAbsent(topic) {
             logger.info("create new stream {}", it)
-            streamletFactory.createStreamlet(id)
+            streamletFactory.createStreamlet(topic, tableId)
         }
     }
 }

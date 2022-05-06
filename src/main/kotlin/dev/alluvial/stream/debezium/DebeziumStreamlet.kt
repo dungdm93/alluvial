@@ -3,7 +3,6 @@ package dev.alluvial.stream.debezium
 import dev.alluvial.api.SchemaHandler
 import dev.alluvial.api.Streamlet
 import dev.alluvial.api.Streamlet.Status.*
-import dev.alluvial.api.StreamletId
 import dev.alluvial.runtime.StreamConfig
 import dev.alluvial.sink.iceberg.IcebergTableOutlet
 import dev.alluvial.source.kafka.KafkaTopicInlet
@@ -14,7 +13,7 @@ import kotlin.math.max
 
 @Suppress("MemberVisibilityCanBePrivate")
 class DebeziumStreamlet(
-    override val id: StreamletId,
+    override val name: String,
     val inlet: KafkaTopicInlet,
     val outlet: IcebergTableOutlet,
     val schemaHandler: SchemaHandler,
@@ -27,6 +26,7 @@ class DebeziumStreamlet(
     private val offsets = mutableMapOf<Int, Long>()
     private var lastRecordTimestamp = Long.MIN_VALUE
     private val clock = Clock.systemUTC()
+    private val idleTimeoutMs = streamConfig.idleTimeout.toMillis()
     private val commitBatchSize = streamConfig.commitBatchSize
     private val commitTimespanMs = streamConfig.commitTimespan.toMillis()
 
@@ -36,7 +36,7 @@ class DebeziumStreamlet(
     override fun run() = withMDC {
         if (status != CREATED) resume()
         status = RUNNING
-        logger.info("Streamlet {} is running", id)
+        logger.info("Streamlet {} is running", name)
         ensureOffsets()
         while (shouldRun()) {
             captureChanges(commitBatchSize)
@@ -47,12 +47,12 @@ class DebeziumStreamlet(
 
     override fun pause() {
         inlet.pause()
-        logger.info("Streamlet {} is paused", id)
+        logger.info("Streamlet {} is paused", name)
     }
 
     override fun resume() {
         inlet.resume()
-        logger.info("Streamlet {} is resumed", id)
+        logger.info("Streamlet {} is resumed", name)
     }
 
     private fun commit() {
@@ -66,6 +66,14 @@ class DebeziumStreamlet(
         if (lag <= 0) return false
         if (lag > commitBatchSize) return true
         return lastRecordTimestamp < clock.millis() - commitTimespanMs
+    }
+
+    fun canTerminate(): Boolean {
+        if (status != SUSPENDED) return false
+
+        val lag = inlet.currentLag()
+        val committedTime = outlet.committedTimestamp() ?: Long.MIN_VALUE
+        return lag <= 0 && committedTime < clock.millis() - idleTimeoutMs
     }
 
     private fun captureChanges(batchSize: Int) {
@@ -95,7 +103,7 @@ class DebeziumStreamlet(
     }
 
     private fun ensureOffsets() {
-        val outletOffsets = outlet.committedOffsets() ?: return
+        val outletOffsets = outlet.committedOffsets()
         offsets.putAll(outletOffsets)
         lastRecordTimestamp = outlet.lastRecordTimestamp() ?: Long.MIN_VALUE
 
@@ -124,10 +132,10 @@ class DebeziumStreamlet(
 
     private inline fun <R> withMDC(block: () -> R): R {
         try {
-            MDC.put("streamlet.id", id.toString())
+            MDC.put("streamlet.id", name)
             return block()
         } catch (e: Exception) {
-            logger.error("Streamlet {} is failed", id)
+            logger.error("Streamlet {} is failed", name)
             status = FAILED
             throw e
         } finally {
@@ -136,6 +144,6 @@ class DebeziumStreamlet(
     }
 
     override fun toString(): String {
-        return "DebeziumStreamlet(${id})"
+        return "DebeziumStreamlet(${name})"
     }
 }

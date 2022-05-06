@@ -1,6 +1,5 @@
 package dev.alluvial.source.kafka
 
-import dev.alluvial.api.StreamletId
 import dev.alluvial.runtime.SourceConfig
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.ConsumerConfig
@@ -28,7 +27,7 @@ fun main() {
         config = config
     )
     val source = KafkaSource(sourceConfig)
-    val inlet = source.getInlet(StreamletId("sakila", "actor"))
+    val inlet = source.getInlet("debezium.mysql.sakila.sakila.actor")
 
     repeat(100) {
         val record = inlet.read()

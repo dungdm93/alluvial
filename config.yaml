@@ -9,6 +9,13 @@ source:
     key.converter.schema.registry.url: http://schema-registry:8081
     value.converter.schema.registry.url: http://schema-registry:8081
     poll.timeout.ms: 1000
+  namingAdjusters:
+    - class: dev.alluvial.source.kafka.naming.ChangingCaseNamingAdjuster
+      case: lower
+    - class: dev.alluvial.source.kafka.naming.MappingSchemaNamingAdjuster
+      map:
+        sakila: dvdrental
+        foobar: abcxyz
 
 sink:
   kind: iceberg
@@ -69,7 +76,7 @@ sink:
 
 stream:
   kind: debezium
-  streamletIdleTimeout: "15m"
-  streamletExamineInterval: "3m"
+  examineInterval: "3m"
+  idleTimeout: "15m"
   commitBatchSize: 1000
   commitTimespan: "10m"

@@ -1,6 +1,5 @@
 package dev.alluvial.schema.debezium
 
-import dev.alluvial.api.StreamletId
 import dev.alluvial.api.TableCreator
 import dev.alluvial.runtime.PartitionSpecConfig
 import dev.alluvial.runtime.TableCreationConfig
@@ -12,6 +11,7 @@ import org.apache.iceberg.PartitionSpec
 import org.apache.iceberg.PartitionSpecs
 import org.apache.iceberg.Table
 import org.apache.iceberg.TableProperties
+import org.apache.iceberg.catalog.TableIdentifier
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.KafkaConsumer
@@ -27,26 +27,24 @@ class KafkaSchemaTableCreator(
 ) : TableCreator {
     companion object {
         const val TABLE_FORMAT_VERSION = "2"
+        private val pollTimeout: Duration = Duration.ofSeconds(1)
     }
 
     private val properties = tableCreationConfig.properties
     private val partitionSpec = tableCreationConfig.partitionSpec
     private val baseLocation = tableCreationConfig.baseLocation?.trimEnd('/')
 
-    override fun createTable(id: StreamletId): Table {
+    override fun createTable(topic: String, tableId: TableIdentifier): Table {
         val consumer = source.newConsumer<ByteArray, ByteArray>()
         val converter = source.getConverter()
 
-        setupConsumer(consumer, id)
-        return consumer.firstNonNull {
-            val record = converter.convert(it)
-            buildTable(id, record)
-        }
+        setupConsumer(consumer, topic)
+        val record = consumer.firstNonNull(converter::convert)
+        consumer.close()
+        return buildTable(tableId, record)
     }
 
-    private fun <K, V> setupConsumer(consumer: KafkaConsumer<K, V>, id: StreamletId) {
-        val topic = source.topicOf(id)
-
+    private fun <K, V> setupConsumer(consumer: KafkaConsumer<K, V>, topic: String) {
         val topicPartitions = consumer.partitionsFor(topic)
             .map { TopicPartition(it.topic(), it.partition()) }
         consumer.assign(topicPartitions)
@@ -56,7 +54,7 @@ class KafkaSchemaTableCreator(
     private inline fun <K, V, R> KafkaConsumer<K, V>.firstNonNull(block: (ConsumerRecord<K, V>) -> R): R {
         val r: ConsumerRecord<K, V>
         loop@ while (true) {
-            val records = this.poll(Duration.ofSeconds(1))
+            val records = this.poll(pollTimeout)
             if (records == null || records.isEmpty) continue
 
             for (record in records) {
@@ -69,24 +67,24 @@ class KafkaSchemaTableCreator(
         return block(r)
     }
 
-    private fun buildTable(id: StreamletId, record: SinkRecord): Table {
+    private fun buildTable(tableId: TableIdentifier, record: SinkRecord): Table {
         val iSchema = icebergSchemaFrom(record)
-        val tableId = sink.tableIdentifierOf(id)
-        val tableBuilder = sink.newTableBuilder(tableId, iSchema)
-            .withProperty(TableProperties.FORMAT_VERSION, TABLE_FORMAT_VERSION)
 
-        tableBuilder.withProperties(properties)
-        if (baseLocation != null)
-            tableBuilder.withLocation("${baseLocation}/${id.schema}/${id.table}")
+        return sink.buildTable(tableId, iSchema) { builder ->
+            builder.withProperty(TableProperties.FORMAT_VERSION, TABLE_FORMAT_VERSION)
 
-        val partitionConfigs = partitionSpec[id.table]
-        if (!partitionConfigs.isNullOrEmpty()) {
-            val partitionSpec = buildPartitionSpec(iSchema, partitionConfigs)
-            tableBuilder.withPartitionSpec(partitionSpec)
+            builder.withProperties(properties)
+            if (baseLocation != null) {
+                val nsPath = tableId.namespace().levels().joinToString("/")
+                builder.withLocation("${baseLocation}/${nsPath}/${tableId.name()}")
+            }
+
+            val partitionConfigs = partitionSpec[tableId.name()]
+            if (!partitionConfigs.isNullOrEmpty()) {
+                val partitionSpec = buildPartitionSpec(iSchema, partitionConfigs)
+                builder.withPartitionSpec(partitionSpec)
+            }
         }
-
-        sink.ensureNamespace(tableId.namespace())
-        return tableBuilder.create()
     }
 
     private fun icebergSchemaFrom(record: SinkRecord): IcebergSchema {
