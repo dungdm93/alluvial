@@ -2,12 +2,16 @@ package dev.alluvial.schema.debezium
 
 import dev.alluvial.api.StreamletId
 import dev.alluvial.api.TableCreator
+import dev.alluvial.runtime.PartitionSpecConfig
 import dev.alluvial.runtime.TableCreationConfig
 import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.sink.iceberg.data.toIcebergSchema
 import dev.alluvial.source.kafka.KafkaSource
+import org.apache.iceberg.PartitionSpec
+import org.apache.iceberg.PartitionSpecs
 import org.apache.iceberg.Table
 import org.apache.iceberg.TableProperties
+import org.apache.iceberg.relocated.com.google.common.base.Preconditions
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.TopicPartition
@@ -70,6 +74,12 @@ class KafkaSchemaTableCreator(
         if (tableCreationConfig.baseLocation != null)
             tableBuilder.withLocation("${tableCreationConfig.baseLocation}/${id.schema}/${id.table}")
 
+        val partitionConfigs = tableCreationConfig.partitionSpec[id.table]
+        if (!partitionConfigs.isNullOrEmpty()) {
+            val partitionSpec = buildPartitionSpec(iSchema, partitionConfigs)
+            tableBuilder.withPartitionSpec(partitionSpec)
+        }
+
         return tableBuilder.create()
     }
 
@@ -84,5 +94,16 @@ class KafkaSchemaTableCreator(
 
         val keys = keySchema.fields().map { it.name() }
         return rowSchema.toIcebergSchema(keys)
+    }
+
+    private fun buildPartitionSpec(schema: IcebergSchema, partitionConfigs: List<PartitionSpecConfig>): PartitionSpec {
+        val builder = PartitionSpec.builderFor(schema)
+        partitionConfigs.forEach { config ->
+            val sourceName = config.column
+            val sourceField = schema.findField(sourceName)
+            Preconditions.checkNotNull(sourceField, "Cannot find source field: %s", sourceName)
+            PartitionSpecs.add(builder, sourceField, config.transform)
+        }
+        return builder.build()
     }
 }
