@@ -37,6 +37,7 @@ val confluentVersion = "7.0.0"
 val icebergVersion = "0.13.1"
 val hadoopVersion = "3.2.1"
 val hiveVersion = "3.1.3"
+val awsVersion = "2.17.186"
 val jacksonVersion = "2.12.3"
 
 val junitVersion = "5.8.2"
@@ -123,6 +124,10 @@ dependencies {
         exclude(group = "com.tdunning", module = "json")
         exclude(group = "org.codehaus.jettison", module = "jettison")
     }
+    runtimeOnly("org.apache.iceberg:iceberg-aws:$icebergVersion")
+    runtimeOnly("software.amazon.awssdk:s3:$awsVersion")
+    runtimeOnly("software.amazon.awssdk:url-connection-client:$awsVersion")
+
     // Iceberg transient dependency
     implementation("org.apache.iceberg:iceberg-common:$icebergVersion")
     implementation("org.apache.iceberg:iceberg-bundled-guava:$icebergVersion")
