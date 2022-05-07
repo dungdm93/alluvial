@@ -47,6 +47,24 @@ services:
       - ./hive/configs/hive/:/opt/hive/conf/
       - ./hive/configs/hadoop/:/opt/hadoop/etc/hadoop/
 
+  minio:
+    image: minio/minio
+    command: [ server, --address=:9000, --console-address=:9001, /data ]
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: SuperSecr3t
+    networks:
+      default:
+        ipv4_address: 10.5.0.11
+    ports:
+      - 9000:9000
+      - 9001:9001
+    volumes:
+      - minio_data:/data
+
+volumes:
+  minio_data:
+
 networks:
   default:
     name: alluvial
