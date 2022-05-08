@@ -23,11 +23,15 @@ import org.apache.iceberg.Schema as IcebergSchema
 class KafkaSchemaTableCreator(
     private val source: KafkaSource,
     private val sink: IcebergSink,
-    private val tableCreationConfig: TableCreationConfig,
+    tableCreationConfig: TableCreationConfig,
 ) : TableCreator {
     companion object {
         const val TABLE_FORMAT_VERSION = "2"
     }
+
+    private val properties = tableCreationConfig.properties
+    private val partitionSpec = tableCreationConfig.partitionSpec
+    private val baseLocation = tableCreationConfig.baseLocation?.trimEnd('/')
 
     override fun createTable(id: StreamletId): Table {
         val consumer = source.newConsumer<ByteArray, ByteArray>()
@@ -71,11 +75,11 @@ class KafkaSchemaTableCreator(
         val tableBuilder = sink.newTableBuilder(tableId, iSchema)
             .withProperty(TableProperties.FORMAT_VERSION, TABLE_FORMAT_VERSION)
 
-        tableBuilder.withProperties(tableCreationConfig.properties)
-        if (tableCreationConfig.baseLocation != null)
-            tableBuilder.withLocation("${tableCreationConfig.baseLocation}/${id.schema}/${id.table}")
+        tableBuilder.withProperties(properties)
+        if (baseLocation != null)
+            tableBuilder.withLocation("${baseLocation}/${id.schema}/${id.table}")
 
-        val partitionConfigs = tableCreationConfig.partitionSpec[id.table]
+        val partitionConfigs = partitionSpec[id.table]
         if (!partitionConfigs.isNullOrEmpty()) {
             val partitionSpec = buildPartitionSpec(iSchema, partitionConfigs)
             tableBuilder.withPartitionSpec(partitionSpec)
