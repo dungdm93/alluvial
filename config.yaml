@@ -15,13 +15,16 @@ sink:
   catalog:
     catalog-type: hadoop
     warehouse: /tmp/warehouse
+    # catalog-type: hive
+    # uri: thrift://hive-metastore:9083
   tableCreation:
-#    baseLocation: alluvial
     properties:
       write.format.default: AVRO
       write.target-file-size-bytes: 134217728  # 128MB
+      # engine.hive.enabled: true
+    # baseLocation: /tmp/alluvial/
     partitionSpec:
-      # Example: Table "actor" is partitioned by column "actor_id" using "void" transformation
+      # Partitioned by column "actor_id" using "void" transformation
       actor:
         - column: actor_id
           transform: void

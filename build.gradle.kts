@@ -31,12 +31,13 @@ repositories {
 
 val slf4jVersion = "1.7.36"
 val logbackVersion = "1.2.10"
-val debeziumVersion = "1.8.1.Final"
+val debeziumVersion = "1.9.1.Final"
 val kafkaVersion = "3.0.0"
 val confluentVersion = "7.0.0"
 val icebergVersion = "0.13.1"
 val hadoopVersion = "3.2.1"
-val jacksonVersion = "2.11.4"
+val hiveVersion = "3.1.3"
+val jacksonVersion = "2.12.3"
 
 val junitVersion = "5.8.2"
 val striktVersion = "0.33.0"
@@ -67,13 +68,60 @@ dependencies {
     implementation("org.apache.iceberg:iceberg-data:$icebergVersion")
     implementation("org.apache.iceberg:iceberg-orc:$icebergVersion")
     implementation("org.apache.iceberg:iceberg-parquet:$icebergVersion")
-    implementation("org.apache.hadoop:hadoop-common:$hadoopVersion") {
+    implementation("org.apache.hadoop:hadoop-client:$hadoopVersion") {
         exclude(group = "log4j")
         exclude(group = "org.slf4j")
+        exclude(group = "commons-logging")
         exclude(group = "commons-beanutils")
         exclude(group = "org.apache.avro")
         exclude(group = "javax.servlet")
         exclude(group = "com.google.code.gson")
+    }
+    runtimeOnly("org.apache.iceberg:iceberg-hive-metastore:$icebergVersion")
+    // "org.apache.hive:hive-standalone-metastore:$hiveVersion"
+    // "org.apache.hive:hive-common:$hiveVersion"
+    // "org.apache.hive:hive-serde:$hiveVersion"
+    runtimeOnly("org.apache.hive:hive-metastore:$hiveVersion") {
+        exclude(group = "log4j")
+        exclude(group = "org.slf4j")
+        exclude(group = "org.apache.logging.log4j")
+        exclude(group = "org.apache.avro")
+        exclude(group = "org.apache.orc")
+        exclude(group = "org.apache.parquet")
+        exclude(group = "net.sf.opencsv")
+        exclude(group = "org.apache.ant")
+        exclude(group = "org.apache.arrow")
+        exclude(group = "org.apache.hadoop")
+        exclude(group = "org.apache.hbase")
+        exclude(group = "org.apache.twill")
+        exclude(group = "org.apache.derby")
+        exclude(group = "org.apache.curator")
+        exclude(group = "org.apache.zookeeper")
+        exclude(group = "co.cask.tephra") // org.apache.tephra
+        exclude(group = "javax.servlet")
+        exclude(group = "javax.xml.bind")
+        exclude(group = "javax.jdo")
+        exclude(group = "javax.transaction")
+        exclude(group = "org.datanucleus")
+        exclude(group = "com.zaxxer", module = "HikariCP")
+        exclude(group = "com.jolbox", module = "bonecp")
+        exclude(group = "commons-dbcp")
+        exclude(group = "commons-pool")
+        exclude(group = "commons-codec")
+        exclude(group = "commons-logging")
+        exclude(group = "commons-cli")
+        exclude(group = "jline")
+        exclude(group = "sqlline")
+        exclude(group = "javolution")
+        exclude(group = "org.antlr")
+        exclude(group = "joda-time")
+        exclude(group = "net.sf.jpam")
+        exclude(group = "com.sun.jersey")
+        exclude(group = "org.eclipse.jetty")
+        exclude(group = "io.dropwizard.metrics")
+        exclude(group = "com.github.joshelser", module = "dropwizard-metrics-hadoop-metrics2-reporter")
+        exclude(group = "com.tdunning", module = "json")
+        exclude(group = "org.codehaus.jettison", module = "jettison")
     }
     // Iceberg transient dependency
     implementation("org.apache.iceberg:iceberg-common:$icebergVersion")
@@ -82,8 +130,8 @@ dependencies {
     implementation("com.github.stephenc.findbugs:findbugs-annotations:1.3.9-1")
     implementation("org.roaringbitmap:RoaringBitmap:0.9.22")
     implementation("org.apache.avro:avro:1.10.1")
-    implementation("org.apache.parquet:parquet-avro:1.12.2")
     implementation("org.apache.orc:orc-core:1.7.2")
+    implementation("org.apache.parquet:parquet-avro:1.12.2")
 
     // Test Frameworks
     testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")
