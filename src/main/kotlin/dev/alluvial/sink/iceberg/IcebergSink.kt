@@ -9,6 +9,8 @@ import org.apache.iceberg.CatalogUtil
 import org.apache.iceberg.Schema
 import org.apache.iceberg.catalog.Catalog
 import org.apache.iceberg.catalog.Catalog.TableBuilder
+import org.apache.iceberg.catalog.Namespace
+import org.apache.iceberg.catalog.SupportsNamespaces
 import org.apache.iceberg.catalog.TableIdentifier
 import org.apache.iceberg.exceptions.NoSuchTableException
 import org.apache.iceberg.util.PropertyUtil
@@ -30,6 +32,7 @@ class IcebergSink(sinkConfig: SinkConfig) {
     }
 
     private val catalog: Catalog
+    private val supportsNamespaces: SupportsNamespaces?
 
     init {
         val properties = sinkConfig.catalog
@@ -44,6 +47,7 @@ class IcebergSink(sinkConfig: SinkConfig) {
         requireNotNull(catalogImpl) { "catalogImpl must not be null" }
 
         val catalog = CatalogUtil.loadCatalog(catalogImpl, "iceberg", properties, Configuration())
+        this.supportsNamespaces = catalog as? SupportsNamespaces
         this.catalog = if (cacheEnabled)
             CachingCatalog.wrap(catalog, cacheExpirationIntervalMs) else
             catalog
@@ -59,9 +63,14 @@ class IcebergSink(sinkConfig: SinkConfig) {
         }
     }
 
-    fun newTableBuilder(id: StreamletId, schema: Schema): TableBuilder {
-        val tableId = tableIdentifierOf(id)
+    fun newTableBuilder(tableId: TableIdentifier, schema: Schema): TableBuilder {
         return catalog.buildTable(tableId, schema)
+    }
+
+    fun ensureNamespace(ns: Namespace) {
+        if (supportsNamespaces == null) return
+        if (supportsNamespaces.namespaceExists(ns)) return
+        supportsNamespaces.createNamespace(ns)
     }
 
     fun committedOffsets(id: StreamletId): Map<Int, Long>? {

@@ -67,7 +67,8 @@ class KafkaSchemaTableCreator(
 
     private fun buildTable(id: StreamletId, record: SinkRecord): Table {
         val iSchema = icebergSchemaFrom(record)
-        val tableBuilder = sink.newTableBuilder(id, iSchema)
+        val tableId = sink.tableIdentifierOf(id)
+        val tableBuilder = sink.newTableBuilder(tableId, iSchema)
             .withProperty(TableProperties.FORMAT_VERSION, TABLE_FORMAT_VERSION)
 
         tableBuilder.withProperties(tableCreationConfig.properties)
@@ -80,6 +81,7 @@ class KafkaSchemaTableCreator(
             tableBuilder.withPartitionSpec(partitionSpec)
         }
 
+        sink.ensureNamespace(tableId.namespace())
         return tableBuilder.create()
     }
 
