@@ -6,6 +6,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.iceberg.CachingCatalog
 import org.apache.iceberg.CatalogProperties.*
 import org.apache.iceberg.CatalogUtil
+import org.apache.iceberg.CatalogUtil.ICEBERG_CATALOG_HADOOP
 import org.apache.iceberg.Schema
 import org.apache.iceberg.catalog.Catalog
 import org.apache.iceberg.catalog.Catalog.TableBuilder
@@ -20,15 +21,6 @@ import org.slf4j.LoggerFactory
 class IcebergSink(sinkConfig: SinkConfig) {
     companion object {
         private val logger = LoggerFactory.getLogger(IcebergSink::class.java)
-        private const val CATALOG_TYPE = "catalog-type"
-        private val NAMED_CATALOG = mapOf(
-            "hadoop" to "org.apache.iceberg.hadoop.HadoopCatalog",
-            "hive" to "org.apache.iceberg.hive.HiveCatalog",
-            "jdbc" to "org.apache.iceberg.jdbc.JdbcCatalog",
-            "glue" to "org.apache.iceberg.aws.glue.GlueCatalog",
-            "dynamodb" to "org.apache.iceberg.aws.dynamodb.DynamoDbCatalog",
-            "nessie" to "org.apache.iceberg.nessie.NessieCatalog",
-        )
     }
 
     private val catalog: Catalog
@@ -43,8 +35,7 @@ class IcebergSink(sinkConfig: SinkConfig) {
             CACHE_EXPIRATION_INTERVAL_MS,
             CACHE_EXPIRATION_INTERVAL_MS_DEFAULT
         )
-        val catalogImpl = NAMED_CATALOG.getOrDefault(properties[CATALOG_TYPE], properties[CATALOG_IMPL])
-        requireNotNull(catalogImpl) { "catalogImpl must not be null" }
+        val catalogImpl = PropertyUtil.propertyAsString(properties, CATALOG_IMPL, ICEBERG_CATALOG_HADOOP)
 
         val catalog = CatalogUtil.loadCatalog(catalogImpl, "iceberg", properties, Configuration())
         this.supportsNamespaces = catalog as? SupportsNamespaces
