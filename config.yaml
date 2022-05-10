@@ -13,10 +13,10 @@ source:
 sink:
   kind: iceberg
   catalog:
-    catalog-type: hadoop
+    catalog-impl: org.apache.iceberg.hadoop.HadoopCatalog
     warehouse: /tmp/warehouse
     # warehouse: s3a://alluvial/warehouse
-    # catalog-type: hive
+    # catalog-impl: org.apache.iceberg.hive.HiveCatalog
     # uri: thrift://hive-metastore:9083
     # io-impl: org.apache.iceberg.aws.s3.S3FileIO
     ## see: org.apache.iceberg.aws.AwsProperties
