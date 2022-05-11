@@ -5,7 +5,7 @@ import dev.alluvial.api.TableCreator
 import dev.alluvial.runtime.PartitionSpecConfig
 import dev.alluvial.runtime.TableCreationConfig
 import dev.alluvial.sink.iceberg.IcebergSink
-import dev.alluvial.sink.iceberg.data.toIcebergSchema
+import dev.alluvial.sink.iceberg.type.toIcebergSchema
 import dev.alluvial.source.kafka.KafkaSource
 import org.apache.iceberg.PartitionSpec
 import org.apache.iceberg.PartitionSpecs

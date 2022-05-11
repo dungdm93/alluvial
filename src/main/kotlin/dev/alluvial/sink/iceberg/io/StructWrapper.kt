@@ -1,7 +1,7 @@
 package dev.alluvial.sink.iceberg.io
 
-import dev.alluvial.sink.iceberg.data.logical.LogicalTypeConverter
-import dev.alluvial.sink.iceberg.data.logical.logicalTypeConverter
+import dev.alluvial.sink.iceberg.type.logical.LogicalTypeConverter
+import dev.alluvial.sink.iceberg.type.logical.logicalTypeConverter
 import org.apache.iceberg.StructLike
 import org.apache.iceberg.types.Type.TypeID.*
 import org.apache.iceberg.types.Types

@@ -1,7 +1,7 @@
 package dev.alluvial.schema.debezium
 
-import dev.alluvial.sink.iceberg.data.isPromotionAllowed
-import dev.alluvial.sink.iceberg.data.toIcebergType
+import dev.alluvial.sink.iceberg.type.isPromotionAllowed
+import dev.alluvial.sink.iceberg.type.toIcebergType
 import org.apache.iceberg.UpdateSchema
 import org.apache.iceberg.relocated.com.google.common.base.Joiner
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions

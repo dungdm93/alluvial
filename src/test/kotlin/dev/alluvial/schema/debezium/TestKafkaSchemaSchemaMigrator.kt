@@ -1,7 +1,7 @@
 package dev.alluvial.schema.debezium
 
-import dev.alluvial.sink.iceberg.data.isMigrateFrom
-import dev.alluvial.sink.iceberg.data.toIcebergSchema
+import dev.alluvial.sink.iceberg.type.isMigrateFrom
+import dev.alluvial.sink.iceberg.type.toIcebergSchema
 import org.apache.iceberg.PartitionSpec
 import org.apache.iceberg.Table
 import org.apache.iceberg.TestTables

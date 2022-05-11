@@ -1,9 +1,9 @@
 package dev.alluvial.sink.iceberg.io
 
 import dev.alluvial.backport.iceberg.io.BaseFileWriterFactory
-import dev.alluvial.sink.iceberg.data.avro.KafkaAvroWriter
-import dev.alluvial.sink.iceberg.data.parquet.KafkaParquetWriter
-import dev.alluvial.sink.iceberg.data.toKafkaSchema
+import dev.alluvial.sink.iceberg.avro.KafkaAvroWriter
+import dev.alluvial.sink.iceberg.parquet.KafkaParquetWriter
+import dev.alluvial.sink.iceberg.type.toKafkaSchema
 import org.apache.iceberg.FileFormat
 import org.apache.iceberg.MetadataColumns.DELETE_FILE_ROW_FIELD_NAME
 import org.apache.iceberg.SortOrder

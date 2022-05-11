@@ -1,7 +1,7 @@
 package dev.alluvial.sink.iceberg.io
 
-import dev.alluvial.sink.iceberg.data.RandomKafkaStruct
-import dev.alluvial.sink.iceberg.data.toIcebergSchema
+import dev.alluvial.sink.iceberg.type.RandomKafkaStruct
+import dev.alluvial.sink.iceberg.type.toIcebergSchema
 import dev.alluvial.source.kafka.DEBEZIUM_LOGICAL_TYPES_SCHEMA
 import dev.alluvial.source.kafka.KAFKA_LOGICAL_TYPES_SCHEMA
 import dev.alluvial.source.kafka.KAFKA_PRIMITIVES_SCHEMA
