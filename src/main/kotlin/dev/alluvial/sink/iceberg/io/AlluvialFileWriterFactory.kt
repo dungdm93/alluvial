@@ -1,9 +1,12 @@
 package dev.alluvial.sink.iceberg.io
 
 import dev.alluvial.backport.iceberg.io.BaseFileWriterFactory
-import dev.alluvial.sink.iceberg.data.avro.KafkaAvroWriter
-import dev.alluvial.sink.iceberg.data.parquet.KafkaParquetWriter
-import dev.alluvial.sink.iceberg.data.toKafkaSchema
+import dev.alluvial.sink.iceberg.avro.KafkaAvroWriter
+import dev.alluvial.sink.iceberg.parquet.KafkaParquetWriter
+import dev.alluvial.sink.iceberg.type.IcebergSchema
+import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.sink.iceberg.type.KafkaStruct
+import dev.alluvial.sink.iceberg.type.toKafkaSchema
 import org.apache.iceberg.FileFormat
 import org.apache.iceberg.MetadataColumns.DELETE_FILE_ROW_FIELD_NAME
 import org.apache.iceberg.SortOrder
@@ -14,9 +17,6 @@ import org.apache.iceberg.io.DeleteSchemaUtil
 import org.apache.iceberg.orc.BackportORC
 import org.apache.iceberg.parquet.BackportParquet
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions
-import org.apache.iceberg.Schema as IcebergSchema
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Struct as KafkaStruct
 
 class AlluvialFileWriterFactory private constructor(
     table: Table,

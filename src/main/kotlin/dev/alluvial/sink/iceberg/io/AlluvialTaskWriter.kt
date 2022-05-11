@@ -3,6 +3,9 @@ package dev.alluvial.sink.iceberg.io
 import dev.alluvial.backport.iceberg.io.PartitioningWriterFactory
 import dev.alluvial.backport.iceberg.io.PathOffset
 import dev.alluvial.backport.iceberg.io.StructCopy
+import dev.alluvial.sink.iceberg.type.IcebergSchema
+import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.sink.iceberg.type.KafkaStruct
 import org.apache.iceberg.ContentFile
 import org.apache.iceberg.PartitionKey
 import org.apache.iceberg.PartitionSpec
@@ -13,10 +16,7 @@ import org.apache.iceberg.io.TaskWriter
 import org.apache.iceberg.io.WriteResult
 import org.apache.iceberg.util.StructLikeMap
 import org.apache.iceberg.util.Tasks
-import org.apache.kafka.connect.data.Schema as KafkaSchema
 import org.apache.kafka.connect.sink.SinkRecord
-import org.apache.iceberg.Schema as IcebergSchema
-import org.apache.kafka.connect.data.Struct as KafkaStruct
 
 class AlluvialTaskWriter(
     partitioningWriterFactory: PartitioningWriterFactory<KafkaStruct>,

@@ -1,0 +1,2 @@
+dev.alluvial.sink.iceberg.type.kafka.LogicalTypeProvider
+dev.alluvial.sink.iceberg.type.debezium.LogicalTypeProvider

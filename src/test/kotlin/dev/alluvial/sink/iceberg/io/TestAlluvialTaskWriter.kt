@@ -1,6 +1,8 @@
 package dev.alluvial.sink.iceberg.io
 
 import dev.alluvial.backport.iceberg.io.PartitioningWriterFactory
+import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.sink.iceberg.type.KafkaStruct
 import org.apache.iceberg.FileFormat
 import org.apache.iceberg.PartitionSpec
 import org.apache.iceberg.TableProperties
@@ -20,8 +22,6 @@ import org.junit.Ignore
 import org.junit.Test
 import java.io.File
 import java.util.concurrent.atomic.AtomicLong
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Struct as KafkaStruct
 
 @Suppress("SameParameterValue")
 internal class TestAlluvialTaskWriter : TableTestBase(TABLE_VERSION) {

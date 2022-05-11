@@ -1,7 +1,14 @@
 package dev.alluvial.schema.debezium
 
-import dev.alluvial.sink.iceberg.data.isPromotionAllowed
-import dev.alluvial.sink.iceberg.data.toIcebergType
+import dev.alluvial.sink.iceberg.type.IcebergField
+import dev.alluvial.sink.iceberg.type.IcebergSchema
+import dev.alluvial.sink.iceberg.type.IcebergType
+import dev.alluvial.sink.iceberg.type.IcebergTypeID
+import dev.alluvial.sink.iceberg.type.KafkaField
+import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.sink.iceberg.type.KafkaType
+import dev.alluvial.sink.iceberg.type.isPromotionAllowed
+import dev.alluvial.sink.iceberg.type.toIcebergType
 import org.apache.iceberg.UpdateSchema
 import org.apache.iceberg.relocated.com.google.common.base.Joiner
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions
@@ -10,13 +17,6 @@ import org.apache.iceberg.types.Types.*
 import org.slf4j.LoggerFactory
 import java.util.Deque
 import java.util.LinkedList
-import org.apache.iceberg.Schema as IcebergSchema
-import org.apache.iceberg.types.Type as IcebergType
-import org.apache.iceberg.types.Type.TypeID as IcebergTypeID
-import org.apache.iceberg.types.Types.NestedField as IcebergField
-import org.apache.kafka.connect.data.Field as KafkaField
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Schema.Type as KafkaTypeID
 
 class KafkaSchemaSchemaMigrator(
     private val schemaUpdater: UpdateSchema,
@@ -51,7 +51,7 @@ class KafkaSchemaSchemaMigrator(
     }
 
     private fun list(sList: KafkaSchema, iList: ListType) {
-        Preconditions.checkArgument(sList.type() == KafkaTypeID.ARRAY, "sList must be ARRAY")
+        Preconditions.checkArgument(sList.type() == KafkaType.ARRAY, "sList must be ARRAY")
 
         withNode("element") {
             val sElementSchema = sList.valueSchema()
@@ -62,7 +62,7 @@ class KafkaSchemaSchemaMigrator(
     }
 
     private fun map(sMap: KafkaSchema, iMap: MapType) {
-        Preconditions.checkArgument(sMap.type() == KafkaTypeID.MAP, "sMap must be MAP")
+        Preconditions.checkArgument(sMap.type() == KafkaType.MAP, "sMap must be MAP")
 
         withNode("key") {
             visit(sMap.keySchema(), iMap.keyType())
@@ -76,7 +76,7 @@ class KafkaSchemaSchemaMigrator(
     }
 
     private fun struct(sStruct: KafkaSchema, iStruct: StructType) {
-        Preconditions.checkArgument(sStruct.type() == KafkaTypeID.STRUCT, "sStruct must be STRUCT")
+        Preconditions.checkArgument(sStruct.type() == KafkaType.STRUCT, "sStruct must be STRUCT")
 
         iStruct.fields().forEach { iField ->
             val sField = sStruct.field(iField.name())

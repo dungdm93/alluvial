@@ -1,6 +1,7 @@
 package dev.alluvial.sink.iceberg.io
 
 import dev.alluvial.backport.iceberg.io.PartitioningWriterFactory
+import dev.alluvial.sink.iceberg.type.KafkaSchema
 import org.apache.iceberg.FileFormat
 import org.apache.iceberg.Table
 import org.apache.iceberg.TableProperties.*
@@ -11,7 +12,6 @@ import org.apache.kafka.connect.sink.SinkRecord
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
-import org.apache.kafka.connect.data.Schema as KafkaSchema
 
 class AlluvialTaskWriterFactory(private val table: Table) {
     companion object {

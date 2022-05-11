@@ -1,18 +1,17 @@
 package dev.alluvial.sink.iceberg.io
 
-import dev.alluvial.sink.iceberg.data.logical.LogicalTypeConverter
-import dev.alluvial.sink.iceberg.data.logical.logicalTypeConverter
+import dev.alluvial.sink.iceberg.type.IcebergField
+import dev.alluvial.sink.iceberg.type.IcebergSchema
+import dev.alluvial.sink.iceberg.type.IcebergType
+import dev.alluvial.sink.iceberg.type.KafkaField
+import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.sink.iceberg.type.KafkaStruct
+import dev.alluvial.sink.iceberg.type.logical.LogicalTypeConverter
+import dev.alluvial.sink.iceberg.type.logical.logicalTypeConverter
 import org.apache.iceberg.StructLike
 import org.apache.iceberg.types.Type.TypeID.*
 import org.apache.iceberg.types.Types
 import java.nio.ByteBuffer
-import org.apache.iceberg.Schema as IcebergSchema
-import org.apache.iceberg.types.Type as IcebergType
-import org.apache.iceberg.types.Types.NestedField as IcebergField
-import org.apache.kafka.connect.data.Field as KafkaField
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Struct as KafkaStruct
-
 
 class StructWrapper(sSchema: KafkaSchema, iStruct: Types.StructType) : StructLike {
     private val getters: List<Getter<*>> = iStruct.fields().map { iField ->

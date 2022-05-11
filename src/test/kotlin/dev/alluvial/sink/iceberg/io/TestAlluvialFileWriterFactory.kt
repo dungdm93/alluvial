@@ -2,13 +2,13 @@ package dev.alluvial.sink.iceberg.io
 
 import dev.alluvial.backport.iceberg.io.FileWriterFactory
 import dev.alluvial.backport.iceberg.io.TestFileWriterFactory
+import dev.alluvial.sink.iceberg.type.IcebergSchema
+import dev.alluvial.sink.iceberg.type.KafkaStruct
 import org.apache.iceberg.FileFormat
 import org.apache.iceberg.util.StructLikeSet
 import org.apache.kafka.connect.data.Schema.INT32_SCHEMA
 import org.apache.kafka.connect.data.Schema.STRING_SCHEMA
 import org.apache.kafka.connect.data.SchemaBuilder
-import org.apache.iceberg.Schema as IcebergSchema
-import org.apache.kafka.connect.data.Struct as KafkaStruct
 
 internal class TestAlluvialFileWriterFactory(fileFormat: FileFormat, partitioned: Boolean) :
     TestFileWriterFactory<KafkaStruct>(fileFormat, partitioned) {
