@@ -1,19 +1,12 @@
 package dev.alluvial.sink.iceberg.data.avro
 
-import dev.alluvial.utils.OffsetTimes
 import dev.alluvial.utils.TimePrecision
 import dev.alluvial.utils.TimePrecision.MILLIS
 import dev.alluvial.utils.TimePrecision.NANOS
-import dev.alluvial.utils.ZonedDateTimes
 import org.apache.avro.io.Encoder
 import org.apache.iceberg.avro.ValueWriter
 import org.apache.iceberg.avro.ValueWriters
 import java.nio.ByteBuffer
-import java.time.OffsetTime
-import java.time.ZoneOffset
-import java.time.ZonedDateTime
-import java.util.Date
-import java.util.concurrent.TimeUnit
 import org.apache.kafka.connect.data.Struct as KafkaStruct
 
 object KafkaValueWriters {
@@ -33,51 +26,8 @@ object KafkaValueWriters {
         return ArrayMapWriter(keyWriter, valueWriter)
     }
 
-    fun date(): ValueWriter<Date> {
-        return DateWriter
-    }
-
-    fun timeAsDate(precision: TimePrecision): ValueWriter<Date> {
-        return TimeAsDateWriter(precision)
-    }
-
-    fun timeAsInt(sourcePrecision: TimePrecision, targetPrecision: TimePrecision): ValueWriter<Int> {
-        return TimeAsIntWriter(sourcePrecision, targetPrecision)
-    }
-
-    fun timeAsLong(sourcePrecision: TimePrecision, targetPrecision: TimePrecision): ValueWriter<Long> {
-        return TimeAsLongWriter(sourcePrecision, targetPrecision)
-    }
-
-    fun zonedTimeAsString(targetPrecision: TimePrecision): ValueWriter<String> {
-        return ZonedTimeAsStringWriter(targetPrecision)
-    }
-
-    fun timestampAsDate(precision: TimePrecision): ValueWriter<Date> {
-        return TimestampAsDateWriter(precision)
-    }
-
-    fun timestampAsLong(sourcePrecision: TimePrecision, targetPrecision: TimePrecision): ValueWriter<Long> {
-        return TimestampAsLongWriter(sourcePrecision, targetPrecision)
-    }
-
-    fun zonedTimestampAsString(targetPrecision: TimePrecision): ValueWriter<String> {
-        return ZonedTimestampAsStringWriter(targetPrecision)
-    }
-
     fun bytes(): ValueWriter<*> {
         return BytesWriter
-    }
-
-    fun arrayAsString(): ValueWriter<String> {
-        return ArrayAsStringWriter
-    }
-
-    fun geometry(): ValueWriter<KafkaStruct> {
-        return struct(
-            listOf(bytes(), ValueWriters.option(0, ValueWriters.ints())),
-            listOf(io.debezium.data.geometry.Geometry.WKB_FIELD, io.debezium.data.geometry.Geometry.SRID_FIELD)
-        )
     }
 
     private class StructWriter(writers: List<ValueWriter<*>>, fields: List<String>) : ValueWriter<KafkaStruct> {
@@ -149,13 +99,6 @@ object KafkaValueWriters {
         }
     }
 
-    private object DateWriter : ValueWriter<Date> {
-        override fun write(date: Date, encoder: Encoder) {
-            val days = TimeUnit.MILLISECONDS.toDays(date.time).toInt()
-            encoder.writeInt(days)
-        }
-    }
-
     abstract class TimeWriter<T>(
         protected val sourcePrecision: TimePrecision,
         protected val targetPrecision: TimePrecision,
@@ -177,30 +120,6 @@ object KafkaValueWriters {
         abstract fun serialize(time: T): Long
     }
 
-    private class TimeAsDateWriter(targetPrecision: TimePrecision) :
-        TimeWriter<Date>(MILLIS, targetPrecision) {
-        override fun serialize(time: Date) = time.time
-    }
-
-    private class TimeAsIntWriter(sourcePrecision: TimePrecision, targetPrecision: TimePrecision) :
-        TimeWriter<Int>(sourcePrecision, targetPrecision) {
-        override fun serialize(time: Int) = time.toLong()
-    }
-
-    private class TimeAsLongWriter(sourcePrecision: TimePrecision, targetPrecision: TimePrecision) :
-        TimeWriter<Long>(sourcePrecision, targetPrecision) {
-        override fun serialize(time: Long) = time
-    }
-
-    private class ZonedTimeAsStringWriter(targetPrecision: TimePrecision) :
-        TimeWriter<String>(targetPrecision, targetPrecision) {
-        override fun serialize(time: String): Long {
-            val ot = OffsetTime.parse(time)
-            assert(ot.offset == ZoneOffset.UTC) { "ZonedTime must be in UTC, got $time" }
-            return OffsetTimes.toUtcMidnightTime(ot, targetPrecision)
-        }
-    }
-
     abstract class TimestampWriter<T>(
         protected val sourcePrecision: TimePrecision,
         protected val targetPrecision: TimePrecision,
@@ -218,40 +137,6 @@ object KafkaValueWriters {
         }
 
         abstract fun serialize(ts: T): Long
-    }
-
-    private class TimestampAsDateWriter(targetPrecision: TimePrecision) :
-        TimestampWriter<Date>(MILLIS, targetPrecision) {
-        override fun serialize(ts: Date) = ts.time
-    }
-
-    private class TimestampAsLongWriter(sourcePrecision: TimePrecision, targetPrecision: TimePrecision) :
-        TimestampWriter<Long>(sourcePrecision, targetPrecision) {
-        override fun serialize(ts: Long) = ts
-    }
-
-    private class ZonedTimestampAsStringWriter(targetPrecision: TimePrecision) :
-        TimestampWriter<String>(targetPrecision, targetPrecision) {
-        override fun serialize(ts: String): Long = when (ts.lowercase()) {
-            "infinity" -> Long.MAX_VALUE
-            "-infinity" -> Long.MIN_VALUE
-            else -> {
-                val zdt = ZonedDateTime.parse(ts)
-                ZonedDateTimes.toEpochTime(zdt, targetPrecision)
-            }
-        }
-    }
-
-    private object ArrayAsStringWriter : ValueWriter<String> {
-        private val delegatedWriter = ValueWriters.array(ValueWriters.strings())
-
-        override fun write(enumStr: String, encoder: Encoder) {
-            val enumSet = if (enumStr.isEmpty())
-                emptyList() else
-                enumStr.split(",")
-
-            delegatedWriter.write(enumSet, encoder)
-        }
     }
 
     private object BytesWriter : ValueWriter<Any> {

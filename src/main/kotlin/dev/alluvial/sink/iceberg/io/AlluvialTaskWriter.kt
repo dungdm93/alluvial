@@ -13,6 +13,7 @@ import org.apache.iceberg.io.TaskWriter
 import org.apache.iceberg.io.WriteResult
 import org.apache.iceberg.util.StructLikeMap
 import org.apache.iceberg.util.Tasks
+import org.apache.kafka.connect.data.Schema as KafkaSchema
 import org.apache.kafka.connect.sink.SinkRecord
 import org.apache.iceberg.Schema as IcebergSchema
 import org.apache.kafka.connect.data.Struct as KafkaStruct
@@ -22,6 +23,7 @@ class AlluvialTaskWriter(
     private val spec: PartitionSpec,
     private val io: FileIO,
     private val partitioner: Partitioner<KafkaStruct>,
+    sSchema: KafkaSchema,
     iSchema: IcebergSchema,
     equalityFieldIds: Set<Int>
 ) : TaskWriter<SinkRecord> {
@@ -37,7 +39,7 @@ class AlluvialTaskWriter(
     init {
         val equalityFieldNames = equalityFieldIds.map { iSchema.findField(it).name() }
         val iKeySchema = iSchema.select(equalityFieldNames)
-        keyer = keyerFor(iKeySchema)
+        keyer = keyerFor(sSchema, iKeySchema)
         insertedRowMap = StructLikeMap.create(iKeySchema.asStruct())
     }
 
@@ -138,11 +140,12 @@ class AlluvialTaskWriter(
 
         fun partitionerFor(
             spec: PartitionSpec,
-            schema: IcebergSchema,
+            sSchema: KafkaSchema,
+            iSchema: IcebergSchema,
         ): Partitioner<KafkaStruct> {
             return object : Partitioner<KafkaStruct> {
-                private val wrapper: StructWrapper = StructWrapper(schema)
-                private val partitionKey = PartitionKey(spec, schema)
+                private val wrapper: StructWrapper = StructWrapper(sSchema, iSchema)
+                private val partitionKey = PartitionKey(spec, iSchema)
 
                 override fun invoke(record: KafkaStruct): StructLike {
                     partitionKey.partition(wrapper.wrap(record))
@@ -151,9 +154,9 @@ class AlluvialTaskWriter(
             }
         }
 
-        fun keyerFor(schema: IcebergSchema): Keyer<SinkRecord> {
+        fun keyerFor(sSchema: KafkaSchema, iSchema: IcebergSchema): Keyer<SinkRecord> {
             return object : Keyer<SinkRecord> {
-                private val wrapper: StructWrapper = StructWrapper(schema)
+                private val wrapper: StructWrapper = StructWrapper(sSchema, iSchema)
 
                 override fun invoke(record: SinkRecord): StructLike {
                     val key = record.key() as KafkaStruct

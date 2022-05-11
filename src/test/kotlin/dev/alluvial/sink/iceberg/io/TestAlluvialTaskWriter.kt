@@ -224,7 +224,7 @@ internal class TestAlluvialTaskWriter : TableTestBase(TABLE_VERSION) {
             .buildForFanoutPartition()
 
         val partitioner = if (table.spec().isPartitioned) {
-            AlluvialTaskWriter.partitionerFor(table.spec(), table.schema())
+            AlluvialTaskWriter.partitionerFor(table.spec(), kafkaSchema, table.schema())
         } else {
             AlluvialTaskWriter.unpartition
         }
@@ -233,6 +233,7 @@ internal class TestAlluvialTaskWriter : TableTestBase(TABLE_VERSION) {
             table.spec(),
             table.io(),
             partitioner,
+            kafkaSchema,
             table.schema(),
             equalityFieldIds.toSet()
         )
