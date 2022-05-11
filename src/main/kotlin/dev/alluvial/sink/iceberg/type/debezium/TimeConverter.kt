@@ -1,27 +1,30 @@
 package dev.alluvial.sink.iceberg.type.debezium
 
-import dev.alluvial.sink.iceberg.avro.KafkaValueReaders
-import dev.alluvial.sink.iceberg.avro.KafkaValueWriters
-import dev.alluvial.sink.iceberg.type.logical.LogicalTypeConverter
-import dev.alluvial.sink.iceberg.type.logical.ParquetReaderContext
-import dev.alluvial.sink.iceberg.type.logical.ParquetPrimitiveReaderContext
-import dev.alluvial.sink.iceberg.type.logical.ParquetWriterContext
-import dev.alluvial.sink.iceberg.type.logical.ParquetPrimitiveWriterContext
+import dev.alluvial.sink.iceberg.avro.KafkaAvroReaders
+import dev.alluvial.sink.iceberg.avro.KafkaAvroWriters
 import dev.alluvial.sink.iceberg.parquet.KafkaParquetReaders
 import dev.alluvial.sink.iceberg.parquet.KafkaParquetWriters
+import dev.alluvial.sink.iceberg.type.AvroSchema
+import dev.alluvial.sink.iceberg.type.AvroValueReader
+import dev.alluvial.sink.iceberg.type.AvroValueWriter
+import dev.alluvial.sink.iceberg.type.IcebergType
+import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.sink.iceberg.type.OrcType
+import dev.alluvial.sink.iceberg.type.OrcValueReader
+import dev.alluvial.sink.iceberg.type.OrcValueWriter
+import dev.alluvial.sink.iceberg.type.ParquetType
+import dev.alluvial.sink.iceberg.type.ParquetValueReader
+import dev.alluvial.sink.iceberg.type.ParquetValueWriter
+import dev.alluvial.sink.iceberg.type.logical.LogicalTypeConverter
+import dev.alluvial.sink.iceberg.type.logical.ParquetPrimitiveReaderContext
+import dev.alluvial.sink.iceberg.type.logical.ParquetPrimitiveWriterContext
+import dev.alluvial.sink.iceberg.type.logical.ParquetReaderContext
+import dev.alluvial.sink.iceberg.type.logical.ParquetWriterContext
 import dev.alluvial.utils.TimePrecision
-import dev.alluvial.utils.TimePrecision.*
+import dev.alluvial.utils.TimePrecision.MICROS
+import dev.alluvial.utils.TimePrecision.MILLIS
 import dev.alluvial.utils.timePrecision
-import org.apache.iceberg.avro.ValueReader
-import org.apache.iceberg.avro.ValueWriter
-import org.apache.iceberg.orc.OrcValueReader
-import org.apache.iceberg.orc.OrcValueWriter
-import org.apache.iceberg.parquet.ParquetValueReader
-import org.apache.iceberg.parquet.ParquetValueWriter
-import org.apache.iceberg.types.Type
-import org.apache.iceberg.types.Types
-import org.apache.kafka.connect.data.Schema
-import org.apache.orc.TypeDescription
+import org.apache.iceberg.types.Types.TimeType
 import org.apache.parquet.column.ColumnDescriptor
 import java.util.function.Supplier
 
@@ -29,12 +32,12 @@ internal object TimeConverter : LogicalTypeConverter<Int, Long> {
     override val name = io.debezium.time.Time.SCHEMA_NAME
 
     private class AvroTimeReader(sourcePrecision: TimePrecision) :
-        KafkaValueReaders.TimeReader<Int>(sourcePrecision, MILLIS) {
+        KafkaAvroReaders.TimeReader<Int>(sourcePrecision, MILLIS) {
         override fun deserialize(time: Long, reuse: Any?): Int = time.toInt()
     }
 
     private class AvroTimeWriter(targetPrecision: TimePrecision) :
-        KafkaValueWriters.TimeWriter<Int>(MILLIS, targetPrecision) {
+        KafkaAvroWriters.TimeWriter<Int>(MILLIS, targetPrecision) {
         override fun serialize(time: Int): Long = time.toLong()
     }
 
@@ -48,23 +51,23 @@ internal object TimeConverter : LogicalTypeConverter<Int, Long> {
         override fun serialize(time: Int): Long = time.toLong()
     }
 
-    override fun toIcebergType(idSupplier: Supplier<Int>, schema: Schema): Type = Types.TimeType.get()
+    override fun toIcebergType(idSupplier: Supplier<Int>, schema: KafkaSchema): IcebergType = TimeType.get()
 
     override fun toIcebergValue(sValue: Int): Long = MICROS.convert(sValue.toLong(), MILLIS)
 
-    override fun avroReader(sSchema: Schema, schema: org.apache.avro.Schema): ValueReader<Int> {
+    override fun avroReader(sSchema: KafkaSchema, schema: AvroSchema): AvroValueReader<Int> {
         val logicalType = schema.logicalType
         return AvroTimeReader(logicalType.timePrecision())
     }
 
-    override fun avroWriter(sSchema: Schema, schema: org.apache.avro.Schema): ValueWriter<Int> {
+    override fun avroWriter(sSchema: KafkaSchema, schema: AvroSchema): AvroValueWriter<Int> {
         val logicalType = schema.logicalType
         return AvroTimeWriter(logicalType.timePrecision())
     }
 
     override fun parquetReader(
-        sSchema: Schema,
-        type: org.apache.parquet.schema.Type,
+        sSchema: KafkaSchema,
+        type: ParquetType,
         ctx: ParquetReaderContext
     ): ParquetValueReader<Int> {
         val logicalType = type.logicalTypeAnnotation
@@ -73,8 +76,8 @@ internal object TimeConverter : LogicalTypeConverter<Int, Long> {
     }
 
     override fun parquetWriter(
-        sSchema: Schema,
-        type: org.apache.parquet.schema.Type,
+        sSchema: KafkaSchema,
+        type: ParquetType,
         ctx: ParquetWriterContext
     ): ParquetValueWriter<Int> {
         val logicalType = type.logicalTypeAnnotation
@@ -82,11 +85,11 @@ internal object TimeConverter : LogicalTypeConverter<Int, Long> {
         return ParquetTimeWriter(logicalType.timePrecision(), primitiveCtx.desc)
     }
 
-    override fun orcReader(sSchema: Schema, type: TypeDescription): OrcValueReader<Int> {
+    override fun orcReader(sSchema: KafkaSchema, type: OrcType): OrcValueReader<Int> {
         TODO("Not yet implemented")
     }
 
-    override fun orcWriter(sSchema: Schema, type: TypeDescription): OrcValueWriter<Int> {
+    override fun orcWriter(sSchema: KafkaSchema, type: OrcType): OrcValueWriter<Int> {
         TODO("Not yet implemented")
     }
 }

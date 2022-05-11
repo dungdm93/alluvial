@@ -1,32 +1,35 @@
 package dev.alluvial.sink.iceberg.type.debezium
 
-import dev.alluvial.sink.iceberg.avro.KafkaValueReaders
-import dev.alluvial.sink.iceberg.avro.KafkaValueWriters
+import dev.alluvial.sink.iceberg.avro.KafkaAvroReaders
+import dev.alluvial.sink.iceberg.avro.KafkaAvroWriters
+import dev.alluvial.sink.iceberg.type.AvroSchema
+import dev.alluvial.sink.iceberg.type.AvroValueReader
+import dev.alluvial.sink.iceberg.type.AvroValueReaders
+import dev.alluvial.sink.iceberg.type.AvroValueWriter
+import dev.alluvial.sink.iceberg.type.AvroValueWriters
+import dev.alluvial.sink.iceberg.type.IcebergField
+import dev.alluvial.sink.iceberg.type.IcebergType
+import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.sink.iceberg.type.KafkaStruct
+import dev.alluvial.sink.iceberg.type.OrcType
+import dev.alluvial.sink.iceberg.type.OrcValueReader
+import dev.alluvial.sink.iceberg.type.OrcValueWriter
+import dev.alluvial.sink.iceberg.type.ParquetType
+import dev.alluvial.sink.iceberg.type.ParquetValueReader
+import dev.alluvial.sink.iceberg.type.ParquetValueWriter
 import dev.alluvial.sink.iceberg.type.logical.LogicalTypeConverter
 import dev.alluvial.sink.iceberg.type.logical.ParquetReaderContext
 import dev.alluvial.sink.iceberg.type.logical.ParquetWriterContext
 import io.debezium.data.geometry.Geometry
 import org.apache.iceberg.StructLike
-import org.apache.iceberg.avro.ValueReader
-import org.apache.iceberg.avro.ValueReaders
-import org.apache.iceberg.avro.ValueWriter
-import org.apache.iceberg.avro.ValueWriters
-import org.apache.iceberg.orc.OrcValueReader
-import org.apache.iceberg.orc.OrcValueWriter
-import org.apache.iceberg.parquet.ParquetValueReader
-import org.apache.iceberg.parquet.ParquetValueWriter
-import org.apache.iceberg.types.Type
 import org.apache.iceberg.types.Types.*
-import org.apache.kafka.connect.data.Schema
-import org.apache.kafka.connect.data.Struct
-import org.apache.orc.TypeDescription
 import java.util.function.Supplier
 
-internal object GeometryConverter : LogicalTypeConverter<Struct, StructLike> {
+internal object GeometryConverter : LogicalTypeConverter<KafkaStruct, StructLike> {
     @Suppress("RemoveRedundantQualifierName")
     override val name = io.debezium.data.geometry.Geometry.LOGICAL_NAME
 
-    private class GeometryStruct(struct: Struct) : StructLike {
+    private class GeometryStruct(struct: KafkaStruct) : StructLike {
         private val wkb = struct.getBytes(Geometry.WKB_FIELD)
         private val srid = struct.getInt32(Geometry.SRID_FIELD)
 
@@ -46,49 +49,52 @@ internal object GeometryConverter : LogicalTypeConverter<Struct, StructLike> {
         }
     }
 
-    override fun toIcebergType(idSupplier: Supplier<Int>, schema: Schema): Type = StructType.of(
-        NestedField.of(idSupplier.get(), false, Geometry.WKB_FIELD, BinaryType.get()),
-        NestedField.of(idSupplier.get(), true, Geometry.SRID_FIELD, IntegerType.get()),
+    override fun toIcebergType(idSupplier: Supplier<Int>, schema: KafkaSchema): IcebergType = StructType.of(
+        IcebergField.of(idSupplier.get(), false, Geometry.WKB_FIELD, BinaryType.get()),
+        IcebergField.of(idSupplier.get(), true, Geometry.SRID_FIELD, IntegerType.get()),
     )
 
-    override fun toIcebergValue(sValue: Struct): StructLike = GeometryStruct(sValue)
+    override fun toIcebergValue(sValue: KafkaStruct): StructLike = GeometryStruct(sValue)
 
-    override fun avroReader(sSchema: Schema, schema: org.apache.avro.Schema): ValueReader<Struct> {
-        return KafkaValueReaders.struct(
+    override fun avroReader(sSchema: KafkaSchema, schema: AvroSchema): AvroValueReader<KafkaStruct> {
+        return KafkaAvroReaders.struct(
             listOf(Geometry.WKB_FIELD, Geometry.SRID_FIELD),
-            listOf(ValueReaders.bytes(), ValueReaders.union(listOf(ValueReaders.nulls(), ValueReaders.ints()))),
+            listOf(
+                AvroValueReaders.bytes(),
+                AvroValueReaders.union(listOf(AvroValueReaders.nulls(), AvroValueReaders.ints()))
+            ),
             sSchema,
         )
     }
 
-    override fun avroWriter(sSchema: Schema, schema: org.apache.avro.Schema): ValueWriter<Struct> {
-        return KafkaValueWriters.struct(
-            listOf(KafkaValueWriters.bytes(), ValueWriters.option(0, ValueWriters.ints())),
+    override fun avroWriter(sSchema: KafkaSchema, schema: AvroSchema): AvroValueWriter<KafkaStruct> {
+        return KafkaAvroWriters.struct(
+            listOf(KafkaAvroWriters.bytes(), AvroValueWriters.option(0, AvroValueWriters.ints())),
             listOf(Geometry.WKB_FIELD, Geometry.SRID_FIELD)
         )
     }
 
     override fun parquetReader(
-        sSchema: Schema,
-        type: org.apache.parquet.schema.Type,
+        sSchema: KafkaSchema,
+        type: ParquetType,
         ctx: ParquetReaderContext
-    ): ParquetValueReader<Struct> {
+    ): ParquetValueReader<KafkaStruct> {
         TODO("Not yet implemented")
     }
 
     override fun parquetWriter(
-        sSchema: Schema,
-        type: org.apache.parquet.schema.Type,
+        sSchema: KafkaSchema,
+        type: ParquetType,
         ctx: ParquetWriterContext
-    ): ParquetValueWriter<Struct> {
+    ): ParquetValueWriter<KafkaStruct> {
         TODO("Not yet implemented")
     }
 
-    override fun orcReader(sSchema: Schema, type: TypeDescription): OrcValueReader<Struct> {
+    override fun orcReader(sSchema: KafkaSchema, type: OrcType): OrcValueReader<KafkaStruct> {
         TODO("Not yet implemented")
     }
 
-    override fun orcWriter(sSchema: Schema, type: TypeDescription): OrcValueWriter<Struct> {
+    override fun orcWriter(sSchema: KafkaSchema, type: OrcType): OrcValueWriter<KafkaStruct> {
         TODO("Not yet implemented")
     }
 }

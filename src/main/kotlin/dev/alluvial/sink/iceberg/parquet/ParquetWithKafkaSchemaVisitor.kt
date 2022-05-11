@@ -1,9 +1,9 @@
 package dev.alluvial.sink.iceberg.parquet
 
+import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.sink.iceberg.type.KafkaType
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions
 import org.apache.iceberg.util.Pair
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Schema.Type as KafkaType
 
 abstract class ParquetWithKafkaSchemaVisitor<T> : ParquetWithPartnerByStructureVisitor<KafkaSchema, T>() {
     override fun isArrayType(type: KafkaSchema): Boolean = type.type() == KafkaType.ARRAY

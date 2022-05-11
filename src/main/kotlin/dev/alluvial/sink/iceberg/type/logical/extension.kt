@@ -1,7 +1,7 @@
 package dev.alluvial.sink.iceberg.type.logical
 
+import dev.alluvial.sink.iceberg.type.KafkaSchema
 import java.util.ServiceLoader
-import org.apache.kafka.connect.data.Schema as KafkaSchema
 
 private var logicalTypeProviderLoader = ServiceLoader.load(LogicalTypeProvider::class.java)
 

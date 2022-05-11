@@ -1,10 +1,10 @@
 package dev.alluvial.sink.iceberg.avro
 
+import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.sink.iceberg.type.KafkaType
 import org.apache.iceberg.avro.AvroWithPartnerByStructureVisitor
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions
 import org.apache.iceberg.util.Pair
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Schema.Type as KafkaType
 
 abstract class AvroWithKafkaSchemaVisitor<T> : AvroWithPartnerByStructureVisitor<KafkaSchema, T>() {
     override fun isStringType(type: KafkaSchema) = type.type() == KafkaType.STRING

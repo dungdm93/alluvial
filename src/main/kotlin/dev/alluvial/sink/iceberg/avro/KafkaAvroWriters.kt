@@ -1,37 +1,37 @@
 package dev.alluvial.sink.iceberg.avro
 
+import dev.alluvial.sink.iceberg.type.AvroValueWriter
+import dev.alluvial.sink.iceberg.type.AvroValueWriters
+import dev.alluvial.sink.iceberg.type.KafkaStruct
 import dev.alluvial.utils.TimePrecision
 import dev.alluvial.utils.TimePrecision.MILLIS
 import dev.alluvial.utils.TimePrecision.NANOS
 import org.apache.avro.io.Encoder
-import org.apache.iceberg.avro.ValueWriter
-import org.apache.iceberg.avro.ValueWriters
 import java.nio.ByteBuffer
-import org.apache.kafka.connect.data.Struct as KafkaStruct
 
-object KafkaValueWriters {
-    fun struct(writers: List<ValueWriter<*>>, fields: List<String>): ValueWriter<KafkaStruct> {
+object KafkaAvroWriters {
+    fun struct(writers: List<AvroValueWriter<*>>, fields: List<String>): AvroValueWriter<KafkaStruct> {
         return StructWriter(writers, fields)
     }
 
-    fun <E> array(elementWriter: ValueWriter<E>): ValueWriter<List<E>> {
+    fun <E> array(elementWriter: AvroValueWriter<E>): AvroValueWriter<List<E>> {
         return ArrayWriter(elementWriter)
     }
 
-    fun <K, V> map(keyWriter: ValueWriter<K>, valueWriter: ValueWriter<V>): ValueWriter<Map<K, V>> {
+    fun <K, V> map(keyWriter: AvroValueWriter<K>, valueWriter: AvroValueWriter<V>): AvroValueWriter<Map<K, V>> {
         return MapWriter(keyWriter, valueWriter)
     }
 
-    fun <K, V> arrayMap(keyWriter: ValueWriter<K>, valueWriter: ValueWriter<V>): ValueWriter<Map<K, V>> {
+    fun <K, V> arrayMap(keyWriter: AvroValueWriter<K>, valueWriter: AvroValueWriter<V>): AvroValueWriter<Map<K, V>> {
         return ArrayMapWriter(keyWriter, valueWriter)
     }
 
-    fun bytes(): ValueWriter<*> {
+    fun bytes(): AvroValueWriter<*> {
         return BytesWriter
     }
 
-    private class StructWriter(writers: List<ValueWriter<*>>, fields: List<String>) : ValueWriter<KafkaStruct> {
-        private val writers: List<Pair<String, ValueWriter<*>>>
+    private class StructWriter(writers: List<AvroValueWriter<*>>, fields: List<String>) : AvroValueWriter<KafkaStruct> {
+        private val writers: List<Pair<String, AvroValueWriter<*>>>
 
         init {
             assert(writers.size == fields.size) { "writers.size and fields.size must be equal" }
@@ -44,15 +44,15 @@ object KafkaValueWriters {
             }
         }
 
-        private fun <T> writeField(struct: KafkaStruct, field: String, writer: ValueWriter<T>, encoder: Encoder) {
+        private fun <T> writeField(struct: KafkaStruct, field: String, writer: AvroValueWriter<T>, encoder: Encoder) {
             @Suppress("UNCHECKED_CAST")
             writer.write(struct.get(field) as T, encoder)
         }
     }
 
     private class ArrayWriter<E>(
-        private val elementWriter: ValueWriter<E>
-    ) : ValueWriter<List<E>> {
+        private val elementWriter: AvroValueWriter<E>
+    ) : AvroValueWriter<List<E>> {
         override fun write(array: List<E>, encoder: Encoder) {
             encoder.writeArrayStart()
             val numElements: Int = array.size
@@ -66,9 +66,9 @@ object KafkaValueWriters {
     }
 
     private class MapWriter<K, V>(
-        private val keyWriter: ValueWriter<K>,
-        private val valueWriter: ValueWriter<V>,
-    ) : ValueWriter<Map<K, V>> {
+        private val keyWriter: AvroValueWriter<K>,
+        private val valueWriter: AvroValueWriter<V>,
+    ) : AvroValueWriter<Map<K, V>> {
         override fun write(map: Map<K, V>, encoder: Encoder) {
             encoder.writeMapStart()
             val numElements: Int = map.size
@@ -83,9 +83,9 @@ object KafkaValueWriters {
     }
 
     private class ArrayMapWriter<K, V>(
-        private val keyWriter: ValueWriter<K>,
-        private val valueWriter: ValueWriter<V>,
-    ) : ValueWriter<Map<K, V>> {
+        private val keyWriter: AvroValueWriter<K>,
+        private val valueWriter: AvroValueWriter<V>,
+    ) : AvroValueWriter<Map<K, V>> {
         override fun write(map: Map<K, V>, encoder: Encoder) {
             encoder.writeArrayStart()
             val numElements: Int = map.size
@@ -102,7 +102,7 @@ object KafkaValueWriters {
     abstract class TimeWriter<T>(
         protected val sourcePrecision: TimePrecision,
         protected val targetPrecision: TimePrecision,
-    ) : ValueWriter<T> {
+    ) : AvroValueWriter<T> {
         init {
             if (targetPrecision == NANOS) {
                 throw IllegalArgumentException("Avro has no $targetPrecision precision time")
@@ -123,7 +123,7 @@ object KafkaValueWriters {
     abstract class TimestampWriter<T>(
         protected val sourcePrecision: TimePrecision,
         protected val targetPrecision: TimePrecision,
-    ) : ValueWriter<T> {
+    ) : AvroValueWriter<T> {
         init {
             if (targetPrecision == NANOS) {
                 throw IllegalArgumentException("Avro has no $targetPrecision precision timestamp")
@@ -139,9 +139,9 @@ object KafkaValueWriters {
         abstract fun serialize(ts: T): Long
     }
 
-    private object BytesWriter : ValueWriter<Any> {
-        private val byteArrayWriter = ValueWriters.bytes()
-        private val byteBufferWriter = ValueWriters.byteBuffers()
+    private object BytesWriter : AvroValueWriter<Any> {
+        private val byteArrayWriter = AvroValueWriters.bytes()
+        private val byteBufferWriter = AvroValueWriters.byteBuffers()
 
         override fun write(datum: Any, encoder: Encoder) {
             when (datum) {

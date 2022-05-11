@@ -1,9 +1,11 @@
 package dev.alluvial.sink.iceberg.parquet
 
+import dev.alluvial.sink.iceberg.type.IcebergSchema
+import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.sink.iceberg.type.KafkaType
 import dev.alluvial.sink.iceberg.type.logical.ParquetReaderContext
 import dev.alluvial.sink.iceberg.type.logical.logicalTypeConverter
 import dev.alluvial.sink.iceberg.type.toKafkaSchema
-import org.apache.iceberg.Schema
 import org.apache.iceberg.parquet.ParquetValueReader
 import org.apache.iceberg.parquet.ParquetValueReaders
 import org.apache.parquet.schema.GroupType
@@ -11,12 +13,10 @@ import org.apache.parquet.schema.MessageType
 import org.apache.parquet.schema.PrimitiveType
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.*
 import org.apache.parquet.schema.Type
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Schema.Type as KafkaType
 
 object KafkaParquetReader {
-    fun buildReader(expectedSchema: Schema, fileSchema: MessageType): ParquetValueReader<*> {
-        val kafkaSchema = expectedSchema.toKafkaSchema()
+    fun buildReader(iSchema: IcebergSchema, fileSchema: MessageType): ParquetValueReader<*> {
+        val kafkaSchema = iSchema.toKafkaSchema()
         return buildReader(kafkaSchema, fileSchema)
     }
 

@@ -1,5 +1,6 @@
 package dev.alluvial.sink.iceberg.avro
 
+import dev.alluvial.sink.iceberg.type.AvroSchema
 import org.apache.avro.io.DatumReader
 import org.apache.avro.io.DatumWriter
 import org.apache.iceberg.Files
@@ -13,7 +14,6 @@ import org.apache.iceberg.data.avro.DataReader
 import org.apache.iceberg.data.avro.DataWriter
 import org.apache.iceberg.io.CloseableIterable
 import org.apache.iceberg.io.FileAppender
-import org.apache.avro.Schema as AvroSchema
 
 internal class GenericAvroRWTest : DataTest() {
     override fun writeAndValidate(schema: Schema) {

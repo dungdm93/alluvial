@@ -1,5 +1,7 @@
 package dev.alluvial.sink.iceberg.parquet
 
+import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.sink.iceberg.type.KafkaType
 import dev.alluvial.sink.iceberg.type.logical.ParquetWriterContext
 import dev.alluvial.sink.iceberg.type.logical.logicalTypeConverter
 import org.apache.iceberg.parquet.ParquetValueWriter
@@ -9,16 +11,16 @@ import org.apache.parquet.schema.MessageType
 import org.apache.parquet.schema.PrimitiveType
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.*
 import org.apache.parquet.schema.Type
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Schema.Type as KafkaType
 
 @Suppress("INACCESSIBLE_TYPE")
 object KafkaParquetWriter {
-    fun buildWriter(schema: KafkaSchema, type: MessageType): ParquetValueWriter<*> {
-        return WriteBuilder(type).visit(schema, type)
+    fun buildWriter(sSchema: KafkaSchema, fileSchema: MessageType): ParquetValueWriter<*> {
+        return WriteBuilder(fileSchema).visit(sSchema, fileSchema)
     }
 
-    private class WriteBuilder(val message: MessageType) : ParquetWithKafkaSchemaVisitor<ParquetValueWriter<*>>() {
+    private class WriteBuilder(
+        val message: MessageType
+    ) : ParquetWithKafkaSchemaVisitor<ParquetValueWriter<*>>() {
         private fun newOption(fieldType: Type, writer: ParquetValueWriter<*>?): ParquetValueWriter<*>? {
             val maxD = message.getMaxDefinitionLevel(*path(fieldType.name))
             return ParquetValueWriters.option(fieldType, maxD, writer)

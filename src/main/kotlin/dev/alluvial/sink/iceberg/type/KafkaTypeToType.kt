@@ -2,10 +2,6 @@ package dev.alluvial.sink.iceberg.type
 
 import dev.alluvial.sink.iceberg.type.logical.logicalTypeConverter
 import org.apache.iceberg.types.Types.*
-import org.apache.iceberg.types.Type as IcebergType
-import org.apache.kafka.connect.data.Field as KafkaField
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Schema.Type as KafkaType
 
 /**
  * @see org.apache.iceberg.flink.FlinkTypeToType

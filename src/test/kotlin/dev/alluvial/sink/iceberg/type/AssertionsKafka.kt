@@ -22,28 +22,23 @@ import java.time.temporal.ChronoUnit
 import java.util.Date
 import java.util.UUID
 import java.util.concurrent.TimeUnit
-import org.apache.iceberg.Schema as IcebergSchema
-import org.apache.iceberg.data.Record as IcebergRecord
-import org.apache.iceberg.types.Type as IcebergType
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Struct as KafkaStruct
 
 /** Assert Kafka Type equals Iceberg Type **/
 object AssertionsKafka {
     fun assertEquals(
-        icebergSchema: IcebergSchema,
-        kafkaSchema: KafkaSchema,
+        iSchema: IcebergSchema,
+        sSchema: KafkaSchema,
         expected: IcebergRecord,
         actual: KafkaStruct
     ) {
-        expectThat(kafkaSchema).isEqualTo(actual.schema())
-        assertEquals(icebergSchema.asStruct(), kafkaSchema, expected, actual)
+        expectThat(sSchema).isEqualTo(actual.schema())
+        assertEquals(iSchema.asStruct(), sSchema, expected, actual)
     }
 
-    fun assertEquals(struct: Types.StructType, kafkaSchema: KafkaSchema, expected: IcebergRecord, actual: KafkaStruct) {
+    fun assertEquals(struct: Types.StructType, sSchema: KafkaSchema, expected: IcebergRecord, actual: KafkaStruct) {
         struct.fields().forEach { field ->
             val icebergFieldType = field.type()
-            val kafkaFieldSchema = kafkaSchema.field(field.name()).schema()
+            val kafkaFieldSchema = sSchema.field(field.name()).schema()
 
             val expectedValue = expected.getField(field.name())
             val actualValue = actual[field.name()]
@@ -52,18 +47,18 @@ object AssertionsKafka {
         }
     }
 
-    fun assertEquals(list: Types.ListType, kafkaSchema: KafkaSchema, expected: List<*>, actual: List<*>) {
+    fun assertEquals(list: Types.ListType, sSchema: KafkaSchema, expected: List<*>, actual: List<*>) {
         expectThat(actual.size)
             .describedAs("List size should match")
             .isEqualTo(expected.size)
 
         val elementType = list.elementType()
         expected.zip(actual) { e, a ->
-            assertEquals(elementType, kafkaSchema.valueSchema(), e, a)
+            assertEquals(elementType, sSchema.valueSchema(), e, a)
         }
     }
 
-    fun assertEquals(map: Types.MapType, kafkaSchema: KafkaSchema, expected: Map<*, *>, actual: Map<*, *>) {
+    fun assertEquals(map: Types.MapType, sSchema: KafkaSchema, expected: Map<*, *>, actual: Map<*, *>) {
         expectThat(actual.size)
             .describedAs("Map size should match")
             .isEqualTo(expected.size)
@@ -71,7 +66,7 @@ object AssertionsKafka {
         val actualKey = { ek: Any? ->
             actual.keys.first { ak: Any? ->
                 try {
-                    assertEquals(map.keyType(), kafkaSchema.keySchema(), ek, ak)
+                    assertEquals(map.keyType(), sSchema.keySchema(), ek, ak)
                     true
                 } catch (e: AssertionError) {
                     false
@@ -83,13 +78,13 @@ object AssertionsKafka {
             val ak = actualKey(ek)
             if (ek != null) expectThat(ak).isNotNull()
             val av = actual[ak]
-            assertEquals(map.valueType(), kafkaSchema.valueSchema(), ev, av)
+            assertEquals(map.valueType(), sSchema.valueSchema(), ev, av)
         }
     }
 
     fun assertEquals(
-        icebergType: IcebergType,
-        kafkaSchema: KafkaSchema,
+        iType: IcebergType,
+        sSchema: KafkaSchema,
         expected: Any?, // Iceberg structure
         actual: Any?,   // Kafka structure
     ) {
@@ -99,18 +94,18 @@ object AssertionsKafka {
         if ((expected == null) xor (actual == null)) {
             throw AssertionError("Not the same nullity")
         }
-        assertEqualsByKafkaSchema(icebergType, kafkaSchema, expected, actual) ||
-            assertEqualsByIcebergType(icebergType, kafkaSchema, expected, actual) ||
-            throw IllegalArgumentException("Unknown TypeID ${icebergType.typeId()}")
+        assertEqualsByKafkaSchema(iType, sSchema, expected, actual) ||
+            assertEqualsByIcebergType(iType, sSchema, expected, actual) ||
+            throw IllegalArgumentException("Unknown TypeID ${iType.typeId()}")
     }
 
     private fun assertEqualsByKafkaSchema(
-        icebergType: IcebergType,
-        kafkaSchema: KafkaSchema,
+        iType: IcebergType,
+        sSchema: KafkaSchema,
         expected: Any?, // Iceberg structure
         actual: Any?,   // Kafka structure
     ): Boolean {
-        when (kafkaSchema.name()) {
+        when (sSchema.name()) {
             /////////////// Debezium Logical Types ///////////////
             io.debezium.time.Date.SCHEMA_NAME -> {
                 val expectedDays = (expected as LocalDate).toEpochDay()
@@ -190,7 +185,7 @@ object AssertionsKafka {
                 expectThat(expectedMillis).isEqualTo(actualMillis)
             }
             org.apache.kafka.connect.data.Timestamp.LOGICAL_NAME -> {
-                val expectedMillis = if ((icebergType as Types.TimestampType).shouldAdjustToUTC())
+                val expectedMillis = if ((iType as Types.TimestampType).shouldAdjustToUTC())
                     OffsetDateTimes.toEpochTime(expected as OffsetDateTime, MILLIS) else
                     LocalDateTimes.toLocalEpochTime(expected as LocalDateTime, MILLIS)
                 val actualMillis = (actual as Date).time
@@ -202,12 +197,12 @@ object AssertionsKafka {
     }
 
     private fun assertEqualsByIcebergType(
-        icebergType: IcebergType,
-        kafkaSchema: KafkaSchema,
+        iType: IcebergType,
+        sSchema: KafkaSchema,
         expected: Any?,
         actual: Any?
     ): Boolean {
-        when (icebergType.typeId()) {
+        when (iType.typeId()) {
             TypeID.INTEGER -> // actual can be Bytes, Short or Integer
                 expectThat(expected).isEqualTo((actual as Number).toInt())
             TypeID.BOOLEAN,
@@ -227,20 +222,20 @@ object AssertionsKafka {
             }
             TypeID.DECIMAL -> expectThat(expected as BigDecimal).isEqualTo(actual as BigDecimal)
             TypeID.STRUCT -> assertEquals(
-                icebergType.asStructType(),
-                kafkaSchema,
+                iType.asStructType(),
+                sSchema,
                 expected as IcebergRecord,
                 actual as KafkaStruct
             )
             TypeID.LIST -> assertEquals(
-                icebergType.asListType(),
-                kafkaSchema,
+                iType.asListType(),
+                sSchema,
                 expected as List<*>,
                 actual as List<*>
             )
             TypeID.MAP -> assertEquals(
-                icebergType.asMapType(),
-                kafkaSchema,
+                iType.asMapType(),
+                sSchema,
                 expected as Map<*, *>,
                 actual as Map<*, *>
             )

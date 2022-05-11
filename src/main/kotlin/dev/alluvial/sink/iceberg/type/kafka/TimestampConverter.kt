@@ -1,38 +1,38 @@
 package dev.alluvial.sink.iceberg.type.kafka
 
-import dev.alluvial.sink.iceberg.avro.KafkaValueReaders
-import dev.alluvial.sink.iceberg.avro.KafkaValueWriters
-import dev.alluvial.sink.iceberg.type.logical.LogicalTypeConverter
-import dev.alluvial.sink.iceberg.type.logical.ParquetReaderContext
-import dev.alluvial.sink.iceberg.type.logical.ParquetPrimitiveReaderContext
-import dev.alluvial.sink.iceberg.type.logical.ParquetWriterContext
-import dev.alluvial.sink.iceberg.type.logical.ParquetPrimitiveWriterContext
+import dev.alluvial.sink.iceberg.avro.KafkaAvroReaders
+import dev.alluvial.sink.iceberg.avro.KafkaAvroWriters
 import dev.alluvial.sink.iceberg.parquet.KafkaParquetReaders
 import dev.alluvial.sink.iceberg.parquet.KafkaParquetWriters
+import dev.alluvial.sink.iceberg.type.AvroSchema
+import dev.alluvial.sink.iceberg.type.AvroValueReader
+import dev.alluvial.sink.iceberg.type.AvroValueWriter
+import dev.alluvial.sink.iceberg.type.IcebergType
+import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.sink.iceberg.type.OrcType
+import dev.alluvial.sink.iceberg.type.OrcValueReader
+import dev.alluvial.sink.iceberg.type.OrcValueWriter
+import dev.alluvial.sink.iceberg.type.ParquetType
+import dev.alluvial.sink.iceberg.type.ParquetValueReader
+import dev.alluvial.sink.iceberg.type.ParquetValueWriter
+import dev.alluvial.sink.iceberg.type.logical.LogicalTypeConverter
+import dev.alluvial.sink.iceberg.type.logical.ParquetPrimitiveReaderContext
+import dev.alluvial.sink.iceberg.type.logical.ParquetPrimitiveWriterContext
+import dev.alluvial.sink.iceberg.type.logical.ParquetReaderContext
+import dev.alluvial.sink.iceberg.type.logical.ParquetWriterContext
 import dev.alluvial.utils.TimePrecision
 import dev.alluvial.utils.TimePrecision.MILLIS
 import dev.alluvial.utils.timePrecision
-import org.apache.iceberg.orc.OrcValueReader
-import org.apache.iceberg.orc.OrcValueWriter
-import org.apache.iceberg.parquet.ParquetValueReader
-import org.apache.iceberg.parquet.ParquetValueWriter
 import org.apache.iceberg.types.Types.TimestampType
 import org.apache.parquet.column.ColumnDescriptor
 import java.util.Date
 import java.util.function.Supplier
-import org.apache.avro.Schema as AvroSchema
-import org.apache.iceberg.avro.ValueReader as AvroValueReader
-import org.apache.iceberg.avro.ValueWriter as AvroValueWriter
-import org.apache.iceberg.types.Type as IcebergType
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.orc.TypeDescription as OrcType
-import org.apache.parquet.schema.Type as ParquetType
 
 internal object TimestampConverter : LogicalTypeConverter<Date, Long> {
     override val name = org.apache.kafka.connect.data.Timestamp.LOGICAL_NAME
 
     private class AvroReader(sourcePrecision: TimePrecision) :
-        KafkaValueReaders.TimestampReader<Date>(sourcePrecision, MILLIS) {
+        KafkaAvroReaders.TimestampReader<Date>(sourcePrecision, MILLIS) {
         override fun deserialize(ts: Long, reuse: Any?): Date {
             return if (ts == (reuse as? Date)?.time)
                 reuse else
@@ -41,7 +41,7 @@ internal object TimestampConverter : LogicalTypeConverter<Date, Long> {
     }
 
     private class AvroWriter(targetPrecision: TimePrecision) :
-        KafkaValueWriters.TimestampWriter<Date>(MILLIS, targetPrecision) {
+        KafkaAvroWriters.TimestampWriter<Date>(MILLIS, targetPrecision) {
         override fun serialize(ts: Date) = ts.time
     }
 

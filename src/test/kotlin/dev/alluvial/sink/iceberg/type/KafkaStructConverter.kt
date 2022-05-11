@@ -12,8 +12,6 @@ import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.util.Date
 import java.util.concurrent.TimeUnit
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Struct as KafkaStruct
 
 /**
  * Convert Iceberg's [Record] to [KafkaStruct]

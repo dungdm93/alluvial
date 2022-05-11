@@ -1,19 +1,26 @@
 package dev.alluvial.sink.iceberg.type.kafka
 
+import dev.alluvial.sink.iceberg.type.AvroSchema
+import dev.alluvial.sink.iceberg.type.AvroValueReader
+import dev.alluvial.sink.iceberg.type.AvroValueReaders
+import dev.alluvial.sink.iceberg.type.AvroValueWriter
+import dev.alluvial.sink.iceberg.type.AvroValueWriters
+import dev.alluvial.sink.iceberg.type.IcebergType
+import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.sink.iceberg.type.OrcType
+import dev.alluvial.sink.iceberg.type.OrcValueReader
+import dev.alluvial.sink.iceberg.type.OrcValueWriter
+import dev.alluvial.sink.iceberg.type.ParquetType
+import dev.alluvial.sink.iceberg.type.ParquetValueReader
+import dev.alluvial.sink.iceberg.type.ParquetValueWriter
 import dev.alluvial.sink.iceberg.type.logical.LogicalTypeConverter
-import dev.alluvial.sink.iceberg.type.logical.ParquetReaderContext
 import dev.alluvial.sink.iceberg.type.logical.ParquetPrimitiveReaderContext
-import dev.alluvial.sink.iceberg.type.logical.ParquetWriterContext
 import dev.alluvial.sink.iceberg.type.logical.ParquetPrimitiveWriterContext
+import dev.alluvial.sink.iceberg.type.logical.ParquetReaderContext
+import dev.alluvial.sink.iceberg.type.logical.ParquetWriterContext
 import org.apache.avro.LogicalTypes
 import org.apache.avro.io.Decoder
-import org.apache.iceberg.avro.ValueReaders
-import org.apache.iceberg.avro.ValueWriters
-import org.apache.iceberg.orc.OrcValueReader
-import org.apache.iceberg.orc.OrcValueWriter
-import org.apache.iceberg.parquet.ParquetValueReader
 import org.apache.iceberg.parquet.ParquetValueReaders
-import org.apache.iceberg.parquet.ParquetValueWriter
 import org.apache.iceberg.parquet.ParquetValueWriters
 import org.apache.iceberg.types.Types.DecimalType
 import org.apache.kafka.connect.data.Decimal
@@ -23,13 +30,6 @@ import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.MathContext
 import java.util.function.Supplier
-import org.apache.avro.Schema as AvroSchema
-import org.apache.iceberg.avro.ValueReader as AvroValueReader
-import org.apache.iceberg.avro.ValueWriter as AvroValueWriter
-import org.apache.iceberg.types.Type as IcebergType
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.orc.TypeDescription as OrcType
-import org.apache.parquet.schema.Type as ParquetType
 
 internal object DecimalConverter : LogicalTypeConverter<BigDecimal, BigDecimal> {
     @Suppress("RemoveRedundantQualifierName")
@@ -60,7 +60,7 @@ internal object DecimalConverter : LogicalTypeConverter<BigDecimal, BigDecimal> 
     override fun avroReader(sSchema: KafkaSchema, schema: AvroSchema): AvroValueReader<BigDecimal> {
         val decimal = schema.logicalType as LogicalTypes.Decimal
         return AvroReader(
-            ValueReaders.decimalBytesReader(schema),
+            AvroValueReaders.decimalBytesReader(schema),
             decimal.precision, decimal.scale
         )
     }
@@ -68,7 +68,7 @@ internal object DecimalConverter : LogicalTypeConverter<BigDecimal, BigDecimal> 
     override fun avroWriter(sSchema: KafkaSchema, schema: AvroSchema): AvroValueWriter<BigDecimal> {
         val precision = sSchema.parameters().getOrDefault("connect.decimal.precision", "38").toInt()
         val scale = sSchema.parameters()[Decimal.SCALE_FIELD]!!.toInt()
-        return ValueWriters.decimal(precision, scale)
+        return AvroValueWriters.decimal(precision, scale)
     }
 
     override fun parquetReader(

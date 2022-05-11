@@ -1,51 +1,54 @@
 package dev.alluvial.sink.iceberg.avro
 
+import dev.alluvial.sink.iceberg.type.AvroValueReader
+import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.sink.iceberg.type.KafkaStruct
 import dev.alluvial.utils.TimePrecision
 import dev.alluvial.utils.TimePrecision.MILLIS
 import dev.alluvial.utils.TimePrecision.NANOS
 import org.apache.avro.io.Decoder
 import org.apache.avro.io.ResolvingDecoder
-import org.apache.iceberg.avro.ValueReader
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Struct as KafkaStruct
 
-object KafkaValueReaders {
+object KafkaAvroReaders {
     fun struct(
         names: List<String>,
-        fieldReaders: List<ValueReader<*>>,
+        fieldReaders: List<AvroValueReader<*>>,
         struct: KafkaSchema,
-    ): ValueReader<KafkaStruct> {
+    ): AvroValueReader<KafkaStruct> {
         return StructReader(names, fieldReaders, struct)
     }
 
-    fun <N : Number> bytes(delegator: ValueReader<N>): ValueReader<Byte> {
+    fun <N : Number> bytes(delegator: AvroValueReader<N>): AvroValueReader<Byte> {
         return ByteReader(delegator)
     }
 
-    fun <N : Number> shorts(delegator: ValueReader<N>): ValueReader<Short> {
+    fun <N : Number> shorts(delegator: AvroValueReader<N>): AvroValueReader<Short> {
         return ShortReader(delegator)
     }
 
-    fun <E> array(elementReader: ValueReader<E>): ValueReader<List<E>> {
+    fun <E> array(elementReader: AvroValueReader<E>): AvroValueReader<List<E>> {
         return ArrayReader(elementReader)
     }
 
-    fun <K, V> map(keyReader: ValueReader<K>, valueReader: ValueReader<V>): ValueReader<Map<K, V>> {
+    fun <K, V> map(keyReader: AvroValueReader<K>, valueReader: AvroValueReader<V>): AvroValueReader<Map<K, V>> {
         return MapReader(keyReader, valueReader)
     }
 
-    fun <K, V> arrayMap(keyReader: ValueReader<K>, valueReader: ValueReader<V>): ValueReader<Map<K, V>> {
+    fun <K, V> arrayMap(
+        keyReader: AvroValueReader<K>,
+        valueReader: AvroValueReader<V>
+    ): AvroValueReader<Map<K, V>> {
         return ArrayMapReader(keyReader, valueReader)
     }
 
-    private class ByteReader<N : Number>(private val delegator: ValueReader<N>) : ValueReader<Byte> {
+    private class ByteReader<N : Number>(private val delegator: AvroValueReader<N>) : AvroValueReader<Byte> {
         override fun read(decoder: Decoder, reuse: Any?): Byte {
             val number = delegator.read(decoder, reuse)
             return number.toByte()
         }
     }
 
-    private class ShortReader<N : Number>(private val delegator: ValueReader<N>) : ValueReader<Short> {
+    private class ShortReader<N : Number>(private val delegator: AvroValueReader<N>) : AvroValueReader<Short> {
         override fun read(decoder: Decoder, reuse: Any?): Short {
             val number = delegator.read(decoder, reuse)
             return number.toShort()
@@ -57,9 +60,9 @@ object KafkaValueReaders {
      */
     private class StructReader(
         private val names: List<String>,
-        private val fieldReaders: List<ValueReader<*>>,
+        private val fieldReaders: List<AvroValueReader<*>>,
         private val kafkaSchema: KafkaSchema,
-    ) : ValueReader<KafkaStruct> {
+    ) : AvroValueReader<KafkaStruct> {
         override fun read(decoder: Decoder, reuse: Any?): KafkaStruct {
             val struct = reuseOrCreate(reuse)
 
@@ -103,8 +106,8 @@ object KafkaValueReaders {
     }
 
     private class ArrayReader<E>(
-        private val elementReader: ValueReader<E>
-    ) : ValueReader<List<E>> {
+        private val elementReader: AvroValueReader<E>
+    ) : AvroValueReader<List<E>> {
         private val reused = mutableListOf<E>()
 
         override fun read(decoder: Decoder, reuse: Any?): List<E> {
@@ -124,9 +127,9 @@ object KafkaValueReaders {
     }
 
     private class MapReader<K, V>(
-        private val keyReader: ValueReader<K>,
-        private val valueReader: ValueReader<V>
-    ) : ValueReader<Map<K, V>> {
+        private val keyReader: AvroValueReader<K>,
+        private val valueReader: AvroValueReader<V>
+    ) : AvroValueReader<Map<K, V>> {
         private val reusedKey = mutableListOf<K>()
         private val reusedValue = mutableListOf<V>()
 
@@ -150,9 +153,9 @@ object KafkaValueReaders {
     }
 
     private class ArrayMapReader<K, V>(
-        private val keyReader: ValueReader<K>,
-        private val valueReader: ValueReader<V>
-    ) : ValueReader<Map<K, V>> {
+        private val keyReader: AvroValueReader<K>,
+        private val valueReader: AvroValueReader<V>
+    ) : AvroValueReader<Map<K, V>> {
         private val reusedKey = mutableListOf<K>()
         private val reusedValue = mutableListOf<V>()
 
@@ -178,7 +181,7 @@ object KafkaValueReaders {
     abstract class TimeReader<T>(
         protected val sourcePrecision: TimePrecision,
         protected val targetPrecision: TimePrecision,
-    ) : ValueReader<T> {
+    ) : AvroValueReader<T> {
         init {
             if (sourcePrecision == NANOS) {
                 throw IllegalArgumentException("Avro has no $sourcePrecision precision time")
@@ -200,7 +203,7 @@ object KafkaValueReaders {
     abstract class TimestampReader<T>(
         protected val sourcePrecision: TimePrecision,
         protected val targetPrecision: TimePrecision,
-    ) : ValueReader<T> {
+    ) : AvroValueReader<T> {
         init {
             if (sourcePrecision == NANOS) {
                 throw IllegalArgumentException("Avro has no $sourcePrecision precision timestamp")

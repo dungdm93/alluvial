@@ -5,12 +5,11 @@ import com.fasterxml.jackson.databind.json.JsonMapper
 import dev.alluvial.api.Outlet
 import dev.alluvial.api.StreamletId
 import dev.alluvial.sink.iceberg.io.AlluvialTaskWriterFactory
+import dev.alluvial.sink.iceberg.type.IcebergTable
+import dev.alluvial.sink.iceberg.type.KafkaSchema
 import org.apache.iceberg.io.TaskWriter
 import org.apache.kafka.connect.sink.SinkRecord
 import org.slf4j.LoggerFactory
-import org.apache.iceberg.Table as IcebergTable
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-
 
 class IcebergTableOutlet(
     val id: StreamletId,

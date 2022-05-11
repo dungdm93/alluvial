@@ -1,10 +1,6 @@
 package dev.alluvial.sink.iceberg.type
 
 import org.apache.iceberg.types.TypeUtil
-import org.apache.iceberg.Schema as IcebergSchema
-import org.apache.iceberg.data.Record as IcebergRecord
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Struct as KafkaStruct
 
 object RandomKafkaStruct {
     fun generate(iSchema: IcebergSchema, numRecords: Int, seed: Long): Iterable<KafkaStruct> {

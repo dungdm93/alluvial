@@ -1,5 +1,7 @@
 package dev.alluvial.sink.iceberg.parquet
 
+import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.sink.iceberg.type.KafkaStruct
 import dev.alluvial.utils.TimePrecision
 import dev.alluvial.utils.TimePrecision.MILLIS
 import org.apache.iceberg.parquet.ParquetValueWriter
@@ -7,8 +9,6 @@ import org.apache.iceberg.parquet.ParquetValueWriters
 import org.apache.parquet.column.ColumnDescriptor
 import org.apache.parquet.io.api.Binary
 import java.nio.ByteBuffer
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Struct as KafkaStruct
 
 object KafkaParquetWriters {
     fun struct(writers: List<ParquetValueWriter<*>?>, schema: KafkaSchema): ParquetValueWriter<KafkaStruct> {

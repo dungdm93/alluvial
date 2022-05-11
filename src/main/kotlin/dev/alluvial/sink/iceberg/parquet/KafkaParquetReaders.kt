@@ -1,5 +1,7 @@
 package dev.alluvial.sink.iceberg.parquet
 
+import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.sink.iceberg.type.KafkaStruct
 import dev.alluvial.utils.TimePrecision
 import org.apache.iceberg.parquet.ParquetValueReader
 import org.apache.iceberg.parquet.ParquetValueReaders
@@ -7,8 +9,6 @@ import org.apache.iceberg.parquet.ParquetValueReaders.PrimitiveReader
 import org.apache.iceberg.parquet.ParquetValueReaders.UnboxedReader
 import org.apache.parquet.column.ColumnDescriptor
 import org.apache.parquet.schema.Type
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Struct as KafkaStruct
 
 object KafkaParquetReaders {
     fun strings(desc: ColumnDescriptor): ParquetValueReader<String> {

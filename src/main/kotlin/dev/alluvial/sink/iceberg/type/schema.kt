@@ -2,13 +2,6 @@ package dev.alluvial.sink.iceberg.type
 
 import org.apache.iceberg.types.Type.TypeID.*
 import org.apache.iceberg.types.TypeUtil
-import org.apache.iceberg.types.Types.NestedField
-import org.apache.iceberg.Schema as IcebergSchema
-import org.apache.iceberg.types.Type as IcebergType
-import org.apache.iceberg.types.Types.NestedField as IcebergField
-import org.apache.kafka.connect.data.Field as KafkaField
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Schema.Type as KafkaType
 
 /**
  * Convert an [IcebergSchema] to a [KafkaSchema].
@@ -70,7 +63,7 @@ fun KafkaSchema.toIcebergType(): IcebergType {
 }
 
 
-private fun NestedField.equalsIgnoreId(that: NestedField): Boolean {
+private fun IcebergField.equalsIgnoreId(that: IcebergField): Boolean {
     // ignore compare id
     if (this.isOptional != that.isOptional) {
         return false

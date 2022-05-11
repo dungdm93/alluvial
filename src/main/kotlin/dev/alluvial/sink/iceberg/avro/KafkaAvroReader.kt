@@ -1,20 +1,20 @@
 package dev.alluvial.sink.iceberg.avro
 
+import dev.alluvial.sink.iceberg.type.AvroSchema
+import dev.alluvial.sink.iceberg.type.AvroType
+import dev.alluvial.sink.iceberg.type.AvroValueReader
+import dev.alluvial.sink.iceberg.type.AvroValueReaders
+import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.sink.iceberg.type.KafkaStruct
+import dev.alluvial.sink.iceberg.type.KafkaType
 import dev.alluvial.sink.iceberg.type.logical.logicalTypeConverter
 import dev.alluvial.utils.TimePrecision.*
 import org.apache.avro.io.DatumReader
 import org.apache.avro.io.Decoder
 import org.apache.iceberg.avro.AvroWithPartnerByStructureVisitor
 import org.apache.iceberg.avro.SupportsRowPosition
-import org.apache.iceberg.avro.ValueReader
-import org.apache.iceberg.avro.ValueReaders
 import org.apache.iceberg.data.avro.DecoderResolver
 import java.util.function.Supplier
-import org.apache.avro.Schema as AvroSchema
-import org.apache.avro.Schema.Type as AvroType
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Schema.Type as KafkaType
-import org.apache.kafka.connect.data.Struct as KafkaStruct
 
 /**
  * @see org.apache.iceberg.avro.GenericAvroReader
@@ -22,16 +22,16 @@ import org.apache.kafka.connect.data.Struct as KafkaStruct
  * @see org.apache.iceberg.spark.data.SparkAvroReader
  */
 class KafkaAvroReader(
-    kafkaSchema: KafkaSchema,
+    private val sSchema: KafkaSchema,
     private val readSchema: AvroSchema,
 ) : DatumReader<KafkaStruct>, SupportsRowPosition {
-    private val reader: ValueReader<KafkaStruct>
+    private val reader: AvroValueReader<KafkaStruct>
     private lateinit var fileSchema: AvroSchema
 
     init {
         @Suppress("UNCHECKED_CAST")
-        this.reader = AvroWithPartnerByStructureVisitor.visit(kafkaSchema, readSchema, ReadBuilder())
-            as ValueReader<KafkaStruct>
+        this.reader = AvroWithPartnerByStructureVisitor.visit(sSchema, readSchema, ReadBuilder())
+            as AvroValueReader<KafkaStruct>
     }
 
     override fun setSchema(schema: AvroSchema) {
@@ -48,74 +48,74 @@ class KafkaAvroReader(
         }
     }
 
-    private class ReadBuilder : AvroWithKafkaSchemaVisitor<ValueReader<*>>() {
+    private class ReadBuilder : AvroWithKafkaSchemaVisitor<AvroValueReader<*>>() {
         override fun record(
             expected: KafkaSchema,
             record: AvroSchema,
             names: List<String>,
-            fieldReaders: List<ValueReader<*>>
-        ): ValueReader<*> {
-            return KafkaValueReaders.struct(names, fieldReaders, expected)
+            fieldReaders: List<AvroValueReader<*>>
+        ): AvroValueReader<*> {
+            return KafkaAvroReaders.struct(names, fieldReaders, expected)
         }
 
         override fun union(
             expected: KafkaSchema,
             union: AvroSchema,
-            options: List<ValueReader<*>>
-        ): ValueReader<*> {
-            return ValueReaders.union(options)
+            options: List<AvroValueReader<*>>
+        ): AvroValueReader<*> {
+            return AvroValueReaders.union(options)
         }
 
         override fun array(
             expected: KafkaSchema,
             array: AvroSchema,
-            elementReader: ValueReader<*>
-        ): ValueReader<*> {
-            return KafkaValueReaders.array(elementReader)
+            elementReader: AvroValueReader<*>
+        ): AvroValueReader<*> {
+            return KafkaAvroReaders.array(elementReader)
         }
 
         override fun map(
             expected: KafkaSchema,
             map: AvroSchema,
-            valueReader: ValueReader<*>
-        ): ValueReader<*> {
-            return KafkaValueReaders.map(ValueReaders.strings(), valueReader)
+            valueReader: AvroValueReader<*>
+        ): AvroValueReader<*> {
+            return KafkaAvroReaders.map(AvroValueReaders.strings(), valueReader)
         }
 
         override fun map(
             expected: KafkaSchema,
             map: AvroSchema,
-            keyReader: ValueReader<*>,
-            valueReader: ValueReader<*>
-        ): ValueReader<*> {
-            return KafkaValueReaders.arrayMap(keyReader, valueReader)
+            keyReader: AvroValueReader<*>,
+            valueReader: AvroValueReader<*>
+        ): AvroValueReader<*> {
+            return KafkaAvroReaders.arrayMap(keyReader, valueReader)
         }
 
         override fun primitive(
             type: KafkaSchema?,
             primitive: AvroSchema
-        ): ValueReader<*> {
+        ): AvroValueReader<*> {
             val converter = type?.logicalTypeConverter()
             if (converter != null) {
                 return converter.avroReader(type, primitive)
             }
 
             return when (primitive.type) {
-                AvroType.NULL -> ValueReaders.nulls()
-                AvroType.BOOLEAN -> ValueReaders.booleans()
+                AvroType.NULL -> AvroValueReaders.nulls()
+                AvroType.BOOLEAN -> AvroValueReaders.booleans()
                 AvroType.INT -> when (type?.type()) {
-                    KafkaType.INT8 -> KafkaValueReaders.bytes(ValueReaders.ints())
-                    KafkaType.INT16 -> KafkaValueReaders.shorts(ValueReaders.ints())
-                    KafkaType.INT32 -> ValueReaders.ints()
+                    KafkaType.INT8 -> KafkaAvroReaders.bytes(AvroValueReaders.ints())
+                    KafkaType.INT16 -> KafkaAvroReaders.shorts(AvroValueReaders.ints())
+                    KafkaType.INT32 -> AvroValueReaders.ints()
                     else -> throw IllegalArgumentException("Unsupported read avro INT to kafka ${type?.type()}")
                 }
-                AvroType.LONG -> ValueReaders.longs()
-                AvroType.FLOAT -> ValueReaders.floats()
-                AvroType.DOUBLE -> ValueReaders.doubles()
-                AvroType.STRING -> ValueReaders.strings()
-                AvroType.FIXED -> ValueReaders.fixed(primitive.fixedSize)
-                AvroType.BYTES -> ValueReaders.bytes()
-                AvroType.ENUM -> ValueReaders.enums(primitive.enumSymbols)
+                AvroType.LONG -> AvroValueReaders.longs()
+                AvroType.FLOAT -> AvroValueReaders.floats()
+                AvroType.DOUBLE -> AvroValueReaders.doubles()
+                AvroType.STRING -> AvroValueReaders.strings()
+                AvroType.FIXED -> AvroValueReaders.fixed(primitive.fixedSize)
+                AvroType.BYTES -> AvroValueReaders.bytes()
+                AvroType.ENUM -> AvroValueReaders.enums(primitive.enumSymbols)
                 else -> throw IllegalArgumentException("Unsupported type: $primitive")
             }
         }

@@ -1,5 +1,7 @@
 package dev.alluvial.schema.debezium
 
+import dev.alluvial.sink.iceberg.type.IcebergSchema
+import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.sink.iceberg.type.isMigrateFrom
 import dev.alluvial.sink.iceberg.type.toIcebergSchema
 import org.apache.iceberg.PartitionSpec
@@ -12,9 +14,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import strikt.api.expectThat
 import java.io.File
-import org.apache.iceberg.Schema as IcebergSchema
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-
 
 internal class TestKafkaSchemaSchemaMigrator {
     @TempDir
@@ -22,10 +21,10 @@ internal class TestKafkaSchemaSchemaMigrator {
     private lateinit var table: Table
     private val formatVersion: Int = 2
 
-    private fun createTable(schema: IcebergSchema) {
+    private fun createTable(iSchema: IcebergSchema) {
         TestTables.clearTables()
         assert(tmpDir.deleteRecursively()) { "folder should be deleted" }
-        table = TestTables.create(tmpDir, "test", schema, PartitionSpec.unpartitioned(), formatVersion)
+        table = TestTables.create(tmpDir, "test", iSchema, PartitionSpec.unpartitioned(), formatVersion)
     }
 
     private fun migrateAndValidate(sBefore: KafkaSchema, sAfter: KafkaSchema) {

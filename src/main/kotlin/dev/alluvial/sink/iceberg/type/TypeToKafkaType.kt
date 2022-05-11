@@ -10,11 +10,9 @@ import org.apache.kafka.connect.data.Date
 import org.apache.kafka.connect.data.Decimal
 import org.apache.kafka.connect.data.Field
 import org.apache.kafka.connect.data.Schema.Type.*
+import org.apache.kafka.connect.data.SchemaBuilder
 import org.apache.kafka.connect.data.Time
 import org.apache.kafka.connect.data.Timestamp
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Schema.Type as KafkaType
-import org.apache.kafka.connect.data.SchemaBuilder as KafkaSchemaBuilder
 
 /**
  * @see org.apache.iceberg.flink.TypeToFlinkType
@@ -81,7 +79,7 @@ class TypeToKafkaType : TypeUtil.SchemaVisitor<KafkaSchema>() {
     override fun struct(struct: StructType, fieldResults: List<KafkaSchema>): KafkaSchema {
         val fields = struct.fields()
 
-        val schemaBuilder = KafkaSchemaBuilder.struct()
+        val schemaBuilder = SchemaBuilder.struct()
         fields.forEachIndexed { idx, field ->
             schemaBuilder.field(field.name(), fieldResults[idx])
         }
@@ -98,14 +96,14 @@ class TypeToKafkaType : TypeUtil.SchemaVisitor<KafkaSchema>() {
         val element = if (list.isElementOptional != elementResult.isOptional)
             elementResult.clone { it.optional = list.isElementOptional } else
             elementResult
-        return KafkaSchemaBuilder.array(element).build()
+        return SchemaBuilder.array(element).build()
     }
 
     override fun map(map: MapType, keyResult: KafkaSchema, valueResult: KafkaSchema): KafkaSchema {
         val value = if (map.isValueOptional != valueResult.isOptional)
             valueResult.clone { it.optional = map.isValueOptional } else
             valueResult
-        return KafkaSchemaBuilder.map(keyResult, value).build()
+        return SchemaBuilder.map(keyResult, value).build()
     }
 
     override fun primitive(primitive: Type.PrimitiveType): KafkaSchema {
@@ -123,7 +121,7 @@ class TypeToKafkaType : TypeUtil.SchemaVisitor<KafkaSchema>() {
             TypeID.UUID -> KafkaSchema.STRING_SCHEMA
             TypeID.FIXED -> {
                 val fixedType = primitive as FixedType
-                KafkaSchemaBuilder.bytes()
+                SchemaBuilder.bytes()
                     .parameter("connect.fixed.size", fixedType.length().toString())
                     .build()
             }

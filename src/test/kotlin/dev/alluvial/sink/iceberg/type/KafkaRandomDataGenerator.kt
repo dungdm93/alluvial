@@ -9,6 +9,7 @@ import dev.alluvial.utils.random
 import dev.alluvial.utils.randomSublist
 import org.apache.iceberg.relocated.com.google.common.collect.Sets
 import org.apache.iceberg.types.Type
+import org.apache.iceberg.types.Type.TypeID
 import org.apache.iceberg.types.TypeUtil
 import org.apache.iceberg.types.Types
 import org.apache.iceberg.util.RandomUtil
@@ -19,12 +20,6 @@ import java.util.Date
 import java.util.Random
 import java.util.concurrent.TimeUnit
 import java.util.function.Supplier
-import org.apache.iceberg.Schema as IcebergSchema
-import org.apache.iceberg.types.Type.TypeID as IcebergType
-import org.apache.kafka.connect.data.Field as KafkaField
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Schema.Type as KafkaType
-import org.apache.kafka.connect.data.Struct as KafkaStruct
 
 internal object KafkaRandomDataGenerator {
     private const val FIFTY_YEARS_IN_NANOS = 50L * (365 * 3 + 366) * 24 * 60 * 60 * 1_000_000_000 / 4
@@ -153,9 +148,9 @@ internal object KafkaRandomDataGenerator {
         override fun primitive(primitive: Type.PrimitiveType): Any {
             val obj = RandomUtil.generatePrimitive(primitive, random)
             return when (primitive.typeId()) {
-                IcebergType.DATE -> dateFrom(obj as Int)
-                IcebergType.TIME -> datetimeFrom(obj as Long)
-                IcebergType.TIMESTAMP -> datetimeFrom(obj as Long)
+                TypeID.DATE -> dateFrom(obj as Int)
+                TypeID.TIME -> datetimeFrom(obj as Long)
+                TypeID.TIMESTAMP -> datetimeFrom(obj as Long)
                 else -> obj
             }
         }

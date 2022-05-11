@@ -1,6 +1,10 @@
 package dev.alluvial.sink.iceberg.avro
 
 import dev.alluvial.sink.iceberg.type.AssertionsKafka.assertEquals
+import dev.alluvial.sink.iceberg.type.IcebergRecord
+import dev.alluvial.sink.iceberg.type.IcebergSchema
+import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.sink.iceberg.type.KafkaStruct
 import dev.alluvial.sink.iceberg.type.RandomKafkaStruct
 import dev.alluvial.sink.iceberg.type.toIcebergSchema
 import dev.alluvial.sink.iceberg.type.toKafkaSchema
@@ -20,33 +24,28 @@ import org.apache.iceberg.io.CloseableIterable
 import org.apache.iceberg.io.FileAppender
 import org.apache.kafka.connect.data.SchemaBuilder
 import org.junit.Test
-import org.apache.avro.Schema as AvroSchema
-import org.apache.iceberg.Schema as IcebergSchema
-import org.apache.iceberg.data.Record as IcebergRecord
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Struct as KafkaStruct
 
 internal class KafkaAvroRWTest : DataTest() {
-    override fun writeAndValidate(icebergSchema: IcebergSchema) {
-        val kafkaSchema = icebergSchema.toKafkaSchema()
-        val expectedIcebergRecords = RandomGenericData.generate(icebergSchema, 100, 0L).toList()
-        val expectedKafkaStructs = RandomKafkaStruct.convert(icebergSchema, expectedIcebergRecords).toList()
+    override fun writeAndValidate(iSchema: IcebergSchema) {
+        val sSchema = iSchema.toKafkaSchema()
+        val expectedIcebergRecords = RandomGenericData.generate(iSchema, 100, 0L).toList()
+        val expectedKafkaStructs = RandomKafkaStruct.convert(iSchema, expectedIcebergRecords).toList()
 
-        validateKafkaReader(icebergSchema, kafkaSchema, expectedIcebergRecords)
-        validateKafkaWriter(icebergSchema, kafkaSchema, expectedKafkaStructs)
+        validateKafkaReader(iSchema, sSchema, expectedIcebergRecords)
+        validateKafkaWriter(iSchema, sSchema, expectedKafkaStructs)
     }
 
-    private fun writeAndValidate(kafkaSchema: KafkaSchema) {
-        val icebergSchema = kafkaSchema.toIcebergSchema()
-        val expectedKafkaStructs = RandomKafkaStruct.generate(kafkaSchema, 100, 5).toList()
+    private fun writeAndValidate(sSchema: KafkaSchema) {
+        val iSchema = sSchema.toIcebergSchema()
+        val expectedKafkaStructs = RandomKafkaStruct.generate(sSchema, 100, 5).toList()
 
-        val expectedIcebergRecords = validateKafkaWriter(icebergSchema, kafkaSchema, expectedKafkaStructs)
-        validateKafkaReader(icebergSchema, kafkaSchema, expectedIcebergRecords)
+        val expectedIcebergRecords = validateKafkaWriter(iSchema, sSchema, expectedKafkaStructs)
+        validateKafkaReader(iSchema, sSchema, expectedIcebergRecords)
     }
 
     private fun validateKafkaReader(
-        icebergSchema: IcebergSchema,
-        kafkaSchema: KafkaSchema,
+        iSchema: IcebergSchema,
+        sSchema: KafkaSchema,
         expected: List<IcebergRecord>
     ): List<KafkaStruct> {
         val tmp = temp.newFile()
@@ -54,7 +53,7 @@ internal class KafkaAvroRWTest : DataTest() {
 
         // Write the expected records into AVRO file, then read them into Kafka Struct and assert with the expected Record list.
         val writer: FileAppender<IcebergRecord> = Avro.write(Files.localOutput(tmp))
-            .schema(icebergSchema)
+            .schema(iSchema)
             .createWriterFunc { DataWriter.create<DatumWriter<*>>(it) }
             .named("test")
             .build()
@@ -64,9 +63,9 @@ internal class KafkaAvroRWTest : DataTest() {
         }
 
         val reader: CloseableIterable<KafkaStruct> = Avro.read(Files.localInput(tmp))
-            .project(icebergSchema)
-            .createReaderFunc { _: IcebergSchema, readSchema: AvroSchema ->
-                KafkaAvroReader(kafkaSchema, readSchema)
+            .project(iSchema)
+            .createReaderFunc { _, readSchema ->
+                KafkaAvroReader(sSchema, readSchema)
             }
             .build()
         val actual = reader.use {
@@ -74,15 +73,15 @@ internal class KafkaAvroRWTest : DataTest() {
         }
 
         expected.zip(actual) { e, a ->
-            assertEquals(icebergSchema, kafkaSchema, e, a)
+            assertEquals(iSchema, sSchema, e, a)
         }
 
         return actual
     }
 
     private fun validateKafkaWriter(
-        icebergSchema: IcebergSchema,
-        kafkaSchema: KafkaSchema,
+        iSchema: IcebergSchema,
+        sSchema: KafkaSchema,
         expected: List<KafkaStruct>,
     ): List<IcebergRecord> {
         val tmp = temp.newFile()
@@ -90,8 +89,8 @@ internal class KafkaAvroRWTest : DataTest() {
 
         // Write the expected Kafka Struct into AVRO file, then read them into Record and assert with the expected Kafka Struct list.
         val writer: FileAppender<KafkaStruct> = Avro.write(Files.localOutput(tmp))
-            .schema(icebergSchema)
-            .createWriterFunc { KafkaAvroWriter(kafkaSchema) }
+            .schema(iSchema)
+            .createWriterFunc { KafkaAvroWriter(sSchema) }
             .named("test")
             .build()
 
@@ -100,15 +99,15 @@ internal class KafkaAvroRWTest : DataTest() {
         }
 
         val reader: AvroIterable<IcebergRecord> = Avro.read(Files.localInput(tmp))
-            .project(icebergSchema)
-            .createReaderFunc { expectedSchema: IcebergSchema, readSchema: AvroSchema ->
+            .project(iSchema)
+            .createReaderFunc { expectedSchema, readSchema ->
                 DataReader.create<DatumReader<*>>(expectedSchema, readSchema)
             }
             .build()
         val actual = reader.toList()
 
         actual.zip(expected) { a, e ->
-            assertEquals(icebergSchema, kafkaSchema, a, e)
+            assertEquals(iSchema, sSchema, a, e)
         }
 
         return actual

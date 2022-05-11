@@ -1,5 +1,8 @@
 package dev.alluvial.sink.iceberg.io
 
+import dev.alluvial.sink.iceberg.type.IcebergSchema
+import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.sink.iceberg.type.KafkaStruct
 import dev.alluvial.sink.iceberg.type.RandomKafkaStruct
 import dev.alluvial.sink.iceberg.type.toIcebergSchema
 import dev.alluvial.source.kafka.DEBEZIUM_LOGICAL_TYPES_SCHEMA
@@ -9,9 +12,6 @@ import org.apache.iceberg.StructLike
 import org.apache.iceberg.types.Type.TypeID.*
 import org.apache.kafka.connect.data.SchemaBuilder
 import org.junit.jupiter.api.Test
-import org.apache.iceberg.Schema as IcebergSchema
-import org.apache.kafka.connect.data.Schema as KafkaSchema
-import org.apache.kafka.connect.data.Struct as KafkaStruct
 
 class TestStructWrapper {
     private fun wrapAndGet(sSchema: KafkaSchema) {
