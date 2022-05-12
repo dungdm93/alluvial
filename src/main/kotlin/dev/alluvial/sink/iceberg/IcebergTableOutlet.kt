@@ -3,7 +3,6 @@ package dev.alluvial.sink.iceberg
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.json.JsonMapper
 import dev.alluvial.api.Outlet
-import dev.alluvial.api.StreamletId
 import dev.alluvial.sink.iceberg.io.AlluvialTaskWriterFactory
 import dev.alluvial.sink.iceberg.type.IcebergTable
 import dev.alluvial.sink.iceberg.type.KafkaSchema
@@ -12,7 +11,6 @@ import org.apache.kafka.connect.sink.SinkRecord
 import org.slf4j.LoggerFactory
 
 class IcebergTableOutlet(
-    val id: StreamletId,
     val table: IcebergTable,
 ) : Outlet {
     companion object {
@@ -61,11 +59,11 @@ class IcebergTableOutlet(
      * @return offsets of last snapshot or null
      * if outlet doesn't have any snapshot.
      */
-    fun committedOffsets(): Map<Int, Long>? {
+    fun committedOffsets(): Map<Int, Long> {
         val serialized = table.currentSnapshot()
             ?.summary()
             ?.get(ALLUVIAL_POSITION_PROP)
-            ?: return null
+            ?: return emptyMap()
         return mapper.readValue(serialized, typeRef)
     }
 

@@ -1,12 +1,12 @@
 package dev.alluvial.stream.debezium
 
-import dev.alluvial.api.StreamletId
 import dev.alluvial.api.TableCreator
-import dev.alluvial.schema.debezium.KafkaSchemaSchemaHandler
 import dev.alluvial.runtime.StreamConfig
+import dev.alluvial.schema.debezium.KafkaSchemaSchemaHandler
 import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.sink.iceberg.IcebergTableOutlet
 import dev.alluvial.source.kafka.KafkaSource
+import org.apache.iceberg.catalog.TableIdentifier
 
 class DebeziumStreamletFactory(
     private val source: KafkaSource,
@@ -14,16 +14,17 @@ class DebeziumStreamletFactory(
     private val tableCreator: TableCreator,
     private val streamConfig: StreamConfig,
 ) {
-    fun createStreamlet(id: StreamletId): DebeziumStreamlet {
-        val inlet = source.getInlet(id)
-        val outlet = sink.getOutlet(id) ?: createOutlet(id)
-        val schemaHandler = KafkaSchemaSchemaHandler(id, outlet)
+    fun createStreamlet(topic: String, tableId: TableIdentifier): DebeziumStreamlet {
+        val inlet = source.getInlet(topic)
+        val outlet = sink.getOutlet(tableId) ?: createOutlet(topic, tableId)
+        val schemaHandler = KafkaSchemaSchemaHandler(outlet)
 
+        val id = tableId.toString()
         return DebeziumStreamlet(id, inlet, outlet, schemaHandler, streamConfig)
     }
 
-    private fun createOutlet(id: StreamletId): IcebergTableOutlet {
-        tableCreator.createTable(id)
-        return sink.getOutlet(id)!!
+    private fun createOutlet(topic: String, tableId: TableIdentifier): IcebergTableOutlet {
+        tableCreator.createTable(topic, tableId)
+        return sink.getOutlet(tableId)!!
     }
 }

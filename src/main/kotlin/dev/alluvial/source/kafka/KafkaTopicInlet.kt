@@ -1,7 +1,6 @@
 package dev.alluvial.source.kafka
 
 import dev.alluvial.api.Inlet
-import dev.alluvial.api.StreamletId
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
@@ -14,7 +13,6 @@ import java.util.Queue
 
 @Suppress("MemberVisibilityCanBePrivate")
 class KafkaTopicInlet(
-    val id: StreamletId,
     val topic: String,
     private val consumer: Consumer<ByteArray, ByteArray>,
     private val converter: KafkaConverter,

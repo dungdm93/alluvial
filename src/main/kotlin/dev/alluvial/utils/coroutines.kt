@@ -11,7 +11,7 @@ import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.time.Duration
 
 fun CoroutineScope.scheduleInterval(
-    interval: Duration,
+    intervalMs: Long,
     context: CoroutineContext = EmptyCoroutineContext,
     start: CoroutineStart = CoroutineStart.DEFAULT,
     block: suspend CoroutineScope.() -> Unit
@@ -19,7 +19,7 @@ fun CoroutineScope.scheduleInterval(
     return launch(context, start) {
         while (isActive) {
             block()
-            delay(interval)
+            delay(intervalMs)
         }
     }
 }
