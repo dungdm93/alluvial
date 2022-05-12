@@ -16,8 +16,8 @@ class LogicalTypeProvider : LogicalTypeProvider {
         ZonedTimestampConverter.name to ZonedTimestampConverter,
         YearConverter.name to YearConverter,
         EnumConverter.name to EnumConverter,
-        EnumSetConverter.name to EnumSetConverter,
-        GeometryConverter.name to GeometryConverter,
+        // EnumSetConverter.name to EnumSetConverter,
+        // GeometryConverter.name to GeometryConverter,
     )
 
     override val name: String = "debezium"
