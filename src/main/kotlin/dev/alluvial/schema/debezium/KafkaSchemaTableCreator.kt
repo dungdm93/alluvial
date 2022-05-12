@@ -106,7 +106,7 @@ class KafkaSchemaTableCreator(
             val sourceName = config.column
             val sourceField = schema.findField(sourceName)
             Preconditions.checkNotNull(sourceField, "Cannot find source field: %s", sourceName)
-            PartitionSpecs.add(builder, sourceField, config.transform)
+            PartitionSpecs.add(builder, sourceField, config.transform, config.name)
         }
         return builder.build()
     }

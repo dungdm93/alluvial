@@ -71,6 +71,7 @@ data class TableCreationConfig(
 data class PartitionSpecConfig(
     val column: String,
     val transform: String,
+    val name: String?,
 ) {
     init {
         require(column.isNotEmpty()) { "Source column name cannot be empty" }

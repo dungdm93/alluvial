@@ -41,38 +41,49 @@ sink:
       actor:
         - column: actor_id
           transform: void
+          name: actor_id_void
       address:
         - column: address_id
           transform: bucket[10]
+          name: id_bucket_by_ten
       category:
         - column: name
           transform: truncate[2]
+          name: truncated_name
       city:
         - column: country_id
           transform: identity
+          name: just_country_id
       film:
         - column: last_update
           transform: month
+          name: lum
       film_actor:
         - column: last_update
           transform: day
+#          name: no_name
       payment:
         - column: last_update
           transform: hour
+#          name: no_name
       # Partitioned by multiple columns
       customer:
         - column: last_update
           transform: year
+          name: p1
         - column: first_name
           transform: truncate[2]
+          name: p2
         - column: last_name
           transform: bucket[3]
+          name: p3
       # Partitioned by multiple columns using the same transformation
       staff:
         - column: first_name
           transform: truncate[2]
         - column: last_name
           transform: truncate[2]
+          name: last_name_trc2
 
 stream:
   kind: debezium
