@@ -71,11 +71,24 @@ services:
       HADOOP_OPTIONAL_TOOLS: hadoop-aws
       AWS_REGION: aws-global
     user: root
+    networks:
+      default:
+        ipv4_address: 10.5.0.12
     ports:
       - 8888:8888
       - 4040:4040 # spark app
     volumes:
       - ./spark/:/opt/spark/conf/
+
+  trino:
+    image: trinodb/trino:380
+    networks:
+      default:
+        ipv4_address: 10.5.0.13
+    ports:
+      - 18080:8080
+    volumes:
+      - ./trino/catalog/:/etc/trino/catalog/
 
 volumes:
   minio_data:
