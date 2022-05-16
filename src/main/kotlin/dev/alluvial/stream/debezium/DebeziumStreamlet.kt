@@ -135,6 +135,7 @@ class DebeziumStreamlet(
             MDC.put("streamlet.id", name)
             return block()
         } catch (e: Exception) {
+            close()
             logger.error("Streamlet {} is failed", name)
             status = FAILED
             throw e
