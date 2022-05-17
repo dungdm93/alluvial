@@ -10,6 +10,7 @@ data class Config(
     val source: SourceConfig,
     val sink: SinkConfig,
     val stream: StreamConfig,
+    val metric: MetricConfig,
 )
 
 data class SourceConfig(
@@ -76,5 +77,15 @@ data class PartitionSpecConfig(
     init {
         require(column.isNotEmpty()) { "Source column name cannot be empty" }
         require(transform.isNotEmpty()) { "Transform type cannot be empty" }
+    }
+}
+
+data class MetricConfig(
+    val kind: String,
+    val commonTags: Map<String, String> = emptyMap(),
+    val properties: Map<String, String> = emptyMap(),
+) {
+    init {
+        require(kind.isNotEmpty()) { "metric.kind cannot be empty" }
     }
 }

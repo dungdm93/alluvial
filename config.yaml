@@ -90,3 +90,13 @@ stream:
   idleTimeout: "15m"
   commitBatchSize: 1000
   commitTimespan: "10m"
+
+
+metric:
+  kind: prometheus
+  commonTags:
+    environment: local
+    service: sakila
+  properties:
+    prometheus.bind: 0.0.0.0:9090
+    prometheus.daemon: true

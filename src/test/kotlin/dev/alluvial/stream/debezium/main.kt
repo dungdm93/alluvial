@@ -1,6 +1,7 @@
 package dev.alluvial.stream.debezium
 
 import dev.alluvial.runtime.Config
+import dev.alluvial.runtime.MetricConfig
 import dev.alluvial.runtime.SinkConfig
 import dev.alluvial.runtime.SourceConfig
 import dev.alluvial.runtime.StreamConfig
@@ -32,7 +33,8 @@ val config = Config(
         ),
         tableCreation = TableCreationConfig(),
     ),
-    stream = StreamConfig(kind = "debezium")
+    stream = StreamConfig(kind = "debezium"),
+    metric = MetricConfig(kind = "prometheus"),
 )
 
 fun main() {

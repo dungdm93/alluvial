@@ -6,10 +6,19 @@ import dev.alluvial.api.Streamlet.Status.*
 import dev.alluvial.runtime.StreamConfig
 import dev.alluvial.sink.iceberg.IcebergTableOutlet
 import dev.alluvial.source.kafka.KafkaTopicInlet
+import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.Gauge
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Tag
+import io.micrometer.core.instrument.Timer
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
+import java.io.Closeable
 import java.time.Clock
+import java.util.concurrent.TimeUnit
+import java.util.function.ToDoubleFunction
 import kotlin.math.max
+import kotlin.system.measureTimeMillis
 
 @Suppress("MemberVisibilityCanBePrivate")
 class DebeziumStreamlet(
@@ -29,6 +38,7 @@ class DebeziumStreamlet(
     private val idleTimeoutMs = streamConfig.idleTimeout.toMillis()
     private val commitBatchSize = streamConfig.commitBatchSize
     private val commitTimespanMs = streamConfig.commitTimespan.toMillis()
+    private var metrics: StreamletMetrics? = null
 
     @Volatile
     override var status = CREATED
@@ -57,8 +67,12 @@ class DebeziumStreamlet(
 
     private fun commit() {
         logger.info("Committing changes")
-        outlet.commit(offsets, lastRecordTimestamp)
-        inlet.commit(offsets)
+        val durationMs = measureTimeMillis {
+            outlet.commit(offsets, lastRecordTimestamp)
+            inlet.commit(offsets)
+        }
+        metrics?.mCommitDuration?.record(durationMs, TimeUnit.MILLISECONDS)
+        metrics?.mCommitCount?.increment()
     }
 
     override fun shouldRun(): Boolean {
@@ -128,6 +142,7 @@ class DebeziumStreamlet(
     override fun close() {
         inlet.close()
         outlet.close()
+        metrics?.close()
     }
 
     private inline fun <R> withMDC(block: () -> R): R {
@@ -146,5 +161,44 @@ class DebeziumStreamlet(
 
     override fun toString(): String {
         return "DebeziumStreamlet(${name})"
+    }
+
+    fun enableMetrics(registry: MeterRegistry, tags: Iterable<Tag>) {
+        metrics = StreamletMetrics(registry, tags)
+    }
+
+    @Suppress("SameParameterValue")
+    inner class StreamletMetrics(
+        private val registry: MeterRegistry,
+        private val tags: Iterable<Tag>
+    ) : Closeable {
+        val mStatus = registerGauge(
+            "streamlet.status",
+            this@DebeziumStreamlet
+        ) { it.status.ordinal.toDouble() }
+        val mLastRecordTimestamp = registerGauge(
+            "streamlet.record.last-timestamp",
+            this@DebeziumStreamlet
+        ) { it.lastRecordTimestamp.toDouble() }
+        val mCommitCount = registerCounter("streamlet.commit.count")
+        val mCommitDuration = registerTimer("streamlet.commit.duration")
+        val metrics = listOf(mStatus, mLastRecordTimestamp, mCommitCount, mCommitDuration)
+
+        private fun <T> registerGauge(name: String, obj: T, toDoubleFunction: ToDoubleFunction<T>): Gauge {
+            registry.gauge(name, tags, obj, toDoubleFunction)
+            return registry[name].gauge()
+        }
+
+        private fun registerCounter(name: String): Counter {
+            return registry.counter(name, tags)
+        }
+
+        private fun registerTimer(name: String): Timer {
+            return registry.timer(name, tags)
+        }
+
+        override fun close() {
+            metrics.forEach { it.close() }
+        }
     }
 }
