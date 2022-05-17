@@ -13,4 +13,6 @@
     <root level="INFO">
         <appender-ref ref="console"/>
     </root>
+
+    <logger name="org.apache.hadoop" level="WARN"/>
 </configuration>
