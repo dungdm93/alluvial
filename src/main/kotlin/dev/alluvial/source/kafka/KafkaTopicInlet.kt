@@ -1,6 +1,10 @@
 package dev.alluvial.source.kafka
 
 import dev.alluvial.api.Inlet
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Metrics
+import io.micrometer.core.instrument.Tag
+import io.micrometer.core.instrument.binder.kafka.KafkaClientMetrics
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
@@ -26,6 +30,7 @@ class KafkaTopicInlet(
     private val partitions: Set<TopicPartition>
     private val partitionQueues = mutableMapOf<Int, Queue<SinkRecord>>()
     private val heap = PriorityQueue(Comparator.comparing(SinkRecord::timestamp))
+    private var metrics: KafkaClientMetrics? = null
 
     init {
         partitions = consumer.partitionsFor(topic).map {
@@ -130,10 +135,15 @@ class KafkaTopicInlet(
         return lag
     }
 
+    fun enableMetrics(registry: MeterRegistry, tags: Iterable<Tag>) {
+        metrics = KafkaClientMetrics(consumer, tags).also { it.bindTo(registry) }
+    }
+
     override fun close() {
         consumer.close()
         partitionQueues.clear()
         heap.clear()
+        metrics?.close()
     }
 
     override fun toString(): String {

@@ -39,6 +39,8 @@ val hadoopVersion = "3.2.1"
 val hiveVersion = "3.1.3"
 val awsVersion = "2.17.186"
 val jacksonVersion = "2.12.3"
+val micrometerVersion = "1.8.5"
+val prometheusVersion = "0.15.0"
 
 val junitVersion = "5.8.2"
 val striktVersion = "0.33.0"
@@ -49,6 +51,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.6.0")
     api("org.slf4j:slf4j-api:$slf4jVersion")
     runtimeOnly("ch.qos.logback:logback-classic:$logbackVersion")
+    implementation("io.micrometer:micrometer-core:$micrometerVersion")
+    implementation("io.micrometer:micrometer-registry-prometheus:$micrometerVersion")
+    implementation("io.prometheus:simpleclient_httpserver:$prometheusVersion")
     implementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion")
