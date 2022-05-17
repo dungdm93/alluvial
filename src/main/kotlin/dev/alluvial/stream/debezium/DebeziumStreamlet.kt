@@ -132,7 +132,7 @@ class DebeziumStreamlet(
 
     private inline fun <R> withMDC(block: () -> R): R {
         try {
-            MDC.put("streamlet.id", name)
+            MDC.put("streamlet.name", name)
             return block()
         } catch (e: Exception) {
             close()

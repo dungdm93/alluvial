@@ -19,8 +19,8 @@ class DebeziumStreamletFactory(
         val outlet = sink.getOutlet(tableId) ?: createOutlet(topic, tableId)
         val schemaHandler = KafkaSchemaSchemaHandler(outlet)
 
-        val id = tableId.toString()
-        return DebeziumStreamlet(id, inlet, outlet, schemaHandler, streamConfig)
+        val name = tableId.toString()
+        return DebeziumStreamlet(name, inlet, outlet, schemaHandler, streamConfig)
     }
 
     private fun createOutlet(topic: String, tableId: TableIdentifier): IcebergTableOutlet {
