@@ -132,6 +132,8 @@ class KafkaTopicInlet(
 
     override fun close() {
         consumer.close()
+        partitionQueues.clear()
+        heap.clear()
     }
 
     override fun toString(): String {
