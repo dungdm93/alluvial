@@ -16,6 +16,7 @@ services:
     image: quay.io/debezium/kafka:1.8.1.Final
     environment:
       ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_NUM_PARTITIONS: 12
     depends_on:
       - zookeeper
     networks:
