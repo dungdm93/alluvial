@@ -24,6 +24,9 @@ services:
         ipv4_address: 10.5.0.3
     ports:
       - 9092:9092
+    healthcheck:
+      test:
+        [ "CMD", "kafka-topics.sh", "--list", "--zookeeper", "zookeeper:2181" ]
 
   schema-registry:
     image: confluentinc/cp-schema-registry:6.1.0

@@ -1,32 +1,24 @@
-package dev.alluvial.utils
+package dev.alluvial.metric.exporters
 
-import dev.alluvial.runtime.MetricConfig
-import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.config.validate.PropertyValidator.getBoolean
 import io.micrometer.core.instrument.config.validate.PropertyValidator.getString
 import io.micrometer.prometheus.PrometheusConfig
 import io.micrometer.prometheus.PrometheusMeterRegistry
 import io.prometheus.client.exporter.HTTPServer
-import java.io.Closeable
-import java.net.InetAddress
 import java.net.InetSocketAddress
 
-abstract class MetricExporter : Runnable, Closeable {
-    abstract val registry: MeterRegistry
-}
-
-class PrometheusMetricExporter(config: MetricConfig) : MetricExporter() {
-    private val exporterConfig = PrometheusMetricExporterConfig(config.properties)
+class PrometheusMetricExporter(config: Map<String, String>) : MetricExporter() {
+    private val exporterConfig = PrometheusMetricExporterConfig(config)
     override val registry = PrometheusMeterRegistry(exporterConfig)
     private var server: HTTPServer? = null
 
     override fun run() {
-        val inetAddress = InetAddress.getByName(exporterConfig.serverAddress())
+        val host = exporterConfig.serverHost()
         val port = exporterConfig.serverPort()
-        val inetSocketAddress = InetSocketAddress(inetAddress, port)
+        val address = InetSocketAddress(host, port)
         val daemon = exporterConfig.serverDaemon()
 
-        server = HTTPServer(inetSocketAddress, registry.prometheusRegistry, daemon)
+        server = HTTPServer(address, registry.prometheusRegistry, daemon)
     }
 
     override fun close() {
@@ -48,22 +40,12 @@ class PrometheusMetricExporter(config: MetricConfig) : MetricExporter() {
 
         fun serverPort(): Int {
             val bind = serverBind()
-            return bind.substring(bind.indexOf(":") + 1, bind.length).toInt()
+            return bind.substring(bind.indexOf(":") + 1).toInt()
         }
 
-        fun serverAddress(): String {
+        fun serverHost(): String {
             val bind = serverBind()
             return bind.substring(0, bind.indexOf(":"))
-        }
-    }
-}
-
-object MetricProviderFactory {
-    fun create(config: MetricConfig): MetricExporter {
-        return when (config.kind) {
-            "prometheus" -> PrometheusMetricExporter(config)
-            // Add new provider here (Elasticsearch, Datadog, etc)
-            else -> throw UnsupportedOperationException("Meter registry \"${config.kind}\" not supported")
         }
     }
 }

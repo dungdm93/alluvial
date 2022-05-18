@@ -6,8 +6,7 @@ import dev.alluvial.schema.debezium.KafkaSchemaSchemaHandler
 import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.sink.iceberg.IcebergTableOutlet
 import dev.alluvial.source.kafka.KafkaSource
-import io.micrometer.core.instrument.Metrics
-import io.micrometer.core.instrument.Tag
+import io.micrometer.core.instrument.MeterRegistry
 import org.apache.iceberg.catalog.TableIdentifier
 
 class DebeziumStreamletFactory(
@@ -15,22 +14,16 @@ class DebeziumStreamletFactory(
     private val sink: IcebergSink,
     private val tableCreator: TableCreator,
     private val streamConfig: StreamConfig,
+    private val registry: MeterRegistry,
 ) {
     fun createStreamlet(topic: String, tableId: TableIdentifier): DebeziumStreamlet {
-        val inlet = source.getInlet(topic)
+        val name = tableId.toString()
+
+        val inlet = source.getInlet(name, topic)
         val outlet = sink.getOutlet(tableId) ?: createOutlet(topic, tableId)
         val schemaHandler = KafkaSchemaSchemaHandler(outlet)
 
-        val name = tableId.toString()
-        val streamlet = DebeziumStreamlet(name, inlet, outlet, schemaHandler, streamConfig)
-
-        // Metrics
-        val registry = Metrics.globalRegistry
-        val tags = listOf(Tag.of("streamlet", name))
-        inlet.enableMetrics(registry, tags)
-        streamlet.enableMetrics(registry, tags)
-
-        return streamlet
+        return DebeziumStreamlet(name, inlet, outlet, schemaHandler, streamConfig, registry)
     }
 
     private fun createOutlet(topic: String, tableId: TableIdentifier): IcebergTableOutlet {

@@ -9,6 +9,7 @@ import dev.alluvial.runtime.TableCreationConfig
 import dev.alluvial.schema.debezium.KafkaSchemaTableCreator
 import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.source.kafka.KafkaSource
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.apache.iceberg.catalog.Namespace
 import org.apache.iceberg.catalog.TableIdentifier
 
@@ -34,14 +35,15 @@ val config = Config(
         tableCreation = TableCreationConfig(),
     ),
     stream = StreamConfig(kind = "debezium"),
-    metric = MetricConfig(kind = "prometheus"),
+    metric = MetricConfig(),
 )
 
 fun main() {
-    val source = KafkaSource(config.source)
+    val meterRegistry = SimpleMeterRegistry()
+    val source = KafkaSource(config.source, meterRegistry)
     val sink = IcebergSink(config.sink)
     val tableCreator = KafkaSchemaTableCreator(source, sink, config.sink.tableCreation)
-    val streamletFactory = DebeziumStreamletFactory(source, sink, tableCreator, config.stream)
+    val streamletFactory = DebeziumStreamletFactory(source, sink, tableCreator, config.stream, meterRegistry)
 
     val topic = "debezium.mysql.sakila.sakila.film"
     val tableId = TableIdentifier.of(Namespace.of("dvdrental"), "film")

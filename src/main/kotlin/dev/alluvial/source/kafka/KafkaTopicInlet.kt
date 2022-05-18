@@ -2,7 +2,7 @@ package dev.alluvial.source.kafka
 
 import dev.alluvial.api.Inlet
 import io.micrometer.core.instrument.MeterRegistry
-import io.micrometer.core.instrument.Tag
+import io.micrometer.core.instrument.Tags
 import io.micrometer.core.instrument.binder.kafka.KafkaClientMetrics
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -17,10 +17,12 @@ import java.util.Queue
 
 @Suppress("MemberVisibilityCanBePrivate")
 class KafkaTopicInlet(
+    val name: String,
     val topic: String,
     private val consumer: Consumer<ByteArray, ByteArray>,
     private val converter: KafkaConverter,
     private val pollTimeout: Duration,
+    registry: MeterRegistry,
 ) : Inlet {
     companion object {
         private val logger = LoggerFactory.getLogger(KafkaTopicInlet::class.java)
@@ -30,7 +32,8 @@ class KafkaTopicInlet(
     private val partitions: Set<TopicPartition>
     private val partitionQueues = mutableMapOf<Int, Queue<SinkRecord>>()
     private val heap = PriorityQueue(Comparator.comparing(SinkRecord::timestamp))
-    private var metrics: KafkaClientMetrics? = null
+    private val metrics = KafkaClientMetrics(consumer, Tags.of("inlet", name))
+        .also { it.bindTo(registry) }
 
     init {
         partitions = consumer.partitionsFor(topic).map {
@@ -162,15 +165,11 @@ class KafkaTopicInlet(
         return lag
     }
 
-    fun enableMetrics(registry: MeterRegistry, tags: Iterable<Tag>) {
-        metrics = KafkaClientMetrics(consumer, tags).also { it.bindTo(registry) }
-    }
-
     override fun close() {
         consumer.close()
         partitionQueues.clear()
         heap.clear()
-        metrics?.close()
+        metrics.close()
     }
 
     override fun toString(): String {

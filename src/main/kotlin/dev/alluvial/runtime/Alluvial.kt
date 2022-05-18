@@ -1,12 +1,14 @@
 package dev.alluvial.runtime
 
 import dev.alluvial.api.Streamlet.Status.*
+import dev.alluvial.metric.MetricService
 import dev.alluvial.schema.debezium.KafkaSchemaTableCreator
 import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.source.kafka.KafkaSource
 import dev.alluvial.stream.debezium.DebeziumStreamlet
 import dev.alluvial.stream.debezium.DebeziumStreamletFactory
 import dev.alluvial.utils.scheduleInterval
+import io.micrometer.core.instrument.Metrics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Runnable
 import kotlinx.coroutines.channels.Channel
@@ -26,6 +28,7 @@ class Alluvial : Runnable {
         private val logger = LoggerFactory.getLogger(Alluvial::class.java)
     }
 
+    private lateinit var metricService: MetricService
     private lateinit var source: KafkaSource
     private lateinit var sink: IcebergSink
     private lateinit var streamletFactory: DebeziumStreamletFactory
@@ -37,17 +40,26 @@ class Alluvial : Runnable {
         logger.warn("Shutdown Hook: closing streamlets")
         streamlets.values.forEach(DebeziumStreamlet::close)
         streamlets.clear()
+
+        logger.warn("Shutdown Hook: closing metrics")
+        metricService.close()
     }
 
     fun configure(config: Config) {
-        source = KafkaSource(config.source)
+        metricService = MetricService(Metrics.globalRegistry, config.metric)
+            .bindJvmMetrics()
+            .bindSystemMetrics()
+        val registry = metricService.registry
+
+        source = KafkaSource(config.source, registry)
         sink = IcebergSink(config.sink)
         val tableCreator = KafkaSchemaTableCreator(source, sink, config.sink.tableCreation)
-        streamletFactory = DebeziumStreamletFactory(source, sink, tableCreator, config.stream)
+        streamletFactory = DebeziumStreamletFactory(source, sink, tableCreator, config.stream, registry)
         examineInterval = config.stream.examineInterval
     }
 
     override fun run(): Unit = runBlocking {
+        metricService.run()
         Runtime.getRuntime().addShutdownHook(terminateStreamletsHook)
 
         val channel = Channel<String>()
