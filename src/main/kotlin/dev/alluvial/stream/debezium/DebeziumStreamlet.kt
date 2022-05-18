@@ -66,7 +66,7 @@ class DebeziumStreamlet(
     }
 
     private fun commit() {
-        logger.info("Committing changes")
+        logger.info("Committing changes {}", offsets)
         val durationMs = measureTimeMillis {
             outlet.commit(offsets, lastRecordTimestamp)
             inlet.commit(offsets)
