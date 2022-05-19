@@ -65,6 +65,9 @@ sink:
       payment:
         - column: last_update
           transform: hour
+      rental:
+        - column: rental_date
+          transform: day
       # Partitioned by multiple columns
       customer:
         - column: last_update
