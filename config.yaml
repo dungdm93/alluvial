@@ -94,12 +94,12 @@ stream:
   commitBatchSize: 1000
   commitTimespan: "10m"
 
-
 metric:
-  kind: prometheus
+  exporters:
+    - kind: prometheus
+      properties:
+        prometheus.bind: 0.0.0.0:9090
+        prometheus.daemon: true
   commonTags:
-    environment: local
-    service: sakila
-  properties:
-    prometheus.bind: 0.0.0.0:9090
-    prometheus.daemon: true
+    environment: "local"
+    service: "sakila"

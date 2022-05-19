@@ -2,16 +2,19 @@ package dev.alluvial.source.kafka
 
 import dev.alluvial.runtime.SourceConfig
 import dev.alluvial.source.kafka.naming.NamingAdjusterManager
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.binder.kafka.KafkaClientMetrics
 import org.apache.iceberg.catalog.TableIdentifier
-import org.apache.kafka.clients.admin.Admin
+import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.OffsetSpec
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
 import org.slf4j.LoggerFactory
+import java.io.Closeable
 
-class KafkaSource(sourceConfig: SourceConfig) {
+class KafkaSource(sourceConfig: SourceConfig, private val registry: MeterRegistry) : Closeable {
     companion object {
         private val logger = LoggerFactory.getLogger(KafkaSource::class.java)
         private val DEFAULT_CONFIG = mapOf(
@@ -27,9 +30,10 @@ class KafkaSource(sourceConfig: SourceConfig) {
     private val config = sourceConfig.config + DEFAULT_CONFIG
     private val topicPrefix = sourceConfig.topicPrefix.trimEnd('.') + "."
     private val pollTimeout = sourceConfig.pollTimeout
-    private val adminClient = Admin.create(config)
+    private val adminClient = AdminClient.create(config)
     private val converter = KafkaConverter(config)
     private val naming = NamingAdjusterManager(sourceConfig.namingAdjusters)
+    private val metrics = KafkaClientMetrics(adminClient).also { it.bindTo(registry) }
 
     fun availableTopics(): List<String> {
         val topics = adminClient.listTopics().names().get()
@@ -40,10 +44,10 @@ class KafkaSource(sourceConfig: SourceConfig) {
         }
     }
 
-    fun getInlet(topic: String): KafkaTopicInlet {
+    fun getInlet(name: String, topic: String): KafkaTopicInlet {
         val consumer = newConsumer<ByteArray, ByteArray>()
         val converter = getConverter()
-        return KafkaTopicInlet(topic, consumer, converter, pollTimeout)
+        return KafkaTopicInlet(name, topic, consumer, converter, pollTimeout, registry)
     }
 
     fun latestOffsets(topic: String): Map<Int, Long> {
@@ -85,5 +89,9 @@ class KafkaSource(sourceConfig: SourceConfig) {
         table = naming.adjustTable(ns, table)
 
         return TableIdentifier.of(*ns.toTypedArray(), table)
+    }
+
+    override fun close() {
+        metrics.close()
     }
 }

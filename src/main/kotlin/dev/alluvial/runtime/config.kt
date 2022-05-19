@@ -81,11 +81,16 @@ data class PartitionSpecConfig(
 }
 
 data class MetricConfig(
-    val kind: String,
+    val exporters: List<MetricExporterConfig> = emptyList(),
     val commonTags: Map<String, String> = emptyMap(),
+    // TODO: Support including/excluding meters by patterns
+)
+
+data class MetricExporterConfig(
+    val kind: String,
     val properties: Map<String, String> = emptyMap(),
 ) {
     init {
-        require(kind.isNotEmpty()) { "metric.kind cannot be empty" }
+        require(kind.isNotEmpty()) { "metric.exporters.kind cannot be empty" }
     }
 }
