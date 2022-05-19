@@ -36,7 +36,7 @@ class DebeziumStreamlet(
     private val idleTimeoutMs = streamConfig.idleTimeout.toMillis()
     private val commitBatchSize = streamConfig.commitBatchSize
     private val commitTimespanMs = streamConfig.commitTimespan.toMillis()
-    private val metrics = StreamletMetrics(registry)
+    private val metrics = Metrics(registry)
 
     @Volatile
     override var status = CREATED
@@ -160,8 +160,8 @@ class DebeziumStreamlet(
         return "DebeziumStreamlet(${name})"
     }
 
-    inner class StreamletMetrics(private val registry: MeterRegistry) : Closeable {
-        private var tags: Tags = Tags.of("streamlet", this@DebeziumStreamlet.name)
+    private inner class Metrics(private val registry: MeterRegistry) : Closeable {
+        private val tags: Tags = Tags.of("streamlet", this@DebeziumStreamlet.name)
 
         val status: Gauge = Gauge.builder("streamlet.status", this@DebeziumStreamlet) { it.status.ordinal.toDouble() }
             .tags(tags)
