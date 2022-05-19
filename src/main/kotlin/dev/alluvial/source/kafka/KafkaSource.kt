@@ -45,7 +45,8 @@ class KafkaSource(sourceConfig: SourceConfig, private val registry: MeterRegistr
     }
 
     fun getInlet(name: String, topic: String): KafkaTopicInlet {
-        val consumer = newConsumer<ByteArray, ByteArray>()
+        val overrideConfig = mapOf(ConsumerConfig.CLIENT_ID_CONFIG to name)
+        val consumer = newConsumer<ByteArray, ByteArray>(overrideConfig)
         val converter = getConverter()
         return KafkaTopicInlet(name, topic, consumer, converter, pollTimeout, registry)
     }

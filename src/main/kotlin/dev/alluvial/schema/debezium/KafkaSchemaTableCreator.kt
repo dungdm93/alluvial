@@ -13,6 +13,7 @@ import org.apache.iceberg.Table
 import org.apache.iceberg.TableProperties
 import org.apache.iceberg.catalog.TableIdentifier
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions
+import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.TopicPartition
@@ -35,7 +36,8 @@ class KafkaSchemaTableCreator(
     private val baseLocation = tableCreationConfig.baseLocation?.trimEnd('/')
 
     override fun createTable(topic: String, tableId: TableIdentifier): Table {
-        val consumer = source.newConsumer<ByteArray, ByteArray>()
+        val overrideConfig = mapOf(ConsumerConfig.CLIENT_ID_CONFIG to "${tableId}(creator)")
+        val consumer = source.newConsumer<ByteArray, ByteArray>(overrideConfig)
         val converter = source.getConverter()
 
         setupConsumer(consumer, topic)
