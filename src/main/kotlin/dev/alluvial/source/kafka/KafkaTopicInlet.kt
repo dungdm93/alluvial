@@ -1,6 +1,7 @@
 package dev.alluvial.source.kafka
 
 import dev.alluvial.api.Inlet
+import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tags
 import io.micrometer.core.instrument.binder.kafka.KafkaClientMetrics
@@ -10,6 +11,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.connect.sink.SinkRecord
 import org.slf4j.LoggerFactory
+import java.io.Closeable
 import java.time.Duration
 import java.util.ArrayDeque
 import java.util.PriorityQueue
@@ -32,8 +34,7 @@ class KafkaTopicInlet(
     private val partitions: Set<TopicPartition>
     private val partitionQueues = mutableMapOf<Int, Queue<SinkRecord>>()
     private val heap = PriorityQueue(Comparator.comparing(SinkRecord::timestamp))
-    private val metrics = KafkaClientMetrics(consumer, Tags.of("inlet", name))
-        .also { it.bindTo(registry) }
+    private val metrics = Metrics(registry)
 
     init {
         partitions = consumer.partitionsFor(topic).map {
@@ -162,6 +163,7 @@ class KafkaTopicInlet(
             val currentOffset = committedOffsets[tp.partition()] ?: 0L
             lag += endOffset - currentOffset
         }
+
         return lag
     }
 
@@ -174,5 +176,26 @@ class KafkaTopicInlet(
 
     override fun toString(): String {
         return "KafkaTopicInlet($topic)"
+    }
+
+    private inner class Metrics(private val registry: MeterRegistry) : Closeable {
+        private val tags = Tags.of("inlet", name)
+
+        val kafkaClientMetrics = KafkaClientMetrics(consumer, tags)
+            .also { it.bindTo(registry) }
+
+        val queueSize: Gauge = Gauge.builder(
+            "inlet.partition.queue.size",
+            this@KafkaTopicInlet.partitionQueues
+        ) { it.values.sumOf(Collection<*>::size).toDouble() }
+            .tags(tags)
+            .description("Total size of all inlet partition queues")
+            .register(registry)
+
+        override fun close() {
+            queueSize.close()
+            registry.remove(queueSize)
+            kafkaClientMetrics.close()
+        }
     }
 }
