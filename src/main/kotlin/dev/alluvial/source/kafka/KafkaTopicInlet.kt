@@ -2,10 +2,10 @@ package dev.alluvial.source.kafka
 
 import dev.alluvial.api.Inlet
 import io.micrometer.core.instrument.MeterRegistry
-import io.micrometer.core.instrument.Metrics
 import io.micrometer.core.instrument.Tag
 import io.micrometer.core.instrument.binder.kafka.KafkaClientMetrics
 import org.apache.kafka.clients.consumer.Consumer
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.connect.sink.SinkRecord
@@ -65,23 +65,48 @@ class KafkaTopicInlet(
     }
 
     private fun pullFromBrokers() {
-        var consumerRecords = consumer.poll(pollTimeout)
-        while (consumer.assignment().isEmpty() && consumerRecords.isEmpty) {
-            logger.info("Waiting for partitions assigned to the consumer")
-            consumerRecords = consumer.poll(pollTimeout)
+        // first time, poll from all partitions
+        consumer.resume(partitions)
+        val pausedPartitions = mutableSetOf<TopicPartition>()
+
+        do {
+            consumer.pause(pausedPartitions)
+
+            val consumerRecords = consumer.poll(pollTimeout)
+            logger.info(
+                "Polled {} records in {} partitions",
+                consumerRecords.count(), consumerRecords.partitions().size
+            )
+            if (consumerRecords.isEmpty) return // no more data
+
+            consumerRecords.partitions().forEach { tp ->
+                val records = consumerRecords.records(tp)
+                queueRecords(tp, records)
+            }
+
+            // consumer.poll(...) doesn't return data of all partitions
+            // So, next times, only poll from partitions which its queue is empty
+            partitions.filterTo(pausedPartitions) {
+                !partitionQueues[it.partition()].isNullOrEmpty()
+            }
+        } while (pausedPartitions.size < partitions.size)
+    }
+
+    private fun queueRecords(tp: TopicPartition, records: List<ConsumerRecord<ByteArray, ByteArray>>) {
+        if (records.isEmpty()) return
+
+        // add records to queue
+        val queue = partitionQueues.computeIfAbsent(tp.partition(), ::ArrayDeque)
+        val previousEmpty = queue.isEmpty()
+        records.forEach {
+            val record = converter.convert(it)
+            queue.add(record)
         }
 
-        consumerRecords.partitions().forEach { tp ->
-            val queue = partitionQueues.computeIfAbsent(tp.partition(), ::ArrayDeque)
-            val previousEmpty = queue.isEmpty()
-            consumerRecords.records(tp).forEach {
-                val record = converter.convert(it)
-                queue.add(record)
-            }
-            val record = queue.peek()
-            if (previousEmpty && record != null) {
-                heap.add(record)
-            }
+        // update heap
+        val headRecord = queue.peek()
+        if (previousEmpty && headRecord != null) {
+            heap.add(headRecord)
         }
     }
 
@@ -105,7 +130,9 @@ class KafkaTopicInlet(
             if (exception != null) {
                 logger.error("Error while commit offset", exception)
             } else {
-                val com = committedOffsets.map { (tp, oam) -> "${tp.partition()}:${oam.offset()}" }
+                val com = buildMap(committedOffsets.size) {
+                    committedOffsets.forEach { (tp, oam) -> put(tp.partition(), oam.offset()) }
+                }
                 logger.info("Committed offsets {}", com)
             }
         }
