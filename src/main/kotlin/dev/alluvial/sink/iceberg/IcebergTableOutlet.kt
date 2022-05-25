@@ -9,6 +9,7 @@ import dev.alluvial.sink.iceberg.type.KafkaSchema
 import org.apache.iceberg.io.TaskWriter
 import org.apache.kafka.connect.sink.SinkRecord
 import org.slf4j.LoggerFactory
+import java.lang.RuntimeException
 
 class IcebergTableOutlet(
     val table: IcebergTable,
@@ -29,7 +30,11 @@ class IcebergTableOutlet(
             logger.info("Create new TaskWriter")
             writer = writerFactory.create()
         }
-        writer!!.write(record)
+        try {
+            writer!!.write(record)
+        } catch (e: RuntimeException) {
+            throw RuntimeException("Error while writing record: $record", e)
+        }
     }
 
     fun commit(positions: Map<Int, Long>, lastRecordTimestamp: Long) {
