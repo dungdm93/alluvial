@@ -8,6 +8,7 @@ import org.apache.iceberg.parquet.ParquetValueReaders
 import org.apache.iceberg.parquet.ParquetValueReaders.PrimitiveReader
 import org.apache.iceberg.parquet.ParquetValueReaders.UnboxedReader
 import org.apache.parquet.column.ColumnDescriptor
+import org.apache.parquet.schema.GroupType
 import org.apache.parquet.schema.Type
 
 object KafkaParquetReaders {
@@ -51,15 +52,17 @@ object KafkaParquetReaders {
     fun struct(
         types: List<Type>,
         fieldReaders: List<ParquetValueReader<*>?>,
-        struct: KafkaSchema,
+        sStruct: KafkaSchema,
+        struct: GroupType,
     ): ParquetValueReader<*> {
-        return StructReader(types, fieldReaders, struct)
+        return StructReader(types, fieldReaders, sStruct, struct)
     }
 
     private class StructReader(
         types: List<Type>,
         readers: List<ParquetValueReader<*>?>,
         private val kafkaSchema: KafkaSchema,
+        private val parquetType: GroupType,
     ) : ParquetValueReaders.StructReader<KafkaStruct, KafkaStruct>(types, readers) {
         override fun newStructData(reuse: KafkaStruct?): KafkaStruct {
             return if (reuse is KafkaStruct)
@@ -70,13 +73,13 @@ object KafkaParquetReaders {
         override fun buildStruct(struct: KafkaStruct): KafkaStruct = struct
 
         override fun getField(intermediate: KafkaStruct, pos: Int): Any? {
-            val field = kafkaSchema.fields()[pos]
-            return intermediate.get(field)
+            val field = parquetType.fields[pos]
+            return intermediate.get(field.name)
         }
 
         override fun set(struct: KafkaStruct, pos: Int, value: Any?) {
-            val field = kafkaSchema.fields()[pos]
-            struct.put(field, value)
+            val field = parquetType.fields[pos]
+            struct.put(field.name, value)
         }
     }
 
