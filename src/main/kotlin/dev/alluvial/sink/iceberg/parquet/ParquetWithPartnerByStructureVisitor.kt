@@ -148,8 +148,9 @@ abstract class ParquetWithPartnerByStructureVisitor<P, T> {
             isStructType(sStruct),
             "Invalid struct: %s is not a struct", sStruct
         )
-        val fieldResults = struct.fields.mapIndexed { idx, field ->
-            val sNameAndType = fieldNameAndType(sStruct, idx)
+        val fieldResults = struct.fields.map { field ->
+            // Looks weird? Yeah, please refer issue DI-1076
+            val sNameAndType = fieldNameAndType(sStruct, field.name)
             Preconditions.checkArgument(
                 field.name == AvroSchemaUtil.makeCompatibleName(sNameAndType.first()),
                 "Structs do not match: field %s != %s", field.name, sNameAndType.first()
@@ -181,7 +182,7 @@ abstract class ParquetWithPartnerByStructureVisitor<P, T> {
     protected abstract fun mapValueType(mapType: P): P
 
     protected abstract fun isStructType(type: P): Boolean
-    protected abstract fun fieldNameAndType(structType: P, pos: Int): Pair<String, P>
+    protected abstract fun fieldNameAndType(structType: P, name: String): Pair<String, P>
 
     protected abstract fun nullType(): P?
 

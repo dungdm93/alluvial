@@ -27,8 +27,8 @@ abstract class ParquetWithKafkaSchemaVisitor<T> : ParquetWithPartnerByStructureV
 
     override fun isStructType(type: KafkaSchema): Boolean = type.type() == KafkaType.STRUCT
 
-    override fun fieldNameAndType(structType: KafkaSchema, pos: Int): Pair<String, KafkaSchema> {
-        val field = structType.fields()[pos]
+    override fun fieldNameAndType(structType: KafkaSchema, name: String): Pair<String, KafkaSchema> {
+        val field = structType.field(name)
         return Pair.of(field.name(), field.schema())
     }
 
