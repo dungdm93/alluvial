@@ -97,8 +97,8 @@ internal object KafkaRandomDataGenerator {
         override fun struct(struct: Types.StructType, fieldResults: Iterable<Any?>): KafkaStruct {
             val s = KafkaStruct(sourceSchema)
             fieldResults.forEachIndexed { idx, fieldResult ->
-                val field = sourceSchema!!.fields()[idx]
-                s.put(field, fieldResult)
+                val field = struct.field(idx)
+                s.put(field.name(), fieldResult)
             }
             return s
         }
