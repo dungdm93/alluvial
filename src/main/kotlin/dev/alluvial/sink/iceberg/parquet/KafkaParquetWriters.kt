@@ -1,6 +1,5 @@
 package dev.alluvial.sink.iceberg.parquet
 
-import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
 import dev.alluvial.utils.TimePrecision
 import dev.alluvial.utils.TimePrecision.MILLIS
@@ -8,10 +7,11 @@ import org.apache.iceberg.parquet.ParquetValueWriter
 import org.apache.iceberg.parquet.ParquetValueWriters
 import org.apache.parquet.column.ColumnDescriptor
 import org.apache.parquet.io.api.Binary
+import org.apache.parquet.schema.GroupType
 import java.nio.ByteBuffer
 
 object KafkaParquetWriters {
-    fun struct(writers: List<ParquetValueWriter<*>?>, schema: KafkaSchema): ParquetValueWriter<KafkaStruct> {
+    fun struct(writers: List<ParquetValueWriter<*>?>, schema: GroupType): ParquetValueWriter<KafkaStruct> {
         return StructWriter(writers, schema)
     }
 
@@ -19,11 +19,11 @@ object KafkaParquetWriters {
         return BytesWriter(desc)
     }
 
-    private class StructWriter(writers: List<ParquetValueWriter<*>?>, private val schema: KafkaSchema) :
+    private class StructWriter(writers: List<ParquetValueWriter<*>?>, private val schema: GroupType) :
         ParquetValueWriters.StructWriter<KafkaStruct>(writers) {
         override fun get(struct: KafkaStruct, index: Int): Any? {
-            val field = schema.fields()[index]
-            return struct.get(field)
+            val field = schema.fields[index]
+            return struct.get(field.name)
         }
     }
 

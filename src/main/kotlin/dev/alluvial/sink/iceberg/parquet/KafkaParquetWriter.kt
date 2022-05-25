@@ -34,7 +34,7 @@ object KafkaParquetWriter {
             val fieldWriters = fields.mapIndexed { idx, field ->
                 newOption(struct.getType(idx), field)
             }
-            return KafkaParquetWriters.struct(fieldWriters, sStruct)
+            return KafkaParquetWriters.struct(fieldWriters, struct)
         }
 
         override fun list(
