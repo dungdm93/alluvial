@@ -22,22 +22,30 @@ import org.apache.iceberg.parquet.Parquet
 import org.apache.kafka.connect.data.SchemaBuilder
 import org.junit.Test
 
-internal class KafkaParquetRWTest : DataTest() {
+internal open class KafkaParquetRWTest : DataTest() {
     override fun writeAndValidate(iSchema: IcebergSchema) {
-        val sSchema = iSchema.toKafkaSchema()
+        val sSchema = convert(iSchema)
         val expectedIcebergRecords = RandomGenericData.generate(iSchema, 100, 0L).toList()
-        val expectedKafkaStructs = RandomKafkaStruct.convert(iSchema, expectedIcebergRecords).toList()
+        val expectedKafkaStructs = RandomKafkaStruct.convert(iSchema, sSchema, expectedIcebergRecords).toList()
 
         validateKafkaReader(iSchema, sSchema, expectedIcebergRecords)
         validateKafkaWriter(iSchema, sSchema, expectedKafkaStructs)
     }
 
     private fun writeAndValidate(sSchema: KafkaSchema) {
-        val iSchema = sSchema.toIcebergSchema()
+        val iSchema = convert(sSchema)
         val expectedKafkaStructs = RandomKafkaStruct.generate(sSchema, 100, 5).toList()
 
         val expectedIcebergRecords = validateKafkaWriter(iSchema, sSchema, expectedKafkaStructs)
         validateKafkaReader(iSchema, sSchema, expectedIcebergRecords)
+    }
+
+    protected open fun convert(iSchema: IcebergSchema): KafkaSchema {
+        return iSchema.toKafkaSchema()
+    }
+
+    protected open fun convert(sSchema: KafkaSchema): IcebergSchema {
+        return sSchema.toIcebergSchema()
     }
 
     private fun validateKafkaReader(

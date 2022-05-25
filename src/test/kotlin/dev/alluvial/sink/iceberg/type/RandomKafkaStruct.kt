@@ -30,6 +30,10 @@ object RandomKafkaStruct {
 
     fun convert(iSchema: IcebergSchema, records: Iterable<IcebergRecord>): Iterable<KafkaStruct> {
         val sSchema = iSchema.toKafkaSchema()
+        return convert(iSchema, sSchema, records)
+    }
+
+    fun convert(iSchema: IcebergSchema, sSchema: KafkaSchema, records: Iterable<IcebergRecord>): Iterable<KafkaStruct> {
         val converter = KafkaStructConverter(sSchema)
         return records.map { converter.convert(iSchema, it) }
     }

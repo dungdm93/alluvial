@@ -41,7 +41,7 @@ object KafkaParquetReader {
                 val fieldReader = fields[idx]
                 newOption(fieldType, fieldReader)
             }
-            return KafkaParquetReaders.struct(struct.fields, fieldReaders, sStruct)
+            return KafkaParquetReaders.struct(struct.fields, fieldReaders, sStruct, struct)
         }
 
         override fun list(
