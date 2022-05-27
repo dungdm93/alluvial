@@ -15,4 +15,5 @@
     </root>
 
     <logger name="org.apache.hadoop" level="WARN"/>
+    <!--logger name="software.amazon.awssdk.request" level="DEBUG"/-->
 </configuration>
