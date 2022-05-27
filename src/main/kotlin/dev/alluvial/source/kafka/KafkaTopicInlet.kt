@@ -152,6 +152,7 @@ class KafkaTopicInlet(
         offsets.forEach { (partition, offset) ->
             consumer.seek(TopicPartition(topic, partition), offset)
         }
+        commit(offsets)
     }
 
     fun currentLag(): Long {
