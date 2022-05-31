@@ -41,7 +41,7 @@ val config = Config(
 fun main() {
     val meterRegistry = SimpleMeterRegistry()
     val source = KafkaSource(config.source, meterRegistry)
-    val sink = IcebergSink(config.sink)
+    val sink = IcebergSink(config.sink, meterRegistry)
     val tableCreator = KafkaSchemaTableCreator(source, sink, config.sink.tableCreation)
     val streamletFactory = DebeziumStreamletFactory(source, sink, tableCreator, config.stream, meterRegistry)
 
