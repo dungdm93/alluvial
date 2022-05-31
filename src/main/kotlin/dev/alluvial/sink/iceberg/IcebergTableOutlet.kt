@@ -6,13 +6,15 @@ import dev.alluvial.api.Outlet
 import dev.alluvial.sink.iceberg.io.AlluvialTaskWriterFactory
 import dev.alluvial.sink.iceberg.type.IcebergTable
 import dev.alluvial.sink.iceberg.type.KafkaSchema
+import io.micrometer.core.instrument.*
 import org.apache.iceberg.io.TaskWriter
 import org.apache.kafka.connect.sink.SinkRecord
 import org.slf4j.LoggerFactory
-import java.lang.RuntimeException
+import java.io.Closeable
 
 class IcebergTableOutlet(
     val table: IcebergTable,
+    registry: MeterRegistry,
 ) : Outlet {
     companion object {
         private val logger = LoggerFactory.getLogger(IcebergTableOutlet::class.java)
@@ -24,6 +26,7 @@ class IcebergTableOutlet(
 
     private val writerFactory = AlluvialTaskWriterFactory(table)
     private var writer: TaskWriter<SinkRecord>? = null
+    private val metrics = Metrics(registry)
 
     fun write(record: SinkRecord) {
         if (writer == null) {
@@ -38,7 +41,7 @@ class IcebergTableOutlet(
     }
 
     fun commit(positions: Map<Int, Long>, lastRecordTimestamp: Long) {
-        val result = writer!!.complete()
+        val result = metrics.recordCommitData(writer!!::complete)
         val rowDelta = table.newRowDelta()
 
         result.dataFiles().forEach(rowDelta::addRows)
@@ -49,7 +52,7 @@ class IcebergTableOutlet(
         rowDelta.set(ALLUVIAL_POSITION_PROP, mapper.writeValueAsString(positions))
         rowDelta.set(ALLUVIAL_LAST_RECORD_TIMESTAMP_PROP, lastRecordTimestamp.toString())
 
-        rowDelta.commit()
+        metrics.recordCommitMetadata(rowDelta::commit)
         writer = null
     }
 
@@ -99,5 +102,35 @@ class IcebergTableOutlet(
 
     override fun toString(): String {
         return "IcebergTableOutlet(${table})"
+    }
+
+    private inner class Metrics(private val registry: MeterRegistry) : Closeable {
+        private val tags = Tags.of("outlet", table.name())
+
+        private val commitDataDuration = LongTaskTimer.builder("alluvial.outlet.commit.data.duration")
+            .tags(tags)
+            .description("Outlet data write duration")
+            .register(registry)
+
+        private val commitMetadataDuration = LongTaskTimer.builder("alluvial.outlet.commit.metadata.duration")
+            .tags(tags)
+            .description("Outlet metadata write duration")
+            .register(registry)
+
+        val registeredMetrics = listOf(commitDataDuration, commitMetadataDuration)
+
+        fun <T> recordCommitData(block: () -> T): T {
+            return commitDataDuration.record(block)
+        }
+        fun <T> recordCommitMetadata(block: () -> T): T {
+            return commitMetadataDuration.record(block)
+        }
+
+        override fun close() {
+            registeredMetrics.forEach {
+                it.close()
+                registry.remove(it)
+            }
+        }
     }
 }

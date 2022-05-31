@@ -52,7 +52,7 @@ class Alluvial : Runnable {
         val registry = metricService.registry
 
         source = KafkaSource(config.source, registry)
-        sink = IcebergSink(config.sink)
+        sink = IcebergSink(config.sink, registry)
         val tableCreator = KafkaSchemaTableCreator(source, sink, config.sink.tableCreation)
         streamletFactory = DebeziumStreamletFactory(source, sink, tableCreator, config.stream, registry)
         examineInterval = config.stream.examineInterval

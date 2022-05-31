@@ -1,6 +1,7 @@
 package dev.alluvial.sink.iceberg
 
 import dev.alluvial.runtime.SinkConfig
+import io.micrometer.core.instrument.MeterRegistry
 import org.apache.hadoop.conf.Configuration
 import org.apache.iceberg.CachingCatalog
 import org.apache.iceberg.CatalogProperties.*
@@ -17,7 +18,7 @@ import org.apache.iceberg.exceptions.NoSuchTableException
 import org.apache.iceberg.util.PropertyUtil
 import org.slf4j.LoggerFactory
 
-class IcebergSink(sinkConfig: SinkConfig) {
+class IcebergSink(sinkConfig: SinkConfig, private val registry: MeterRegistry) {
     companion object {
         private val logger = LoggerFactory.getLogger(IcebergSink::class.java)
     }
@@ -46,7 +47,7 @@ class IcebergSink(sinkConfig: SinkConfig) {
     fun getOutlet(tableId: TableIdentifier): IcebergTableOutlet? {
         return try {
             val table = catalog.loadTable(tableId)
-            IcebergTableOutlet(table)
+            IcebergTableOutlet(table, registry)
         } catch (e: NoSuchTableException) {
             null
         }
