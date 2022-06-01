@@ -49,6 +49,7 @@ class Alluvial : Runnable {
         metricService = MetricService(Metrics.globalRegistry, config.metric)
             .bindJvmMetrics()
             .bindSystemMetrics()
+            .bindAwsClientMetrics()
         val registry = metricService.registry
 
         source = KafkaSource(config.source, registry)

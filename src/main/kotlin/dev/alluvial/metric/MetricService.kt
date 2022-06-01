@@ -1,8 +1,12 @@
 package dev.alluvial.metric
 
+import dev.alluvial.aws.metric.HttpClientMetricCollector
+import dev.alluvial.aws.metric.MicrometerMetricPublisher
+import dev.alluvial.aws.metric.ServiceClientMetricCollector
 import dev.alluvial.metric.exporters.MetricExporter
 import dev.alluvial.runtime.MetricConfig
 import io.micrometer.core.instrument.Tag
+import io.micrometer.core.instrument.Tags
 import io.micrometer.core.instrument.binder.jvm.JvmGcMetrics
 import io.micrometer.core.instrument.binder.jvm.JvmHeapPressureMetrics
 import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics
@@ -37,6 +41,15 @@ class MetricService(
     fun bindSystemMetrics(): MetricService = this.also {
         ProcessorMetrics().bindTo(registry)
         FileDescriptorMetrics().bindTo(registry)
+    }
+
+    fun bindAwsClientMetrics(): MetricService = this.also {
+        MicrometerMetricPublisher.registerCollector(
+            ServiceClientMetricCollector("S3", registry, Tags.empty())
+        )
+        MicrometerMetricPublisher.registerCollector(
+            HttpClientMetricCollector(registry, Tags.empty())
+        )
     }
 
     override fun run() {

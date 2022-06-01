@@ -1,9 +1,11 @@
 package org.apache.iceberg.aws;
 
+import dev.alluvial.aws.metric.MicrometerMetricPublisher;
 import org.apache.iceberg.aws.AwsClientFactories.DefaultAwsClientFactory;
 import org.apache.iceberg.util.PropertyUtil;
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
+import software.amazon.awssdk.metrics.MetricPublisher;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.glue.GlueClient;
 import software.amazon.awssdk.services.kms.KmsClient;
@@ -29,6 +31,7 @@ public class AlluvialAwsClientFactory implements AwsClientFactory {
     private String s3SecretAccessKey;
     private String s3SessionToken;
     private Boolean s3PathStyleAccess;
+    private MetricPublisher metricPublisher;
 
     @Override
     public S3Client s3() {
@@ -39,6 +42,7 @@ public class AlluvialAwsClientFactory implements AwsClientFactory {
         return S3Client.builder()
             .httpClient(HTTP_CLIENT_DEFAULT)
             .serviceConfiguration(config)
+            .overrideConfiguration(o -> o.addMetricPublisher(metricPublisher))
             .applyMutation(builder -> configureEndpoint(builder, s3Endpoint))
             .credentialsProvider(credentialsProvider(s3AccessKeyId, s3SecretAccessKey, s3SessionToken))
             .build();
@@ -72,6 +76,7 @@ public class AlluvialAwsClientFactory implements AwsClientFactory {
         );
 
         defaultAwsClientFactory.initialize(properties);
+        metricPublisher = MicrometerMetricPublisher.getInstance();
     }
 
     public static void configurePathStyle(S3Configuration.Builder builder, Boolean pathStyleAccess) {
