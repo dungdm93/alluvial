@@ -2,6 +2,8 @@ package dev.alluvial.sink.iceberg.io
 
 import dev.alluvial.backport.iceberg.io.PartitioningWriterFactory
 import dev.alluvial.sink.iceberg.type.KafkaSchema
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Tags
 import org.apache.iceberg.FileFormat
 import org.apache.iceberg.Table
 import org.apache.iceberg.TableProperties.*
@@ -13,7 +15,11 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
-class AlluvialTaskWriterFactory(private val table: Table) {
+class AlluvialTaskWriterFactory(
+    private val table: Table,
+    private val registry: MeterRegistry,
+    private val tags: Tags
+) {
     companion object {
         private val PARTITION_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneOffset.UTC)
         private val TASK_FORMATTER = DateTimeFormatter.ofPattern("HHmmss").withZone(ZoneOffset.UTC)
@@ -77,7 +83,9 @@ class AlluvialTaskWriterFactory(private val table: Table) {
             partitioner,
             dataKafkaSchema!!,
             table.schema(),
-            table.schema().identifierFieldIds()
+            table.schema().identifierFieldIds(),
+            registry,
+            tags
         )
     }
 }
