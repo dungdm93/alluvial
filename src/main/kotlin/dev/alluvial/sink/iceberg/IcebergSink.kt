@@ -44,10 +44,12 @@ class IcebergSink(sinkConfig: SinkConfig, private val registry: MeterRegistry) {
             catalog
     }
 
-    fun getOutlet(tableId: TableIdentifier): IcebergTableOutlet? {
+    fun getOutlet(name: String, tableId: TableIdentifier): IcebergTableOutlet? {
         return try {
             val table = catalog.loadTable(tableId)
-            IcebergTableOutlet(tableId.toString(), table, registry)
+
+            logger.info("Creating new outlet {}", name)
+            IcebergTableOutlet(name, table, registry)
         } catch (e: NoSuchTableException) {
             null
         }
@@ -64,11 +66,17 @@ class IcebergSink(sinkConfig: SinkConfig, private val registry: MeterRegistry) {
     private fun ensureNamespace(ns: Namespace) {
         if (supportsNamespaces == null) return
         if (supportsNamespaces.namespaceExists(ns)) return
+
+        logger.info("Creating namespace {}", ns)
         supportsNamespaces.createNamespace(ns)
     }
 
     fun committedOffsets(tableId: TableIdentifier): Map<Int, Long> {
-        val outlet = getOutlet(tableId)
-        return outlet?.committedOffsets() ?: emptyMap()
+        return try {
+            val table = catalog.loadTable(tableId)
+            return table.committedOffsets()
+        } catch (e: NoSuchTableException) {
+            emptyMap()
+        }
     }
 }

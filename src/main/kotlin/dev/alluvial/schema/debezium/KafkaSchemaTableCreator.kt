@@ -19,6 +19,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.connect.data.Schema.Type.STRUCT
 import org.apache.kafka.connect.sink.SinkRecord
+import org.slf4j.LoggerFactory
 import java.time.Duration
 
 class KafkaSchemaTableCreator(
@@ -27,6 +28,7 @@ class KafkaSchemaTableCreator(
     tableCreationConfig: TableCreationConfig,
 ) : TableCreator {
     companion object {
+        private val logger = LoggerFactory.getLogger(KafkaSchemaTableCreator::class.java)
         const val TABLE_FORMAT_VERSION = "2"
         private val pollTimeout: Duration = Duration.ofSeconds(1)
     }
@@ -73,18 +75,27 @@ class KafkaSchemaTableCreator(
         val iSchema = icebergSchemaFrom(record)
 
         return sink.buildTable(tableId, iSchema) { builder ->
+            logger.info("Creating table {}", tableId)
+            logger.info("Schema:\n{}", iSchema)
+
             builder.withProperty(TableProperties.FORMAT_VERSION, TABLE_FORMAT_VERSION)
+            logger.info("formatVersion: {}", TABLE_FORMAT_VERSION)
 
             builder.withProperties(properties)
+            logger.info("properties: {}", properties)
+
             if (baseLocation != null) {
                 val nsPath = tableId.namespace().levels().joinToString("/")
-                builder.withLocation("${baseLocation}/${nsPath}/${tableId.name()}")
+                val location = "${baseLocation}/${nsPath}/${tableId.name()}"
+                builder.withLocation(location)
+                logger.info("location: {}", location)
             }
 
             val partitionConfigs = partitionSpec[tableId.name()]
             if (!partitionConfigs.isNullOrEmpty()) {
-                val partitionSpec = buildPartitionSpec(iSchema, partitionConfigs)
-                builder.withPartitionSpec(partitionSpec)
+                val spec = buildPartitionSpec(iSchema, partitionConfigs)
+                builder.withPartitionSpec(spec)
+                logger.info("partitionSpec: {}", spec)
             }
         }
     }
