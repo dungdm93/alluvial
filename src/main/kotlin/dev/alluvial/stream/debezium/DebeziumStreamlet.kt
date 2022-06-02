@@ -6,6 +6,7 @@ import dev.alluvial.api.Streamlet.Status.*
 import dev.alluvial.runtime.StreamConfig
 import dev.alluvial.sink.iceberg.IcebergTableOutlet
 import dev.alluvial.source.kafka.KafkaTopicInlet
+import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.LongTaskTimer
 import io.micrometer.core.instrument.MeterRegistry
@@ -97,6 +98,7 @@ class DebeziumStreamlet(
                 count = 0 // reset counter
                 firstNonNull = false
                 schemaHandler.migrateSchema(record)
+                metrics.incrementSchemaMigration()
                 continue
             }
             if (!firstNonNull && record.value() != null) {
@@ -182,10 +184,19 @@ class DebeziumStreamlet(
             .description("Streamlet commit duration")
             .register(registry)
 
-        val registeredMetrics = listOf(status, lastRecordTimestamp, commitDuration)
+        private val schemaMigration = Counter.builder("alluvial.streamlet.schema.migration")
+            .tags(tags)
+            .description("Streamlet schema migration count")
+            .register(registry)
+
+        private val registeredMetrics = listOf(status, lastRecordTimestamp, commitDuration, schemaMigration)
 
         fun <T> recordCommit(block: () -> T): T {
             return commitDuration.record(block)
+        }
+
+        fun incrementSchemaMigration() {
+            schemaMigration.increment()
         }
 
         override fun close() {
