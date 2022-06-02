@@ -6,11 +6,10 @@ import dev.alluvial.api.Streamlet.Status.*
 import dev.alluvial.runtime.StreamConfig
 import dev.alluvial.sink.iceberg.IcebergTableOutlet
 import dev.alluvial.source.kafka.KafkaTopicInlet
-import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.Gauge
+import io.micrometer.core.instrument.LongTaskTimer
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tags
-import io.micrometer.core.instrument.Timer
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import java.io.Closeable
@@ -65,11 +64,10 @@ class DebeziumStreamlet(
 
     private fun commit() {
         logger.info("Committing changes {}", offsets)
-        metrics.commitDuration.record {
+        metrics.recordCommit {
             outlet.commit(offsets, lastRecordTimestamp)
             inlet.commit(offsets)
         }
-        metrics.commitCount.increment()
     }
 
     override fun shouldRun(): Boolean {
@@ -163,30 +161,30 @@ class DebeziumStreamlet(
     private inner class Metrics(private val registry: MeterRegistry) : Closeable {
         private val tags: Tags = Tags.of("streamlet", this@DebeziumStreamlet.name)
 
-        val status: Gauge = Gauge.builder("streamlet.status", this@DebeziumStreamlet) { it.status.ordinal.toDouble() }
+        private val status = Gauge.builder(
+            "alluvial.streamlet.status", this@DebeziumStreamlet
+        ) { it.status.ordinal.toDouble() }
             .tags(tags)
             .description("Streamlet status")
             .register(registry)
 
-        val lastRecordTimestamp: Gauge = Gauge.builder(
-            "streamlet.record.last-timestamp",
-            this@DebeziumStreamlet
+        private val lastRecordTimestamp = Gauge.builder(
+            "alluvial.streamlet.record.last-timestamp", this@DebeziumStreamlet
         ) { it.lastRecordTimestamp.toDouble() }
             .tags(tags)
             .description("Streamlet last record timestamp")
             .register(registry)
 
-        val commitCount: Counter = Counter.builder("streamlet.commit.count")
-            .tags(tags)
-            .description("Streamlet commit count")
-            .register(registry)
-
-        val commitDuration: Timer = Timer.builder("streamlet.commit.duration")
+        private val commitDuration = LongTaskTimer.builder("alluvial.streamlet.commit.duration")
             .tags(tags)
             .description("Streamlet commit duration")
             .register(registry)
 
-        val registeredMetrics = listOf(status, lastRecordTimestamp, commitCount, commitDuration)
+        val registeredMetrics = listOf(status, lastRecordTimestamp, commitDuration)
+
+        fun <T> recordCommit(block: () -> T): T {
+            return commitDuration.record(block)
+        }
 
         override fun close() {
             registeredMetrics.forEach {
