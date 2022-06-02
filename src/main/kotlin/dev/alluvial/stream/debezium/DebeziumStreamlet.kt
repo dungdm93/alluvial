@@ -65,8 +65,10 @@ class DebeziumStreamlet(
     private fun commit() {
         logger.info("Committing changes {}", offsets)
         metrics.recordCommit {
+            status = COMMITTING
             outlet.commit(offsets, lastRecordTimestamp)
             inlet.commit(offsets)
+            status = RUNNING
         }
     }
 
