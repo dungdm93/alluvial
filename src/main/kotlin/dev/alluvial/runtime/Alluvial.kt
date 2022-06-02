@@ -99,7 +99,8 @@ class Alluvial : Runnable {
         val streamlet = streamlets[topic]!!
         when (streamlet.status) {
             CREATED -> logger.warn("Streamlet {} is still in CREATED state, something may be wrong!!!", streamlet.name)
-            RUNNING -> logger.info("Streamlet {} is RUNNING", streamlet.name)
+            RUNNING,
+            COMMITTING -> logger.info("Streamlet {} is {}", streamlet.name, streamlet.status)
             SUSPENDED -> {
                 if (streamlet.canTerminate()) {
                     logger.info("Close streamlet {}: No more message for awhile", streamlet.name)

@@ -4,7 +4,7 @@ import java.io.Closeable
 
 interface Streamlet : Closeable {
     enum class Status {
-        CREATED, RUNNING, SUSPENDED, FAILED
+        CREATED, RUNNING, COMMITTING, SUSPENDED, FAILED
     }
 
     val name: String
