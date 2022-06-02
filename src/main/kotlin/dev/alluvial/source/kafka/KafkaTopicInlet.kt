@@ -182,12 +182,11 @@ class KafkaTopicInlet(
     private inner class Metrics(private val registry: MeterRegistry) : Closeable {
         private val tags = Tags.of("inlet", name)
 
-        val kafkaClientMetrics = KafkaClientMetrics(consumer, tags)
+        private val kafkaClientMetrics = KafkaClientMetrics(consumer, tags)
             .also { it.bindTo(registry) }
 
-        val queueSize: Gauge = Gauge.builder(
-            "inlet.partition.queue.size",
-            this@KafkaTopicInlet.partitionQueues
+        private val queueSize = Gauge.builder(
+            "alluvial.inlet.partition.queue.size", this@KafkaTopicInlet.partitionQueues
         ) { it.values.sumOf(Collection<*>::size).toDouble() }
             .tags(tags)
             .description("Total size of all inlet partition queues")

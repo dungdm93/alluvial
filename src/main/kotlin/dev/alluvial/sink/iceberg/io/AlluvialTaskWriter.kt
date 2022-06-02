@@ -6,8 +6,8 @@ import dev.alluvial.backport.iceberg.io.StructCopy
 import dev.alluvial.sink.iceberg.type.IcebergSchema
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
-import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tags
 import org.apache.iceberg.ContentFile
 import org.apache.iceberg.PartitionKey
@@ -74,7 +74,7 @@ class AlluvialTaskWriter(
             "d" -> delete(before)
             else -> {} // ignore
         }
-        metrics.increaseRecordTypeCount(operation)
+        metrics.increaseRecordCount(operation)
     }
 
     private fun internalPosDelete(key: StructLike, partition: StructLike?): Boolean {
@@ -179,8 +179,7 @@ class AlluvialTaskWriter(
         private val registry: MeterRegistry,
         private val tags: Tags
     ) : Closeable {
-
-        val opCounters = mapOf(
+        private val opCounters = mapOf(
             "c" to Counter.builder("alluvial.task.writer.record.type")
                 .tags(tags.and("op", "create"))
                 .description("Total create events")
@@ -202,8 +201,8 @@ class AlluvialTaskWriter(
                 .register(registry)
         )
 
-        fun increaseRecordTypeCount(typeName: String) {
-            opCounters[typeName]?.increment()
+        fun increaseRecordCount(op: String) {
+            opCounters[op]?.increment()
         }
 
         override fun close() {
