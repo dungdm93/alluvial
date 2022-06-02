@@ -3,6 +3,8 @@ package dev.alluvial.sink.iceberg.io
 import dev.alluvial.backport.iceberg.io.PartitioningWriterFactory
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
+import io.micrometer.core.instrument.Tags
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.apache.iceberg.FileFormat
 import org.apache.iceberg.PartitionSpec
 import org.apache.iceberg.TableProperties
@@ -235,7 +237,9 @@ internal class TestAlluvialTaskWriter : TableTestBase(TABLE_VERSION) {
             partitioner,
             kafkaSchema,
             table.schema(),
-            equalityFieldIds.toSet()
+            equalityFieldIds.toSet(),
+            SimpleMeterRegistry(),
+            Tags.of("outlet", table.name())
         )
     }
 

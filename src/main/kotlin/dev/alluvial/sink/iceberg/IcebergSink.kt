@@ -47,7 +47,7 @@ class IcebergSink(sinkConfig: SinkConfig, private val registry: MeterRegistry) {
     fun getOutlet(tableId: TableIdentifier): IcebergTableOutlet? {
         return try {
             val table = catalog.loadTable(tableId)
-            IcebergTableOutlet(table, registry)
+            IcebergTableOutlet(tableId.toString(), table, registry)
         } catch (e: NoSuchTableException) {
             null
         }
