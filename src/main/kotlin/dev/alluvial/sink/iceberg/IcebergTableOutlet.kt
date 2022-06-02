@@ -1,18 +1,19 @@
 package dev.alluvial.sink.iceberg
 
-import com.fasterxml.jackson.core.type.TypeReference
-import com.fasterxml.jackson.databind.json.JsonMapper
 import dev.alluvial.api.Outlet
 import dev.alluvial.sink.iceberg.io.AlluvialTaskWriterFactory
 import dev.alluvial.sink.iceberg.type.IcebergTable
 import dev.alluvial.sink.iceberg.type.KafkaSchema
-import io.micrometer.core.instrument.*
+import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.LongTaskTimer
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Tags
+import io.micrometer.core.instrument.Timer
 import org.apache.iceberg.io.TaskWriter
 import org.apache.kafka.connect.sink.SinkRecord
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.time.Clock
-import java.time.Duration
 import java.util.concurrent.TimeUnit
 
 class IcebergTableOutlet(
@@ -22,10 +23,6 @@ class IcebergTableOutlet(
 ) : Outlet {
     companion object {
         private val logger = LoggerFactory.getLogger(IcebergTableOutlet::class.java)
-        private val mapper = JsonMapper()
-        private val typeRef = object : TypeReference<Map<Int, Long>>() {}
-        private const val ALLUVIAL_POSITION_PROP = "alluvial.position"
-        private const val ALLUVIAL_LAST_RECORD_TIMESTAMP_PROP = "alluvial.last-record.timestamp"
     }
 
     private val metrics = Metrics(registry)
@@ -75,11 +72,7 @@ class IcebergTableOutlet(
      * if outlet doesn't have any snapshot.
      */
     fun committedOffsets(): Map<Int, Long> {
-        val serialized = table.currentSnapshot()
-            ?.summary()
-            ?.get(ALLUVIAL_POSITION_PROP)
-            ?: return emptyMap()
-        return mapper.readValue(serialized, typeRef)
+        return table.committedOffsets()
     }
 
     /**
@@ -117,12 +110,12 @@ class IcebergTableOutlet(
 
         private val commitDataDuration = LongTaskTimer.builder("alluvial.outlet.commit.data.duration")
             .tags(tags)
-            .description("Outlet data write duration")
+            .description("Outlet commit data duration")
             .register(registry)
 
         private val commitMetadataDuration = LongTaskTimer.builder("alluvial.outlet.commit.metadata.duration")
             .tags(tags)
-            .description("Outlet metadata write duration")
+            .description("Outlet commit metadata duration")
             .register(registry)
 
         private val recordWriteLag = Timer.builder("alluvial.outlet.write.record.lag")
