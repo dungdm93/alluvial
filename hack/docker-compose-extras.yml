@@ -63,12 +63,12 @@ services:
       - minio_data:/data
 
   jupyter:
-    image: hub.teko.vn/dataops/jupyter/pyspark-notebook:3.2.0
+    image: hub.teko.vn/dataops/jupyter/pyspark-notebook:3.2.1
     command: [ start-notebook.sh, --NotebookApp.token='' ]
     environment:
       GRANT_SUDO: "yes"
       JUPYTER_ENABLE_LAB: "yes"
-      HADOOP_OPTIONAL_TOOLS: hadoop-aws
+      HADOOP_OPTIONAL_TOOLS: hadoop-aws,hadoop-iceberg-aws
       AWS_REGION: aws-global
     user: root
     networks:
@@ -78,7 +78,7 @@ services:
       - 8888:8888
       - 4040:4040 # spark app
     volumes:
-      - ./spark/:/opt/spark/conf/
+      - ./spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
 
   trino:
     image: trinodb/trino:380
