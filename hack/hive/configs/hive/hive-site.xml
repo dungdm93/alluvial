@@ -59,4 +59,14 @@
     <name>hive.users.in.admin.role</name>
     <value>root</value>
   </property>
+
+  <property>
+    <name>hive.compactor.initiator.on</name>
+    <value>true</value>
+  </property>
+
+  <property>
+    <name>hive.compactor.worker.threads</name>
+    <value>1</value>
+  </property>
 </configuration>
