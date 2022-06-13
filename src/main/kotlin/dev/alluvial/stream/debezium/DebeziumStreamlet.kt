@@ -165,13 +165,6 @@ class DebeziumStreamlet(
     private inner class Metrics(private val registry: MeterRegistry) : Closeable {
         private val tags: Tags = Tags.of("streamlet", this@DebeziumStreamlet.name)
 
-        private val status = Gauge.builder(
-            "alluvial.streamlet.status", this@DebeziumStreamlet
-        ) { it.status.ordinal.toDouble() }
-            .tags(tags)
-            .description("Streamlet status")
-            .register(registry)
-
         private val lastRecordTimestamp = Gauge.builder(
             "alluvial.streamlet.record.last-timestamp", this@DebeziumStreamlet
         ) { it.lastRecordTimestamp.toDouble() }
@@ -189,7 +182,7 @@ class DebeziumStreamlet(
             .description("Streamlet schema migration count")
             .register(registry)
 
-        private val registeredMetrics = listOf(status, lastRecordTimestamp, commitDuration, schemaMigration)
+        private val registeredMetrics = listOf(lastRecordTimestamp, commitDuration, schemaMigration)
 
         fun <T> recordCommit(block: () -> T): T {
             return commitDuration.record(block)

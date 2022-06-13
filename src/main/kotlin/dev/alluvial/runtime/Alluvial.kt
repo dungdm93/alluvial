@@ -8,6 +8,8 @@ import dev.alluvial.source.kafka.KafkaSource
 import dev.alluvial.stream.debezium.DebeziumStreamlet
 import dev.alluvial.stream.debezium.DebeziumStreamletFactory
 import dev.alluvial.utils.scheduleInterval
+import io.micrometer.core.instrument.Gauge
+import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Metrics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Runnable
@@ -18,6 +20,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.supervisorScope
 import org.apache.iceberg.catalog.TableIdentifier
 import org.slf4j.LoggerFactory
+import java.io.Closeable
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
@@ -26,6 +29,7 @@ import kotlin.concurrent.thread
 class Alluvial : Runnable {
     companion object {
         private val logger = LoggerFactory.getLogger(Alluvial::class.java)
+        private val registry = Metrics.globalRegistry
     }
 
     private lateinit var metricService: MetricService
@@ -35,6 +39,7 @@ class Alluvial : Runnable {
     private lateinit var examineInterval: Duration
     private val streamlets: ConcurrentMap<String, DebeziumStreamlet> = ConcurrentHashMap()
     private val topic2Table = mutableMapOf<String, TableIdentifier>()
+    private val metrics = AppMetrics(registry)
 
     private val terminateStreamletsHook = thread(start = false, name = "terminator") {
         logger.warn("Shutdown Hook: closing streamlets")
@@ -42,11 +47,12 @@ class Alluvial : Runnable {
         streamlets.clear()
 
         logger.warn("Shutdown Hook: closing metrics")
+        metrics.close()
         metricService.close()
     }
 
     fun configure(config: Config) {
-        metricService = MetricService(Metrics.globalRegistry, config.metric)
+        metricService = MetricService(registry, config.metric)
             .bindJvmMetrics()
             .bindSystemMetrics()
             .bindAwsClientMetrics()
@@ -83,6 +89,7 @@ class Alluvial : Runnable {
     private suspend fun examineStreamlets(channel: SendChannel<String>) {
         logger.info("Start examine streamlets")
         val topics = source.availableTopics()
+        metrics.availableTopicsCount = topics.size
 
         logger.info("Found {} topics available", topics.size)
         for (topic in topics) {
@@ -133,6 +140,37 @@ class Alluvial : Runnable {
         return streamlets.computeIfAbsent(topic) {
             logger.info("create new stream {}", it)
             streamletFactory.createStreamlet(topic, tableId)
+                .also { metrics::registerStreamlet }
+        }
+    }
+
+    private inner class AppMetrics(private val registry: MeterRegistry) : Closeable {
+        var availableTopicsCount = 0
+        private val streamletStatuses: ConcurrentMap<String, Gauge> = ConcurrentHashMap()
+        private val availTopicGauge = Gauge.builder("alluvial.topic.available", this) {
+            it.availableTopicsCount.toDouble()
+        }.register(registry)
+
+
+        fun registerStreamlet(streamlet: DebeziumStreamlet) {
+            streamletStatuses.computeIfAbsent(streamlet.name) {
+                Gauge.builder(
+                    "alluvial.streamlet.status",
+                    streamlet
+                ) { it.status.ordinal.toDouble() }
+                    .tags("streamlet", streamlet.name)
+                    .register(registry)
+            }
+        }
+
+        override fun close() {
+            availTopicGauge.close()
+            registry.remove(availTopicGauge)
+            streamletStatuses.values.forEach {
+                it.close()
+                registry.remove(it)
+            }
+            streamletStatuses.clear()
         }
     }
 }
