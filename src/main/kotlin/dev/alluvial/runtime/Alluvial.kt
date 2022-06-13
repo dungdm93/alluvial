@@ -140,7 +140,7 @@ class Alluvial : Runnable {
         return streamlets.computeIfAbsent(topic) {
             logger.info("create new stream {}", it)
             streamletFactory.createStreamlet(topic, tableId)
-                .also { metrics::registerStreamlet }
+                .also(metrics::registerStreamlet)
         }
     }
 
