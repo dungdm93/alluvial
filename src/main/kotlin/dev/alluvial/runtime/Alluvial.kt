@@ -113,6 +113,7 @@ class Alluvial : Runnable {
                     logger.info("Close streamlet {}: No more message for awhile", streamlet.name)
                     streamlet.close()
                     streamlets.remove(topic)
+                        ?.also(metrics::unregisterStreamlet)
                 } else if (streamlet.shouldRun()) {
                     channel.send(topic)
                 } else {
@@ -145,30 +146,33 @@ class Alluvial : Runnable {
     }
 
     private inner class AppMetrics(private val registry: MeterRegistry) : Closeable {
-        var availableTopicsCount = 0
-        private val streamletStatuses: ConcurrentMap<String, Gauge> = ConcurrentHashMap()
-        private val availTopicGauge = Gauge.builder("alluvial.topic.available", this) {
+        private val streamletStatuses = ConcurrentHashMap<String, Gauge>()
+        private val availableTopics = Gauge.builder("alluvial.topic.available", this) {
             it.availableTopicsCount.toDouble()
         }.register(registry)
 
+        var availableTopicsCount = 0
 
         fun registerStreamlet(streamlet: DebeziumStreamlet) {
             streamletStatuses.computeIfAbsent(streamlet.name) {
-                Gauge.builder(
-                    "alluvial.streamlet.status",
-                    streamlet
-                ) { it.status.ordinal.toDouble() }
+                Gauge.builder("alluvial.streamlet.status", streamlet) { it.status.ordinal.toDouble() }
                     .tags("streamlet", streamlet.name)
                     .register(registry)
             }
         }
 
+        fun unregisterStreamlet(streamlet: DebeziumStreamlet) {
+            streamletStatuses.remove(streamlet.name)
+                ?.close()
+        }
+
         override fun close() {
-            availTopicGauge.close()
-            registry.remove(availTopicGauge)
-            streamletStatuses.values.forEach {
-                it.close()
-                registry.remove(it)
+            availableTopics.close()
+            registry.remove(availableTopics)
+
+            streamletStatuses.forEach { (_, meter) ->
+                meter.close()
+                registry.remove(meter)
             }
             streamletStatuses.clear()
         }
