@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 plugins {
     application
     java
@@ -158,6 +160,12 @@ dependencies {
     testImplementation("org.apache.iceberg:iceberg-api:$icebergVersion:tests")
     testImplementation("org.apache.iceberg:iceberg-core:$icebergVersion:tests")
     testImplementation("org.apache.iceberg:iceberg-data:$icebergVersion:tests")
+}
+
+tasks.withType<KotlinCompile>().configureEach {
+    kotlinOptions {
+        jvmTarget = "11"
+    }
 }
 
 tasks.getByName<Test>("test") {
