@@ -1,5 +1,6 @@
 package dev.alluvial.sink.iceberg.type
 
+import dev.alluvial.source.kafka.fieldSchema
 import dev.alluvial.utils.LocalDateTimes
 import dev.alluvial.utils.LocalTimes
 import dev.alluvial.utils.OffsetDateTimes
@@ -38,7 +39,7 @@ object AssertionsKafka {
     fun assertEquals(struct: Types.StructType, sSchema: KafkaSchema, expected: IcebergRecord, actual: KafkaStruct) {
         struct.fields().forEach { field ->
             val icebergFieldType = field.type()
-            val kafkaFieldSchema = sSchema.field(field.name()).schema()
+            val kafkaFieldSchema = sSchema.fieldSchema(field.name())
 
             val expectedValue = expected.getField(field.name())
             val actualValue = actual[field.name()]

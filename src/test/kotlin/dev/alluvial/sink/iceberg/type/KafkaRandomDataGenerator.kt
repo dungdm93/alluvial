@@ -1,6 +1,7 @@
 package dev.alluvial.sink.iceberg.type
 
 import dev.alluvial.source.kafka.ENUM_VALUES
+import dev.alluvial.source.kafka.fieldSchema
 import dev.alluvial.utils.OffsetDateTimes
 import dev.alluvial.utils.OffsetTimes
 import dev.alluvial.utils.TimePrecision
@@ -104,7 +105,7 @@ internal object KafkaRandomDataGenerator {
         }
 
         override fun field(field: Types.NestedField, fieldResult: Supplier<Any?>): Any? =
-            travel(sourceSchema!!.field(field.name()).schema()) {
+            travel(sourceSchema!!.fieldSchema(field.name())) {
                 // return null 5% of the time when the value is optional
                 return if (field.isOptional && random.nextInt(20) == 1)
                     null else fieldResult.get()

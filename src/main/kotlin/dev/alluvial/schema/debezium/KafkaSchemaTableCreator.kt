@@ -7,6 +7,7 @@ import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.sink.iceberg.type.IcebergSchema
 import dev.alluvial.sink.iceberg.type.toIcebergSchema
 import dev.alluvial.source.kafka.KafkaSource
+import dev.alluvial.source.kafka.fieldSchema
 import org.apache.iceberg.PartitionSpec
 import org.apache.iceberg.PartitionSpecs
 import org.apache.iceberg.Table
@@ -106,7 +107,7 @@ class KafkaSchemaTableCreator(
         require(keySchema.type() == STRUCT) { "KeySchema must be a STRUCT" }
         require(valueSchema.type() == STRUCT) { "ValueSchema must be a STRUCT" }
 
-        val rowSchema = valueSchema.field("after").schema()
+        val rowSchema = valueSchema.fieldSchema("after")
         require(rowSchema.type() == STRUCT) { "ValueSchema.after must be a STRUCT" }
 
         val keys = keySchema.fields().map { it.name() }

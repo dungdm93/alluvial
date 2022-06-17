@@ -4,11 +4,11 @@ import dev.alluvial.sink.iceberg.type.IcebergSchema
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.sink.iceberg.type.isMigrateFrom
 import dev.alluvial.sink.iceberg.type.toIcebergSchema
+import dev.alluvial.source.kafka.structSchema
 import org.apache.iceberg.PartitionSpec
 import org.apache.iceberg.Table
 import org.apache.iceberg.TestTables
 import org.apache.kafka.connect.data.Decimal
-import org.apache.kafka.connect.data.SchemaBuilder
 import org.apache.kafka.connect.data.SchemaBuilder.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -46,7 +46,7 @@ internal class TestKafkaSchemaSchemaMigrator {
 
     @Test
     fun testPrimitives() {
-        val before = struct {
+        val before = structSchema {
             field("pk", INT32_SCHEMA)
             field("dropping", STRING_SCHEMA)
             // columns will be replaced
@@ -62,7 +62,7 @@ internal class TestKafkaSchemaSchemaMigrator {
             field("require_to_optional", STRING_SCHEMA)
             field("optional_to_require", OPTIONAL_INT32_SCHEMA)
         }
-        val after = struct {
+        val after = structSchema {
             field("pk", INT32_SCHEMA)
             field("adding", STRING_SCHEMA)
             // replaced columns
@@ -84,7 +84,7 @@ internal class TestKafkaSchemaSchemaMigrator {
 
     @Test
     fun testList() {
-        val before = struct {
+        val before = structSchema {
             field("pk", INT32_SCHEMA)
             // change element nullability
             field("list_require_to_optional", array(STRING_SCHEMA))
@@ -93,14 +93,14 @@ internal class TestKafkaSchemaSchemaMigrator {
             field("list_of_primitive", array(STRING_SCHEMA))
             field("list_of_decimal", array(decimal(10, 3)))
             field("list_of_map_to_struct", array(map(INT32_SCHEMA, FLOAT32_SCHEMA)))
-            field("list_of_struct", array(struct {
+            field("list_of_struct", array(structSchema {
                 field("s_unchanged", BOOLEAN_SCHEMA)
                 field("s_dropped", STRING_SCHEMA)
                 field("s_update_inline", decimal(10, 3))
                 field("s_replace", decimal(10, 3))
             }))
         }
-        val after = struct {
+        val after = structSchema {
             field("pk", INT32_SCHEMA)
             // change element nullability
             field("list_require_to_optional", array(OPTIONAL_STRING_SCHEMA))
@@ -108,8 +108,8 @@ internal class TestKafkaSchemaSchemaMigrator {
             // change element type
             field("list_of_primitive", array(INT32_SCHEMA))
             field("list_of_decimal", array(decimal(20, 3)))
-            field("list_of_map_to_struct", array(struct { field("foobar", INT32_SCHEMA) }))
-            field("list_of_struct", array(struct {
+            field("list_of_map_to_struct", array(structSchema { field("foobar", INT32_SCHEMA) }))
+            field("list_of_struct", array(structSchema {
                 field("s_unchanged", BOOLEAN_SCHEMA)
                 field("s_added", FLOAT32_SCHEMA)
                 field("s_update_inline", decimal(20, 3))
@@ -122,7 +122,7 @@ internal class TestKafkaSchemaSchemaMigrator {
 
     @Test
     fun testMap() {
-        val before = struct {
+        val before = structSchema {
             field("pk", INT32_SCHEMA)
             // change value nullability
             field("map_value_require_to_optional", map(OPTIONAL_STRING_SCHEMA, INT64_SCHEMA))
@@ -138,14 +138,14 @@ internal class TestKafkaSchemaSchemaMigrator {
             field("map_of_array_value_int_to_long", map(STRING_SCHEMA, array(INT32_SCHEMA)))
             field("map_of_array_value_decimal_upcast", map(STRING_SCHEMA, array(decimal(10, 3))))
             field("map_of_array_value_decimal_replace", map(STRING_SCHEMA, array(decimal(10, 3))))
-            field("map_of_struct", map(STRING_SCHEMA, struct {
+            field("map_of_struct", map(STRING_SCHEMA, structSchema {
                 field("s_unchanged", BOOLEAN_SCHEMA)
                 field("s_dropped", STRING_SCHEMA)
                 field("s_update_inline", decimal(10, 3))
                 field("s_replace", decimal(10, 3))
             }))
         }
-        val after = struct {
+        val after = structSchema {
             field("pk", INT32_SCHEMA)
             // change value nullability
             field("map_value_require_to_optional", map(STRING_SCHEMA, OPTIONAL_INT64_SCHEMA))
@@ -161,7 +161,7 @@ internal class TestKafkaSchemaSchemaMigrator {
             field("map_of_array_value_int_to_long", map(STRING_SCHEMA, array(INT64_SCHEMA)))
             field("map_of_array_value_decimal_upcast", map(STRING_SCHEMA, array(decimal(20, 3))))
             field("map_of_array_value_decimal_replace", map(STRING_SCHEMA, array(decimal(10, 7))))
-            field("map_of_struct", map(STRING_SCHEMA, struct {
+            field("map_of_struct", map(STRING_SCHEMA, structSchema {
                 field("s_unchanged", BOOLEAN_SCHEMA)
                 field("s_added", FLOAT32_SCHEMA)
                 field("s_update_inline", decimal(20, 3))
@@ -174,9 +174,9 @@ internal class TestKafkaSchemaSchemaMigrator {
 
     @Test
     fun testStruct() {
-        val before = struct {
+        val before = structSchema {
             field("pk", INT32_SCHEMA)
-            field("struct", struct {
+            field("struct", structSchema {
                 // field of primitive
                 field("f_string_to_int32", STRING_SCHEMA)
                 field("f_required_to_optional", STRING_SCHEMA)
@@ -187,7 +187,7 @@ internal class TestKafkaSchemaSchemaMigrator {
                 field("f_list_of_primitive", array(STRING_SCHEMA))
                 field("f_list_of_decimal", array(decimal(10, 3)))
                 field("f_list_of_map_to_struct", array(map(INT32_SCHEMA, FLOAT32_SCHEMA)))
-                field("f_list_of_struct", array(struct {
+                field("f_list_of_struct", array(structSchema {
                     field("s_unchanged", BOOLEAN_SCHEMA)
                     field("s_dropped", STRING_SCHEMA)
                     field("s_update_inline", decimal(10, 3))
@@ -204,7 +204,7 @@ internal class TestKafkaSchemaSchemaMigrator {
                 field("f_map_of_array_value_int_to_long", map(STRING_SCHEMA, array(INT32_SCHEMA)))
                 field("f_map_of_array_value_decimal_upcast", map(STRING_SCHEMA, array(decimal(10, 3))))
                 field("f_map_of_array_value_decimal_replace", map(STRING_SCHEMA, array(decimal(10, 3))))
-                field("f_map_of_struct", map(STRING_SCHEMA, struct {
+                field("f_map_of_struct", map(STRING_SCHEMA, structSchema {
                     field("s_unchanged", BOOLEAN_SCHEMA)
                     field("s_dropped", STRING_SCHEMA)
                     field("s_update_inline", decimal(10, 3))
@@ -212,9 +212,9 @@ internal class TestKafkaSchemaSchemaMigrator {
                 }))
             })
         }
-        val after = struct {
+        val after = structSchema {
             field("pk", INT32_SCHEMA)
-            field("struct", struct {
+            field("struct", structSchema {
                 // field of primitive
                 field("f_string_to_int32", INT32_SCHEMA)
                 field("f_optional_to_required", STRING_SCHEMA)
@@ -224,8 +224,8 @@ internal class TestKafkaSchemaSchemaMigrator {
                 // list
                 field("f_list_of_primitive", array(INT32_SCHEMA))
                 field("f_list_of_decimal", array(decimal(20, 3)))
-                field("f_list_of_map_to_struct", array(struct { field("foobar", INT32_SCHEMA) }))
-                field("f_list_of_struct", array(struct {
+                field("f_list_of_map_to_struct", array(structSchema { field("foobar", INT32_SCHEMA) }))
+                field("f_list_of_struct", array(structSchema {
                     field("s_unchanged", BOOLEAN_SCHEMA)
                     field("s_added", FLOAT32_SCHEMA)
                     field("s_update_inline", decimal(20, 3))
@@ -242,7 +242,7 @@ internal class TestKafkaSchemaSchemaMigrator {
                 field("f_map_of_array_value_int_to_long", map(STRING_SCHEMA, array(INT64_SCHEMA)))
                 field("f_map_of_array_value_decimal_upcast", map(STRING_SCHEMA, array(decimal(20, 3))))
                 field("f_map_of_array_value_decimal_replace", map(STRING_SCHEMA, array(decimal(10, 7))))
-                field("f_map_of_struct", map(STRING_SCHEMA, struct {
+                field("f_map_of_struct", map(STRING_SCHEMA, structSchema {
                     field("s_unchanged", BOOLEAN_SCHEMA)
                     field("s_added", FLOAT32_SCHEMA)
                     field("s_update_inline", decimal(20, 3))
@@ -256,9 +256,5 @@ internal class TestKafkaSchemaSchemaMigrator {
 
     private fun decimal(precision: Int, scale: Int): KafkaSchema {
         return Decimal.builder(scale).parameter("precision", precision.toString()).build()
-    }
-
-    private inline fun struct(block: SchemaBuilder.() -> Unit): KafkaSchema {
-        return struct().also(block).build()
     }
 }

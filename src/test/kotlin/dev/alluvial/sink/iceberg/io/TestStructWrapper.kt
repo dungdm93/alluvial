@@ -8,6 +8,7 @@ import dev.alluvial.sink.iceberg.type.toIcebergSchema
 import dev.alluvial.source.kafka.DEBEZIUM_LOGICAL_TYPES_SCHEMA
 import dev.alluvial.source.kafka.KAFKA_LOGICAL_TYPES_SCHEMA
 import dev.alluvial.source.kafka.KAFKA_PRIMITIVES_SCHEMA
+import dev.alluvial.source.kafka.structSchema
 import org.apache.iceberg.StructLike
 import org.apache.iceberg.types.Type.TypeID.*
 import org.apache.kafka.connect.data.SchemaBuilder
@@ -55,25 +56,25 @@ class TestStructWrapper {
 
     @Test
     fun testKafkaPrimitives() {
-        val kafkaSchema = SchemaBuilder.struct().apply {
+        val kafkaSchema = structSchema {
             KAFKA_PRIMITIVES_SCHEMA.forEach(::field)
-        }.build()
+        }
         wrapAndGet(kafkaSchema)
     }
 
     @Test
     fun testKafkaLogicalTypes() {
-        val kafkaSchema = SchemaBuilder.struct().apply {
+        val kafkaSchema = structSchema {
             KAFKA_LOGICAL_TYPES_SCHEMA.forEach(::field)
-        }.build()
+        }
         wrapAndGet(kafkaSchema)
     }
 
     @Test
     fun testDebeziumLogicalTypes() {
-        val kafkaSchema = SchemaBuilder.struct().apply {
+        val kafkaSchema = structSchema {
             DEBEZIUM_LOGICAL_TYPES_SCHEMA.forEach(::field)
-        }.build()
+        }
         wrapAndGet(kafkaSchema)
     }
 }

@@ -1,5 +1,6 @@
 package dev.alluvial.sink.iceberg.type
 
+import dev.alluvial.source.kafka.fieldSchema
 import org.apache.iceberg.Schema
 import org.apache.iceberg.data.Record
 import org.apache.iceberg.types.Type
@@ -49,7 +50,7 @@ internal class KafkaStructConverter(
     }
 
     private fun field(field: Types.NestedField, obj: Any?): Any? =
-        travel(sourceSchema!!.field(field.name()).schema()) {
+        travel(sourceSchema!!.fieldSchema(field.name())) {
             convert(field.type(), obj)
         }
 
