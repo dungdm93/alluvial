@@ -4,11 +4,11 @@ import dev.alluvial.backport.iceberg.io.FileWriterFactory
 import dev.alluvial.backport.iceberg.io.TestFileWriterFactory
 import dev.alluvial.sink.iceberg.type.IcebergSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
+import dev.alluvial.source.kafka.structSchema
 import org.apache.iceberg.FileFormat
 import org.apache.iceberg.util.StructLikeSet
 import org.apache.kafka.connect.data.Schema.INT32_SCHEMA
 import org.apache.kafka.connect.data.Schema.STRING_SCHEMA
-import org.apache.kafka.connect.data.SchemaBuilder
 
 internal class TestAlluvialFileWriterFactory(fileFormat: FileFormat, partitioned: Boolean) :
     TestFileWriterFactory<KafkaStruct>(fileFormat, partitioned) {
@@ -28,10 +28,11 @@ internal class TestAlluvialFileWriterFactory(fileFormat: FileFormat, partitioned
     }
 
     override fun toRow(id: Int, data: String): KafkaStruct {
-        val schema = SchemaBuilder.struct().name("test")
-            .field("id", INT32_SCHEMA)
-            .field("data", STRING_SCHEMA)
-            .build()
+        val schema = structSchema {
+            name("test")
+            field("id", INT32_SCHEMA)
+            field("data", STRING_SCHEMA)
+        }
         return KafkaStruct(schema)
             .put("id", id)
             .put("data", data)

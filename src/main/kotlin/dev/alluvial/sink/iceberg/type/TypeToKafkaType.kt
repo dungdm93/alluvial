@@ -1,5 +1,6 @@
 package dev.alluvial.sink.iceberg.type
 
+import dev.alluvial.source.kafka.structSchema
 import org.apache.iceberg.Schema
 import org.apache.iceberg.types.Type
 import org.apache.iceberg.types.Type.TypeID
@@ -79,11 +80,11 @@ class TypeToKafkaType : TypeUtil.SchemaVisitor<KafkaSchema>() {
     override fun struct(struct: StructType, fieldResults: List<KafkaSchema>): KafkaSchema {
         val fields = struct.fields()
 
-        val schemaBuilder = SchemaBuilder.struct()
-        fields.forEachIndexed { idx, field ->
-            schemaBuilder.field(field.name(), fieldResults[idx])
+        return structSchema {
+            fields.forEachIndexed { idx, field ->
+                field(field.name(), fieldResults[idx])
+            }
         }
-        return schemaBuilder.build()
     }
 
     override fun field(field: NestedField, fieldResult: KafkaSchema): KafkaSchema {

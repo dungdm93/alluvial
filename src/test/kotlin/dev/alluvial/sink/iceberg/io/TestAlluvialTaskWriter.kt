@@ -3,6 +3,7 @@ package dev.alluvial.sink.iceberg.io
 import dev.alluvial.backport.iceberg.io.PartitioningWriterFactory
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
+import dev.alluvial.source.kafka.structSchema
 import io.micrometer.core.instrument.Tags
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.apache.iceberg.FileFormat
@@ -16,7 +17,6 @@ import org.apache.iceberg.io.OutputFileFactory
 import org.apache.iceberg.io.TaskWriter
 import org.apache.iceberg.io.WriteResult
 import org.apache.iceberg.util.StructLikeSet
-import org.apache.kafka.connect.data.SchemaBuilder
 import org.apache.kafka.connect.sink.SinkRecord
 import org.junit.Assert
 import org.junit.Before
@@ -61,15 +61,16 @@ internal class TestAlluvialTaskWriter : TableTestBase(TABLE_VERSION) {
             .defaultFormat(format)
             .commit()
 
-        kafkaSchema = SchemaBuilder.struct()
-            .field("id", KafkaSchema.INT32_SCHEMA)
-            .field("data", KafkaSchema.STRING_SCHEMA)
-            .optional()
-            .build()
-        envelopeSchema = SchemaBuilder.struct()
-            .field("op", KafkaSchema.STRING_SCHEMA)
-            .field("before", kafkaSchema)
-            .field("after", kafkaSchema)
+        kafkaSchema = structSchema {
+            field("id", KafkaSchema.INT32_SCHEMA)
+            field("data", KafkaSchema.STRING_SCHEMA)
+            optional()
+        }
+        envelopeSchema = structSchema {
+            field("op", KafkaSchema.STRING_SCHEMA)
+            field("before", kafkaSchema)
+            field("after", kafkaSchema)
+        }
     }
 
     private fun testCdcEvents(partitioned: Boolean) {

@@ -4,6 +4,7 @@ import dev.alluvial.api.Outlet
 import dev.alluvial.sink.iceberg.io.AlluvialTaskWriterFactory
 import dev.alluvial.sink.iceberg.type.IcebergTable
 import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.source.kafka.fieldSchema
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.LongTaskTimer
 import io.micrometer.core.instrument.MeterRegistry
@@ -62,7 +63,7 @@ class IcebergTableOutlet(
 
     fun updateSourceSchema(keySchema: KafkaSchema, valueSchema: KafkaSchema) {
         assert(writer == null) { "Must be commit before change Kafka schema" }
-        val rowSchema = valueSchema.field("after").schema()
+        val rowSchema = valueSchema.fieldSchema("after")
         writerFactory.setDataKafkaSchema(rowSchema)
         writerFactory.setEqualityDeleteKafkaSchema(keySchema)
     }

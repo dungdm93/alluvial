@@ -11,6 +11,7 @@ import dev.alluvial.sink.iceberg.type.toKafkaSchema
 import dev.alluvial.source.kafka.DEBEZIUM_LOGICAL_TYPES_SCHEMA
 import dev.alluvial.source.kafka.KAFKA_LOGICAL_TYPES_SCHEMA
 import dev.alluvial.source.kafka.KAFKA_PRIMITIVES_SCHEMA
+import dev.alluvial.source.kafka.structSchema
 import org.apache.iceberg.Files
 import org.apache.iceberg.data.DataTest
 import org.apache.iceberg.data.RandomGenericData
@@ -19,7 +20,6 @@ import org.apache.iceberg.data.parquet.GenericParquetWriter
 import org.apache.iceberg.io.CloseableIterable
 import org.apache.iceberg.io.FileAppender
 import org.apache.iceberg.parquet.Parquet
-import org.apache.kafka.connect.data.SchemaBuilder
 import org.junit.Test
 
 internal open class KafkaParquetRWTest : DataTest() {
@@ -122,25 +122,25 @@ internal open class KafkaParquetRWTest : DataTest() {
 
     @Test
     fun testKafkaPrimitives() {
-        val kafkaSchema = SchemaBuilder.struct().apply {
+        val kafkaSchema = structSchema {
             KAFKA_PRIMITIVES_SCHEMA.forEach(::field)
-        }.build()
+        }
         writeAndValidate(kafkaSchema)
     }
 
     @Test
     fun testKafkaLogicalTypes() {
-        val kafkaSchema = SchemaBuilder.struct().apply {
+        val kafkaSchema = structSchema {
             KAFKA_LOGICAL_TYPES_SCHEMA.forEach(::field)
-        }.build()
+        }
         writeAndValidate(kafkaSchema)
     }
 
     @Test
     fun testDebeziumLogicalTypes() {
-        val kafkaSchema = SchemaBuilder.struct().apply {
+        val kafkaSchema = structSchema {
             DEBEZIUM_LOGICAL_TYPES_SCHEMA.forEach(::field)
-        }.build()
+        }
         writeAndValidate(kafkaSchema)
     }
 }

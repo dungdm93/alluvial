@@ -11,6 +11,7 @@ import dev.alluvial.sink.iceberg.type.toKafkaSchema
 import dev.alluvial.source.kafka.DEBEZIUM_LOGICAL_TYPES_SCHEMA
 import dev.alluvial.source.kafka.KAFKA_LOGICAL_TYPES_SCHEMA
 import dev.alluvial.source.kafka.KAFKA_PRIMITIVES_SCHEMA
+import dev.alluvial.source.kafka.structSchema
 import org.apache.avro.io.DatumReader
 import org.apache.avro.io.DatumWriter
 import org.apache.iceberg.Files
@@ -22,7 +23,6 @@ import org.apache.iceberg.data.avro.DataReader
 import org.apache.iceberg.data.avro.DataWriter
 import org.apache.iceberg.io.CloseableIterable
 import org.apache.iceberg.io.FileAppender
-import org.apache.kafka.connect.data.SchemaBuilder
 import org.junit.Test
 
 internal class KafkaAvroRWTest : DataTest() {
@@ -115,25 +115,25 @@ internal class KafkaAvroRWTest : DataTest() {
 
     @Test
     fun testKafkaPrimitives() {
-        val kafkaSchema = SchemaBuilder.struct().apply {
+        val kafkaSchema = structSchema {
             KAFKA_PRIMITIVES_SCHEMA.forEach(::field)
-        }.build()
+        }
         writeAndValidate(kafkaSchema)
     }
 
     @Test
     fun testKafkaLogicalTypes() {
-        val kafkaSchema = SchemaBuilder.struct().apply {
+        val kafkaSchema = structSchema {
             KAFKA_LOGICAL_TYPES_SCHEMA.forEach(::field)
-        }.build()
+        }
         writeAndValidate(kafkaSchema)
     }
 
     @Test
     fun testDebeziumLogicalTypes() {
-        val kafkaSchema = SchemaBuilder.struct().apply {
+        val kafkaSchema = structSchema {
             DEBEZIUM_LOGICAL_TYPES_SCHEMA.forEach(::field)
-        }.build()
+        }
         writeAndValidate(kafkaSchema)
     }
 }
