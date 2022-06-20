@@ -3,7 +3,7 @@ version: '3.7'
 
 services:
   zookeeper:
-    image: quay.io/debezium/zookeeper:1.8.1.Final
+    image: quay.io/debezium/zookeeper:1.9.3.Final
     networks:
       default:
         ipv4_address: 10.5.0.2
@@ -13,7 +13,7 @@ services:
     #   - 3888:3888 # leader election
 
   kafka:
-    image: quay.io/debezium/kafka:1.8.1.Final
+    image: quay.io/debezium/kafka:1.9.3.Final
     environment:
       ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_NUM_PARTITIONS: 12
@@ -46,13 +46,13 @@ services:
       - 8081:8081
 
   debezium:
-    image: quay.io/debezium/connect:1.8.1.Final
+    image: quay.io/debezium/connect:1.9.3.Final
     environment:
       BOOTSTRAP_SERVERS: kafka:9092
       GROUP_ID: 1
-      CONFIG_STORAGE_TOPIC: debezium.configs
-      OFFSET_STORAGE_TOPIC: debezium.offsets
-      STATUS_STORAGE_TOPIC: debezium.statuses
+      CONFIG_STORAGE_TOPIC: _debezium.configs
+      OFFSET_STORAGE_TOPIC: _debezium.offsets
+      STATUS_STORAGE_TOPIC: _debezium.statuses
       KEY_CONVERTER: io.confluent.connect.avro.AvroConverter
       VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
       CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
