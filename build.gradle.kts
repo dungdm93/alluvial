@@ -162,7 +162,7 @@ dependencies {
     testImplementation("org.apache.iceberg:iceberg-data:$icebergVersion:tests")
 }
 
-tasks.withType<KotlinCompile>().configureEach {
+tasks.withType<KotlinCompile> {
     kotlinOptions {
         jvmTarget = "11"
     }
