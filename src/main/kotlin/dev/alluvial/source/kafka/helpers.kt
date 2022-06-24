@@ -7,6 +7,6 @@ fun KafkaSchema.fieldSchema(fieldName: String): KafkaSchema {
     return this.field(fieldName).schema()
 }
 
-inline fun structSchema(block: SchemaBuilder.() -> Unit): KafkaSchema {
-    return SchemaBuilder.struct().also(block).build()
+inline fun structSchema(version: Int = 1, block: SchemaBuilder.() -> Unit): KafkaSchema {
+    return SchemaBuilder.struct().also(block).version(version).build()
 }

@@ -1,8 +1,7 @@
 package dev.alluvial.schema.debezium
 
 import org.apache.kafka.connect.sink.SinkRecord
-import java.util.Objects
 
-internal const val SCHEMA_HASH_PROP = "alluvial.schema.hash"
+internal const val SCHEMA_VERSION_PROP = "alluvial.schema.version"
 
-fun SinkRecord.schemaHash() = Objects.hash(keySchema(), valueSchema())
+fun SinkRecord.schemaVersion() = "key=${keySchema().version()},value=${valueSchema().version()}"

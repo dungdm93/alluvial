@@ -74,16 +74,16 @@ class KafkaSchemaTableCreator(
 
     private fun buildTable(tableId: TableIdentifier, record: SinkRecord): Table {
         val iSchema = icebergSchemaFrom(record)
-        val schemaHash = record.schemaHash()
+        val schemaVersion = record.schemaVersion()
 
         return sink.buildTable(tableId, iSchema) { builder ->
             logger.info("Creating table {}", tableId)
-            logger.info("schema: hash={}\n{}", schemaHash, iSchema)
+            logger.info("schema: version: {}\n{}", schemaVersion, iSchema)
 
             builder.withProperty(TableProperties.FORMAT_VERSION, TABLE_FORMAT_VERSION)
             logger.info("formatVersion: {}", TABLE_FORMAT_VERSION)
 
-            builder.withProperty(SCHEMA_HASH_PROP, schemaHash.toString())
+            builder.withProperty(SCHEMA_VERSION_PROP, schemaVersion)
 
             builder.withProperties(properties)
             logger.info("properties: {}", properties)
