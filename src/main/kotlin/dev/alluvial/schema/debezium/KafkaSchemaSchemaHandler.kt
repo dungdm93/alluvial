@@ -20,26 +20,26 @@ class KafkaSchemaSchemaHandler(
     }
 
     private val table = outlet.table
-    var hashedSchema: Int? = null
+    var schemaVersion: String? = null
         private set
 
     init {
-        // Try to fetch schema hash from table properties
-        hashedSchema = table.properties()[SCHEMA_HASH_PROP]?.toInt()
-        if (hashedSchema == null) {
-            logger.warn("Could not get schema hash from table properties")
+        // Try to fetch schema version from table properties
+        schemaVersion = table.properties()[SCHEMA_VERSION_PROP]
+        if (schemaVersion == null) {
+            logger.warn("Could not get schema version from table properties")
         }
     }
 
     override fun shouldMigrate(record: SinkRecord): Boolean {
         if (record.value() == null) return false
 
-        // Current schema hash is null, so should perform migration to ensure the hash is updated
+        // Current schema version is null, so should perform migration to ensure the version is updated
         // and new schema is applied (if any)
-        if (hashedSchema == null) return true
+        if (schemaVersion == null) return true
 
-        val hashed = record.schemaHash()
-        return hashedSchema != hashed
+        val version = record.schemaVersion()
+        return schemaVersion != version
     }
 
     override fun migrateSchema(record: SinkRecord) {
@@ -48,11 +48,11 @@ class KafkaSchemaSchemaHandler(
         val txn = table.newTransaction()
         updateSchema(txn.updateSchema(), record)
 
-        val hashed = record.schemaHash()
-        updateSchemaHash(txn.updateProperties(), hashed)
+        val version = record.schemaVersion()
+        updateSchemaVersion(txn.updateProperties(), version)
         txn.commitTransaction()
 
-        hashedSchema = hashed
+        schemaVersion = version
     }
 
     private fun updateSchema(updater: UpdateSchema, record: SinkRecord) {
@@ -69,8 +69,8 @@ class KafkaSchemaSchemaHandler(
         updater.commit()
     }
 
-    private fun updateSchemaHash(updater: UpdateProperties, hash: Int) {
-        updater.set(SCHEMA_HASH_PROP, hash.toString())
+    private fun updateSchemaVersion(updater: UpdateProperties, version: String) {
+        updater.set(SCHEMA_VERSION_PROP, version)
         updater.commit()
     }
 }

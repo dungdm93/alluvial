@@ -45,11 +45,11 @@ internal class TestKafkaSchemaSchemaHandler {
     private lateinit var table: Table
     private val formatVersion: Int = 2
 
-    private fun createTable(iSchema: IcebergSchema, schemaHash: Int? = null) {
+    private fun createTable(iSchema: IcebergSchema, schemaVersion: String? = null) {
         table = TestTables.create(tmpDir, "table", iSchema, PartitionSpec.unpartitioned(), formatVersion)
-        schemaHash?.let {
+        schemaVersion?.let {
             val updater = table.updateProperties()
-            updater.set(SCHEMA_HASH_PROP, it.toString())
+            updater.set(SCHEMA_VERSION_PROP, it)
             updater.commit()
         }
     }
@@ -86,7 +86,7 @@ internal class TestKafkaSchemaSchemaHandler {
     }
 
     @Test
-    fun tableNoSchemaHashShouldMigrate() {
+    fun tableNoSchemaVersionShouldMigrate() {
         createTable(VALUE_SCHEMA_ORIGIN.toIcebergSchema())
         val outlet = createOutlet()
         val schemaHandler = KafkaSchemaSchemaHandler(outlet)
@@ -94,22 +94,22 @@ internal class TestKafkaSchemaSchemaHandler {
     }
 
     @Test
-    fun tableHasSchemaHashShouldNotMigrateIfNoNewSchema() {
-        val schemaHash = RECORD_ORIGIN.schemaHash()
-        createTable(VALUE_SCHEMA_ORIGIN.toIcebergSchema(), schemaHash)
+    fun tableHasSchemaVersionShouldNotMigrateIfNoNewSchema() {
+        val schemaVersion = RECORD_ORIGIN.schemaVersion()
+        createTable(VALUE_SCHEMA_ORIGIN.toIcebergSchema(), schemaVersion)
         val outlet = createOutlet()
         val schemaHandler = KafkaSchemaSchemaHandler(outlet)
         Assertions.assertFalse(schemaHandler.shouldMigrate(RECORD_ORIGIN))
     }
 
     @Test
-    fun tableHasSchemaHashShouldMigrateIfNewValueSchema() {
-        val schemaHash = RECORD_ORIGIN.schemaHash()
-        createTable(VALUE_SCHEMA_ORIGIN.toIcebergSchema(), schemaHash)
+    fun tableHasSchemaVersionShouldMigrateIfNewValueSchema() {
+        val schemaVersion = RECORD_ORIGIN.schemaVersion()
+        createTable(VALUE_SCHEMA_ORIGIN.toIcebergSchema(), schemaVersion)
         val outlet = createOutlet()
         val schemaHandler = KafkaSchemaSchemaHandler(outlet)
 
-        val newValueSchema = structSchema {
+        val newValueSchema = structSchema(2) {
             field("id", INT32_SCHEMA)
             field("fieldSuperNew", INT32_SCHEMA)
         }
@@ -126,13 +126,13 @@ internal class TestKafkaSchemaSchemaHandler {
     }
 
     @Test
-    fun tableHasSchemaHashShouldMigrateIfNewKeySchema() {
-        val schemaHash = RECORD_ORIGIN.schemaHash()
-        createTable(VALUE_SCHEMA_ORIGIN.toIcebergSchema(), schemaHash)
+    fun tableHasSchemaVersionShouldMigrateIfNewKeySchema() {
+        val schemaVersion = RECORD_ORIGIN.schemaVersion()
+        createTable(VALUE_SCHEMA_ORIGIN.toIcebergSchema(), schemaVersion)
         val outlet = createOutlet()
         val schemaHandler = KafkaSchemaSchemaHandler(outlet)
 
-        val newKeySchema = structSchema {
+        val newKeySchema = structSchema(2) {
             field("id", INT32_SCHEMA)
             field("field1", INT32_SCHEMA)
         }
@@ -149,12 +149,12 @@ internal class TestKafkaSchemaSchemaHandler {
     }
 
     @Test
-    fun migrateSchemaWhenSchemaHashIsNull() {
+    fun migrateSchemaWhenSchemaVersionIsNull() {
         createTable(VALUE_SCHEMA_ORIGIN.toIcebergSchema())
         val outlet = createOutlet()
         val schemaHandler = KafkaSchemaSchemaHandler(outlet)
 
-        Assertions.assertNull(schemaHandler.hashedSchema)
+        Assertions.assertNull(schemaHandler.schemaVersion)
 
         val valueSchema = structSchema { field("after", VALUE_SCHEMA_ORIGIN) }
         val key = KafkaStruct(KEY_SCHEMA_ORIGIN).put("id", ANY_INT)
@@ -166,21 +166,21 @@ internal class TestKafkaSchemaSchemaHandler {
         val record = SinkRecord("topic", ANY_INT, KEY_SCHEMA_ORIGIN, key, valueSchema, value, ANY_INT.toLong())
         schemaHandler.migrateSchema(record)
 
-        val hashed = record.schemaHash()
-        Assertions.assertEquals(schemaHandler.hashedSchema, hashed)
-        Assertions.assertEquals(table.properties()[SCHEMA_HASH_PROP]?.toInt(), hashed)
+        val version = record.schemaVersion()
+        Assertions.assertEquals(schemaHandler.schemaVersion, version)
+        Assertions.assertEquals(table.properties()[SCHEMA_VERSION_PROP], version)
     }
 
     @Test
-    fun migrateSchemaWhenSchemaHashNotNull() {
-        val hashed = RECORD_ORIGIN.schemaHash()
+    fun migrateSchemaWhenSchemaVersionNotNull() {
+        val version = RECORD_ORIGIN.schemaVersion()
 
-        createTable(VALUE_SCHEMA_ORIGIN.toIcebergSchema(), hashed)
+        createTable(VALUE_SCHEMA_ORIGIN.toIcebergSchema(), version)
         val outlet = createOutlet()
         val schemaHandler = KafkaSchemaSchemaHandler(outlet)
 
-        Assertions.assertEquals(schemaHandler.hashedSchema, hashed)
-        Assertions.assertEquals(table.properties()[SCHEMA_HASH_PROP]?.toInt(), hashed)
+        Assertions.assertEquals(schemaHandler.schemaVersion, version)
+        Assertions.assertEquals(table.properties()[SCHEMA_VERSION_PROP], version)
 
         // Record with new key schema
         val keySchema = structSchema {
@@ -198,10 +198,10 @@ internal class TestKafkaSchemaSchemaHandler {
                 .put("id", ANY_INT)
         )
         val record = SinkRecord("topic", ANY_INT, keySchema, key, valueSchema, value, ANY_INT.toLong())
-        val newHashed = record.schemaHash()
+        val newVersion = record.schemaVersion()
 
         schemaHandler.migrateSchema(record)
-        Assertions.assertEquals(schemaHandler.hashedSchema, newHashed)
-        Assertions.assertEquals(table.properties()[SCHEMA_HASH_PROP]?.toInt(), newHashed)
+        Assertions.assertEquals(schemaHandler.schemaVersion, newVersion)
+        Assertions.assertEquals(table.properties()[SCHEMA_VERSION_PROP], newVersion)
     }
 }
