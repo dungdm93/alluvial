@@ -22,7 +22,7 @@ import org.apache.iceberg.util.Tasks
 import org.apache.kafka.connect.sink.SinkRecord
 import java.io.Closeable
 
-class AlluvialTaskWriter(
+class DebeziumTaskWriter(
     partitioningWriterFactory: PartitioningWriterFactory<KafkaStruct>,
     private val spec: PartitionSpec,
     private val io: FileIO,

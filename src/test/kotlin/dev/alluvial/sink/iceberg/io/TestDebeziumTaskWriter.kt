@@ -26,7 +26,7 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 
 @Suppress("SameParameterValue")
-internal class TestAlluvialTaskWriter : TableTestBase(TABLE_VERSION) {
+internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
     companion object {
         private const val TABLE_VERSION = 2
     }
@@ -214,7 +214,7 @@ internal class TestAlluvialTaskWriter : TableTestBase(TABLE_VERSION) {
     private fun createTaskWriter(vararg equalityFieldIds: Int): TaskWriter<SinkRecord> {
         val schema = table.schema()
         val equalityFieldNames = equalityFieldIds.map { schema.findField(it).name() }
-        val fileWriterFactory = AlluvialFileWriterFactory.buildFor(table) {
+        val fileWriterFactory = KafkaFileWriterFactory.buildFor(table) {
             equalityDeleteRowSchema = schema.select(equalityFieldNames)
         }
         val outputFileFactory = OutputFileFactory.builderFor(table, 1, 1L)
@@ -227,11 +227,11 @@ internal class TestAlluvialTaskWriter : TableTestBase(TABLE_VERSION) {
             .buildForFanoutPartition()
 
         val partitioner = if (table.spec().isPartitioned) {
-            AlluvialTaskWriter.partitionerFor(table.spec(), kafkaSchema, table.schema())
+            DebeziumTaskWriter.partitionerFor(table.spec(), kafkaSchema, table.schema())
         } else {
-            AlluvialTaskWriter.unpartition
+            DebeziumTaskWriter.unpartition
         }
-        return AlluvialTaskWriter(
+        return DebeziumTaskWriter(
             partitioningWriterFactory,
             table.spec(),
             table.io(),

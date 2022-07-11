@@ -15,7 +15,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
-class AlluvialTaskWriterFactory(
+class DebeziumTaskWriterFactory(
     private val table: Table,
     private val registry: MeterRegistry,
     private val tags: Tags
@@ -52,12 +52,12 @@ class AlluvialTaskWriterFactory(
     }
 
     fun create(): TaskWriter<SinkRecord> {
-        val fileWriterFactory = AlluvialFileWriterFactory.buildFor(table) {
+        val fileWriterFactory = KafkaFileWriterFactory.buildFor(table) {
             dataFileFormat = fileFormat
-            dataKafkaSchema = this@AlluvialTaskWriterFactory.dataKafkaSchema
+            dataKafkaSchema = this@DebeziumTaskWriterFactory.dataKafkaSchema
             deleteFileFormat = fileFormat
-            equalityDeleteKafkaSchema = this@AlluvialTaskWriterFactory.equalityDeleteKafkaSchema
-            positionDeleteKafkaSchema = this@AlluvialTaskWriterFactory.positionDeleteKafkaSchema
+            equalityDeleteKafkaSchema = this@DebeziumTaskWriterFactory.equalityDeleteKafkaSchema
+            positionDeleteKafkaSchema = this@DebeziumTaskWriterFactory.positionDeleteKafkaSchema
         }
 
         val partitionId = PARTITION_FORMATTER.format(Instant.now()).toInt()
@@ -74,9 +74,9 @@ class AlluvialTaskWriterFactory(
             .buildForFanoutPartition()
 
         val partitioner = if (table.spec().isPartitioned)
-            AlluvialTaskWriter.partitionerFor(table.spec(), dataKafkaSchema!!, table.schema()) else
-            AlluvialTaskWriter.unpartition
-        return AlluvialTaskWriter(
+            DebeziumTaskWriter.partitionerFor(table.spec(), dataKafkaSchema!!, table.schema()) else
+            DebeziumTaskWriter.unpartition
+        return DebeziumTaskWriter(
             partitioningWriterFactory,
             table.spec(),
             table.io(),

@@ -10,7 +10,7 @@ import org.apache.iceberg.util.StructLikeSet
 import org.apache.kafka.connect.data.Schema.INT32_SCHEMA
 import org.apache.kafka.connect.data.Schema.STRING_SCHEMA
 
-internal class TestAlluvialFileWriterFactory(fileFormat: FileFormat, partitioned: Boolean) :
+internal class TestKafkaFileWriterFactory(fileFormat: FileFormat, partitioned: Boolean) :
     TestFileWriterFactory<KafkaStruct>(fileFormat, partitioned) {
 
     override fun newWriterFactory(
@@ -18,7 +18,7 @@ internal class TestAlluvialFileWriterFactory(fileFormat: FileFormat, partitioned
         equalityDeleteRowSchema: IcebergSchema?,
         positionDeleteRowSchema: IcebergSchema?
     ): FileWriterFactory<KafkaStruct> {
-        return AlluvialFileWriterFactory.buildFor(table) {
+        return KafkaFileWriterFactory.buildFor(table) {
             this.dataFileFormat = format()
             this.deleteFileFormat = format()
             this.equalityFieldIds = equalityFieldIds?.toIntArray() ?: intArrayOf()

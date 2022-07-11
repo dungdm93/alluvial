@@ -18,7 +18,7 @@ import org.apache.iceberg.orc.BackportORC
 import org.apache.iceberg.parquet.BackportParquet
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions
 
-class AlluvialFileWriterFactory private constructor(
+class KafkaFileWriterFactory private constructor(
     table: Table,
     dataFileFormat: FileFormat,
     dataSchema: IcebergSchema,
@@ -148,7 +148,7 @@ class AlluvialFileWriterFactory private constructor(
             equalityDeleteRowSchema = table.schema().select(identifierFieldNames)
         }
 
-        fun build() = AlluvialFileWriterFactory(
+        fun build() = KafkaFileWriterFactory(
             table, dataFileFormat, dataSchema, dataKafkaSchema, dataSortOrder, deleteFileFormat,
             equalityFieldIds, equalityDeleteRowSchema, equalityDeleteKafkaSchema, equalityDeleteSortOrder,
             positionDeleteRowSchema, positionDeleteKafkaSchema,
