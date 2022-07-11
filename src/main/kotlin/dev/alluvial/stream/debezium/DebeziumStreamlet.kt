@@ -91,24 +91,29 @@ class DebeziumStreamlet(
     private fun captureChanges(batchSize: Int) {
         var record = inlet.read()
         var count = 0
-        var firstNonNull = false
+        var sourceSchemaIsSet = false
         while (record != null) {
             if (schemaHandler.shouldMigrate(record)) {
                 if (count > 0) commit()
                 count = 0 // reset counter
-                firstNonNull = false
                 schemaHandler.migrateSchema(record)
+                sourceSchemaIsSet = false
                 metrics.incrementSchemaMigration()
                 continue
             }
-            if (!firstNonNull && record.value() != null) {
-                outlet.updateSourceSchema(record.keySchema(), record.valueSchema())
-                firstNonNull = true
+
+            // Tombstone event is ignored
+            if (record.value() != null) {
+                if (!sourceSchemaIsSet) {
+                    outlet.updateSourceSchema(record.keySchema(), record.valueSchema())
+                    sourceSchemaIsSet = true
+                }
+                outlet.write(record)
+                count++
             }
-            outlet.write(record)
+
             offsets[record.kafkaPartition()] = record.kafkaOffset() + 1
             lastRecordTimestamp = max(lastRecordTimestamp, record.timestamp())
-            count++
             if (count >= batchSize) break
             record = inlet.read()
         }
