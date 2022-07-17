@@ -54,6 +54,10 @@ class IcebergTableOutlet(
         rowDelta.validateDeletedFiles()
             .validateDataFilesExist(result.referencedDataFiles().asIterable())
 
+        // Set rowDelta.startingSnapshotId to the current snapshot since we only validate positional delete files and
+        // those delete records always reference to data files in the same commit.
+        table.currentSnapshot()?.let { rowDelta.validateFromSnapshot(it.snapshotId()) }
+
         rowDelta.set(ALLUVIAL_POSITION_PROP, mapper.writeValueAsString(positions))
         rowDelta.set(ALLUVIAL_LAST_RECORD_TIMESTAMP_PROP, lastRecordTimestamp.toString())
 
