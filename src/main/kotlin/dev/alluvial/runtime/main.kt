@@ -8,7 +8,9 @@ import com.fasterxml.jackson.module.kotlin.readValue
 import java.io.FileReader
 
 val mapper = YAMLMapper().also {
-    it.registerModule(KotlinModule())
+    val kotlinModule = KotlinModule.Builder()
+        .build()
+    it.registerModule(kotlinModule)
 }
 
 fun parseConfig(args: Array<out String>): Config {
