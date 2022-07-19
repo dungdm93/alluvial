@@ -55,7 +55,7 @@ class KafkaSource(sourceConfig: SourceConfig, private val registry: MeterRegistr
 
     fun latestOffsets(topic: String): Map<Int, Long> {
         val partitions = adminClient.describeTopics(listOf(topic))
-            .all().get()[topic]!!
+            .allTopicNames().get()[topic]!!
             .partitions()
 
         val request = partitions.associate { TopicPartition(topic, it.partition()) to OffsetSpec.latest() }

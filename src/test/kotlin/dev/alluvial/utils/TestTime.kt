@@ -204,7 +204,9 @@ internal class TestTime {
     )
 
     private val mapper = JsonMapper().also {
-        it.registerModule(KotlinModule())
+        val kotlinModule = KotlinModule.Builder()
+            .build()
+        it.registerModule(kotlinModule)
     }
 
     @ParameterizedTest

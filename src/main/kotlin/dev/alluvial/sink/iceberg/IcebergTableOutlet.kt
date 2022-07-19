@@ -1,7 +1,7 @@
 package dev.alluvial.sink.iceberg
 
 import dev.alluvial.api.Outlet
-import dev.alluvial.sink.iceberg.io.AlluvialTaskWriterFactory
+import dev.alluvial.sink.iceberg.io.DebeziumTaskWriterFactory
 import dev.alluvial.sink.iceberg.type.IcebergTable
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.source.kafka.fieldSchema
@@ -28,7 +28,7 @@ class IcebergTableOutlet(
 
     private val metrics = Metrics(registry)
     private var writer: TaskWriter<SinkRecord>? = null
-    private val writerFactory = AlluvialTaskWriterFactory(table, registry, Tags.of("outlet", name))
+    private val writerFactory = DebeziumTaskWriterFactory(table, registry, Tags.of("outlet", name))
 
     fun write(record: SinkRecord) {
         if (writer == null) {

@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 plugins {
     application
     java
-    kotlin("jvm") version "1.6.10"
+    kotlin("jvm") version "1.7.0"
     id("io.spring.dependency-management") version "1.0.11.RELEASE"
 }
 
@@ -32,26 +32,26 @@ repositories {
 }
 
 val slf4jVersion = "1.7.36"
-val logbackVersion = "1.2.10"
-val debeziumVersion = "1.9.1.Final"
-val kafkaVersion = "3.0.0"
+val logbackVersion = "1.2.11"
+val debeziumVersion = "1.9.3.Final"
+val kafkaVersion = "3.1.0"
 val confluentVersion = "7.0.0"
-val icebergVersion = "0.13.1"
-val hadoopVersion = "3.2.1"
+val icebergVersion = "0.14.0"
+val hadoopVersion = "3.3.2"
 val hiveVersion = "3.1.3"
-val awsVersion = "2.17.186"
-val jacksonVersion = "2.12.3"
-val micrometerVersion = "1.8.5"
+val awsVersion = "2.17.209"
+val jacksonVersion = "2.13.3"
+val micrometerVersion = "1.9.0"
 val prometheusVersion = "0.15.0"
 
 val junitVersion = "5.8.2"
-val striktVersion = "0.33.0"
-val assertjVersion = "3.22.0"
+val striktVersion = "0.34.1"
+val assertjVersion = "3.23.1"
 val mockitoVersion = "4.6.1"
 
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.6.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.6.3")
     api("org.slf4j:slf4j-api:$slf4jVersion")
     runtimeOnly("ch.qos.logback:logback-classic:$logbackVersion")
     implementation("io.micrometer:micrometer-core:$micrometerVersion")
@@ -141,14 +141,10 @@ dependencies {
     implementation("software.amazon.awssdk:url-connection-client:$awsVersion")
 
     // Iceberg transient dependency
-    implementation("org.apache.iceberg:iceberg-common:$icebergVersion")
     implementation("org.apache.iceberg:iceberg-bundled-guava:$icebergVersion")
-    implementation("com.github.ben-manes.caffeine:caffeine:2.8.4")
-    implementation("com.github.stephenc.findbugs:findbugs-annotations:1.3.9-1")
-    implementation("org.roaringbitmap:RoaringBitmap:0.9.22")
-    implementation("org.apache.avro:avro:1.10.1")
-    implementation("org.apache.orc:orc-core:1.7.2")
-    implementation("org.apache.parquet:parquet-avro:1.12.2")
+    implementation("org.apache.avro:avro:1.10.2")
+    implementation("org.apache.orc:orc-core:1.7.5")
+    implementation("org.apache.parquet:parquet-avro:1.12.3")
 
     // Test Frameworks
     testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")
