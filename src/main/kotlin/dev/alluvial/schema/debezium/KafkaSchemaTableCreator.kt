@@ -9,9 +9,9 @@ import dev.alluvial.sink.iceberg.type.toIcebergSchema
 import dev.alluvial.source.kafka.KafkaSource
 import dev.alluvial.source.kafka.fieldSchema
 import org.apache.iceberg.PartitionSpec
-import org.apache.iceberg.PartitionSpecs
 import org.apache.iceberg.Table
 import org.apache.iceberg.TableProperties
+import org.apache.iceberg.addSpec
 import org.apache.iceberg.catalog.TableIdentifier
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions
 import org.apache.kafka.clients.consumer.ConsumerConfig
@@ -123,7 +123,7 @@ class KafkaSchemaTableCreator(
             val sourceName = config.column
             val sourceField = schema.findField(sourceName)
             Preconditions.checkNotNull(sourceField, "Cannot find source field: %s", sourceName)
-            PartitionSpecs.add(builder, sourceField, config.transform, config.name)
+            builder.addSpec(sourceField, config.transform, config.name)
         }
         return builder.build()
     }
