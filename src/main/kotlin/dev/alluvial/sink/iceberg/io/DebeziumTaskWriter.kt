@@ -1,8 +1,5 @@
 package dev.alluvial.sink.iceberg.io
 
-import dev.alluvial.backport.iceberg.io.PartitioningWriterFactory
-import dev.alluvial.backport.iceberg.io.PathOffset
-import dev.alluvial.backport.iceberg.io.StructCopy
 import dev.alluvial.sink.iceberg.type.IcebergSchema
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
@@ -17,6 +14,7 @@ import org.apache.iceberg.deletes.PositionDelete
 import org.apache.iceberg.io.FileIO
 import org.apache.iceberg.io.TaskWriter
 import org.apache.iceberg.io.WriteResult
+import org.apache.iceberg.io.copy
 import org.apache.iceberg.util.StructLikeMap
 import org.apache.iceberg.util.Tasks
 import org.apache.kafka.connect.sink.SinkRecord
@@ -88,7 +86,7 @@ class DebeziumTaskWriter(
 
     private fun insert(row: KafkaStruct) {
         val partition = partitioner(row)
-        val copiedKey = StructCopy.copy(key)
+        val copiedKey = key.copy()!!
 
         internalPosDelete(copiedKey, partition)
         val pathOffset = insertWriter.write(row, spec, partition)
@@ -97,7 +95,7 @@ class DebeziumTaskWriter(
 
     private fun delete(row: KafkaStruct) {
         val partition = partitioner(row)
-        val copiedKey = StructCopy.copy(key)
+        val copiedKey = key.copy()!!
 
         if (!internalPosDelete(copiedKey, partition)) {
             equalityDeleteWriter.write(row, spec, partition)

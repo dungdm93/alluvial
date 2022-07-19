@@ -17,55 +17,57 @@
  * under the License.
  */
 
-package dev.alluvial.backport.iceberg.io;
+package dev.alluvial.sink.iceberg.io;
 
 import org.apache.iceberg.DeleteFile;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.StructLike;
-import org.apache.iceberg.deletes.PositionDelete;
-import org.apache.iceberg.encryption.EncryptedOutputFile;
 import org.apache.iceberg.io.DeleteWriteResult;
 import org.apache.iceberg.io.FileIO;
+import org.apache.iceberg.io.FileWriterFactory;
 import org.apache.iceberg.io.OutputFileFactory;
+import org.apache.iceberg.io.RollingEqualityDeleteWriter;
+import org.apache.iceberg.io.TrackedFileWriter;
+import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
-import org.apache.iceberg.util.CharSequenceSet;
 
 import java.util.List;
 
 /**
- * A rolling position delete writer that splits incoming deletes into multiple files within one spec/partition
- * based on the target file size.
+ * An equality delete writer capable of writing to multiple specs and partitions that keeps
+ * delete writers for each seen spec/partition pair open until this writer is closed.
  */
-public class RollingPositionDeleteWriter<T>
-    extends RollingFileWriter<PositionDelete<T>, PositionDeleteWriter<T>, DeleteWriteResult> {
+public class FanoutEqualityDeleteWriter<T> extends FanoutWriter<T, DeleteWriteResult> {
 
     private final FileWriterFactory<T> writerFactory;
+    private final OutputFileFactory fileFactory;
+    private final FileIO io;
+    private final long targetFileSizeInBytes;
     private final List<DeleteFile> deleteFiles;
-    private final CharSequenceSet referencedDataFiles;
 
-    public RollingPositionDeleteWriter(FileWriterFactory<T> writerFactory, OutputFileFactory fileFactory,
-                                       FileIO io, long targetFileSizeInBytes,
-                                       PartitionSpec spec, StructLike partition) {
-        super(fileFactory, io, targetFileSizeInBytes, spec, partition);
+    public FanoutEqualityDeleteWriter(FileWriterFactory<T> writerFactory, OutputFileFactory fileFactory,
+                                      FileIO io, long targetFileSizeInBytes) {
         this.writerFactory = writerFactory;
+        this.fileFactory = fileFactory;
+        this.io = io;
+        this.targetFileSizeInBytes = targetFileSizeInBytes;
         this.deleteFiles = Lists.newArrayList();
-        this.referencedDataFiles = CharSequenceSet.empty();
-        openCurrentWriter();
     }
 
     @Override
-    protected PositionDeleteWriter<T> newWriter(EncryptedOutputFile file) {
-        return writerFactory.newPositionDeleteWriter(file, spec(), partition());
+    protected TrackedFileWriter<T, DeleteWriteResult> newWriter(PartitionSpec spec, StructLike partition) {
+        var writer = new RollingEqualityDeleteWriter<>(writerFactory, fileFactory, io, targetFileSizeInBytes, spec, partition);
+        return TrackedFileWriter.wrap(writer);
     }
 
     @Override
     protected void addResult(DeleteWriteResult result) {
+        Preconditions.checkArgument(!result.referencesDataFiles(), "Equality deletes cannot reference data files");
         deleteFiles.addAll(result.deleteFiles());
-        referencedDataFiles.addAll(result.referencedDataFiles());
     }
 
     @Override
     protected DeleteWriteResult aggregatedResult() {
-        return new DeleteWriteResult(deleteFiles, referencedDataFiles);
+        return new DeleteWriteResult(deleteFiles);
     }
 }

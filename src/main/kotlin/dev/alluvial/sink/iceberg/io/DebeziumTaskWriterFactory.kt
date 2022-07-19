@@ -1,6 +1,5 @@
 package dev.alluvial.sink.iceberg.io
 
-import dev.alluvial.backport.iceberg.io.PartitioningWriterFactory
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tags
@@ -69,7 +68,6 @@ class DebeziumTaskWriterFactory(
         val partitioningWriterFactory = PartitioningWriterFactory.builder(fileWriterFactory)
             .fileFactory(outputFileFactory)
             .io(table.io())
-            .fileFormat(fileFormat)
             .targetFileSizeInBytes(targetFileSizeInBytes)
             .buildForFanoutPartition()
 

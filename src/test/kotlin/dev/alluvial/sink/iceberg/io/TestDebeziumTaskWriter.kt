@@ -1,6 +1,5 @@
 package dev.alluvial.sink.iceberg.io
 
-import dev.alluvial.backport.iceberg.io.PartitioningWriterFactory
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
 import dev.alluvial.source.kafka.structSchema
@@ -222,7 +221,6 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
         val partitioningWriterFactory = PartitioningWriterFactory.builder(fileWriterFactory)
             .fileFactory(outputFileFactory)
             .io(table.io())
-            .fileFormat(format)
             .targetFileSizeInBytes(128 * 1024 * 1024)
             .buildForFanoutPartition()
 

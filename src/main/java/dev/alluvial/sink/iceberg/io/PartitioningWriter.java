@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package dev.alluvial.backport.iceberg.io;
+package dev.alluvial.sink.iceberg.io;
 
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DeleteFile;

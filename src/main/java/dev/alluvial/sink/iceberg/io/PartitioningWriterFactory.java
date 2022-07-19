@@ -17,13 +17,13 @@
  * under the License.
  */
 
-package dev.alluvial.backport.iceberg.io;
+package dev.alluvial.sink.iceberg.io;
 
-import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.deletes.PositionDelete;
 import org.apache.iceberg.io.DataWriteResult;
 import org.apache.iceberg.io.DeleteWriteResult;
 import org.apache.iceberg.io.FileIO;
+import org.apache.iceberg.io.FileWriterFactory;
 import org.apache.iceberg.io.OutputFileFactory;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 
@@ -31,16 +31,13 @@ public abstract class PartitioningWriterFactory<T> {
     protected final FileWriterFactory<T> writerFactory;
     protected final OutputFileFactory fileFactory;
     protected final FileIO io;
-    protected final FileFormat fileFormat;
     protected final long targetFileSizeInBytes;
 
-    public PartitioningWriterFactory(
-        FileWriterFactory<T> writerFactory, OutputFileFactory fileFactory,
-        FileIO io, FileFormat fileFormat, long targetFileSizeInBytes) {
+    public PartitioningWriterFactory(FileWriterFactory<T> writerFactory, OutputFileFactory fileFactory,
+                                     FileIO io, long targetFileSizeInBytes) {
         this.writerFactory = writerFactory;
         this.fileFactory = fileFactory;
         this.io = io;
-        this.fileFormat = fileFormat;
         this.targetFileSizeInBytes = targetFileSizeInBytes;
     }
 
@@ -58,7 +55,6 @@ public abstract class PartitioningWriterFactory<T> {
         private FileWriterFactory<T> writerFactory = null;
         private OutputFileFactory fileFactory = null;
         private FileIO io = null;
-        private FileFormat fileFormat = null;
         private long targetFileSizeInBytes = 0;
 
         public Builder(FileWriterFactory<T> writerFactory) {
@@ -73,12 +69,12 @@ public abstract class PartitioningWriterFactory<T> {
 
         public PartitioningWriterFactory<T> buildForClusteredPartition() {
             checkArguments();
-            return new ClusteredWriterFactory<>(writerFactory, fileFactory, io, fileFormat, targetFileSizeInBytes);
+            return new ClusteredWriterFactory<>(writerFactory, fileFactory, io, targetFileSizeInBytes);
         }
 
         public PartitioningWriterFactory<T> buildForFanoutPartition() {
             checkArguments();
-            return new FanoutWriterFactory<>(writerFactory, fileFactory, io, fileFormat, targetFileSizeInBytes);
+            return new FanoutWriterFactory<>(writerFactory, fileFactory, io, targetFileSizeInBytes);
         }
 
         public Builder<T> fileFactory(OutputFileFactory fileFactory) {
@@ -91,11 +87,6 @@ public abstract class PartitioningWriterFactory<T> {
             return this;
         }
 
-        public Builder<T> fileFormat(FileFormat fileFormat) {
-            this.fileFormat = fileFormat;
-            return this;
-        }
-
         public Builder<T> targetFileSizeInBytes(long targetFileSizeInBytes) {
             this.targetFileSizeInBytes = targetFileSizeInBytes;
             return this;
@@ -103,48 +94,46 @@ public abstract class PartitioningWriterFactory<T> {
     }
 
     protected static class ClusteredWriterFactory<T> extends PartitioningWriterFactory<T> {
-        public ClusteredWriterFactory(
-            FileWriterFactory<T> writerFactory, OutputFileFactory fileFactory,
-            FileIO io, FileFormat fileFormat, long targetFileSizeInBytes) {
-            super(writerFactory, fileFactory, io, fileFormat, targetFileSizeInBytes);
+        public ClusteredWriterFactory(FileWriterFactory<T> writerFactory, OutputFileFactory fileFactory,
+                                      FileIO io, long targetFileSizeInBytes) {
+            super(writerFactory, fileFactory, io, targetFileSizeInBytes);
         }
 
         @Override
         public PartitioningWriter<T, DataWriteResult> newDataWriter() {
-            return new ClusteredDataWriter<>(writerFactory, fileFactory, io, fileFormat, targetFileSizeInBytes);
+            return new ClusteredDataWriter<>(writerFactory, fileFactory, io, targetFileSizeInBytes);
         }
 
         @Override
         public PartitioningWriter<T, DeleteWriteResult> newEqualityDeleteWriter() {
-            return new ClusteredEqualityDeleteWriter<>(writerFactory, fileFactory, io, fileFormat, targetFileSizeInBytes);
+            return new ClusteredEqualityDeleteWriter<>(writerFactory, fileFactory, io, targetFileSizeInBytes);
         }
 
         @Override
         public PartitioningWriter<PositionDelete<T>, DeleteWriteResult> newPositionDeleteWriter() {
-            return new ClusteredPositionDeleteWriter<>(writerFactory, fileFactory, io, fileFormat, targetFileSizeInBytes);
+            return new ClusteredPositionDeleteWriter<>(writerFactory, fileFactory, io, targetFileSizeInBytes);
         }
     }
 
     protected static class FanoutWriterFactory<T> extends PartitioningWriterFactory<T> {
-        public FanoutWriterFactory(
-            FileWriterFactory<T> writerFactory, OutputFileFactory fileFactory,
-            FileIO io, FileFormat fileFormat, long targetFileSizeInBytes) {
-            super(writerFactory, fileFactory, io, fileFormat, targetFileSizeInBytes);
+        public FanoutWriterFactory(FileWriterFactory<T> writerFactory, OutputFileFactory fileFactory,
+                                   FileIO io, long targetFileSizeInBytes) {
+            super(writerFactory, fileFactory, io, targetFileSizeInBytes);
         }
 
         @Override
         public PartitioningWriter<T, DataWriteResult> newDataWriter() {
-            return new FanoutDataWriter<>(writerFactory, fileFactory, io, fileFormat, targetFileSizeInBytes);
+            return new FanoutDataWriter<>(writerFactory, fileFactory, io, targetFileSizeInBytes);
         }
 
         @Override
         public PartitioningWriter<T, DeleteWriteResult> newEqualityDeleteWriter() {
-            return new FanoutEqualityDeleteWriter<>(writerFactory, fileFactory, io, fileFormat, targetFileSizeInBytes);
+            return new FanoutEqualityDeleteWriter<>(writerFactory, fileFactory, io, targetFileSizeInBytes);
         }
 
         @Override
         public PartitioningWriter<PositionDelete<T>, DeleteWriteResult> newPositionDeleteWriter() {
-            return new FanoutPositionDeleteWriter<>(writerFactory, fileFactory, io, fileFormat, targetFileSizeInBytes);
+            return new FanoutPositionDeleteWriter<>(writerFactory, fileFactory, io, targetFileSizeInBytes);
         }
     }
 }

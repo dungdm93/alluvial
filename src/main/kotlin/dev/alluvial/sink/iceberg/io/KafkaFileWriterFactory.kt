@@ -1,6 +1,5 @@
 package dev.alluvial.sink.iceberg.io
 
-import dev.alluvial.backport.iceberg.io.BaseFileWriterFactory
 import dev.alluvial.sink.iceberg.avro.KafkaAvroWriter
 import dev.alluvial.sink.iceberg.parquet.KafkaParquetWriter
 import dev.alluvial.sink.iceberg.type.IcebergSchema
@@ -12,10 +11,11 @@ import org.apache.iceberg.MetadataColumns.DELETE_FILE_ROW_FIELD_NAME
 import org.apache.iceberg.SortOrder
 import org.apache.iceberg.Table
 import org.apache.iceberg.TableProperties
-import org.apache.iceberg.avro.BackportAvro
+import org.apache.iceberg.avro.Avro
+import org.apache.iceberg.data.BaseFileWriterFactory
 import org.apache.iceberg.io.DeleteSchemaUtil
-import org.apache.iceberg.orc.BackportORC
-import org.apache.iceberg.parquet.BackportParquet
+import org.apache.iceberg.orc.ORC
+import org.apache.iceberg.parquet.Parquet
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions
 
 class KafkaFileWriterFactory private constructor(
@@ -64,35 +64,35 @@ class KafkaFileWriterFactory private constructor(
         return positionDeleteKafkaSchema!!
     }
 
-    override fun configureDataWrite(builder: BackportAvro.DataWriteBuilder) {
+    override fun configureDataWrite(builder: Avro.DataWriteBuilder) {
         builder.createWriterFunc { KafkaAvroWriter(dataKafkaSchema()) }
     }
 
-    override fun configureDataWrite(builder: BackportParquet.DataWriteBuilder) {
+    override fun configureDataWrite(builder: Parquet.DataWriteBuilder) {
         builder.createWriterFunc { msgType ->
             KafkaParquetWriter.buildWriter(dataKafkaSchema(), msgType)
         }
     }
 
-    override fun configureDataWrite(builder: BackportORC.DataWriteBuilder) {
+    override fun configureDataWrite(builder: ORC.DataWriteBuilder) {
         TODO("Not yet implemented")
     }
 
-    override fun configureEqualityDelete(builder: BackportAvro.DeleteWriteBuilder) {
+    override fun configureEqualityDelete(builder: Avro.DeleteWriteBuilder) {
         builder.createWriterFunc { KafkaAvroWriter(equalityDeleteKafkaSchema()) }
     }
 
-    override fun configureEqualityDelete(builder: BackportParquet.DeleteWriteBuilder) {
+    override fun configureEqualityDelete(builder: Parquet.DeleteWriteBuilder) {
         builder.createWriterFunc { msgType ->
             KafkaParquetWriter.buildWriter(equalityDeleteKafkaSchema(), msgType)
         }
     }
 
-    override fun configureEqualityDelete(builder: BackportORC.DeleteWriteBuilder) {
+    override fun configureEqualityDelete(builder: ORC.DeleteWriteBuilder) {
         TODO("Not yet implemented")
     }
 
-    override fun configurePositionDelete(builder: BackportAvro.DeleteWriteBuilder) {
+    override fun configurePositionDelete(builder: Avro.DeleteWriteBuilder) {
         val rowField = positionDeleteKafkaSchema().field(DELETE_FILE_ROW_FIELD_NAME)
         if (rowField != null) {
             // KafkaAvroWriter accepts just the Kafka schema of the field ignoring the path and pos
@@ -100,13 +100,13 @@ class KafkaFileWriterFactory private constructor(
         }
     }
 
-    override fun configurePositionDelete(builder: BackportParquet.DeleteWriteBuilder) {
+    override fun configurePositionDelete(builder: Parquet.DeleteWriteBuilder) {
         builder.createWriterFunc { msgType ->
             KafkaParquetWriter.buildWriter(positionDeleteKafkaSchema(), msgType)
         }
     }
 
-    override fun configurePositionDelete(builder: BackportORC.DeleteWriteBuilder) {
+    override fun configurePositionDelete(builder: ORC.DeleteWriteBuilder) {
         TODO("Not yet implemented")
     }
 
