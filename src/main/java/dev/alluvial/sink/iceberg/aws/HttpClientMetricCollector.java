@@ -1,4 +1,4 @@
-package dev.alluvial.aws.metric;
+package dev.alluvial.sink.iceberg.aws;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;

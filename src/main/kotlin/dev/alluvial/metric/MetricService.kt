@@ -1,8 +1,8 @@
 package dev.alluvial.metric
 
-import dev.alluvial.aws.metric.HttpClientMetricCollector
-import dev.alluvial.aws.metric.MicrometerMetricPublisher
-import dev.alluvial.aws.metric.ServiceClientMetricCollector
+import dev.alluvial.sink.iceberg.aws.HttpClientMetricCollector
+import dev.alluvial.sink.iceberg.aws.MicrometerMetricPublisher
+import dev.alluvial.sink.iceberg.aws.ServiceClientMetricCollector
 import dev.alluvial.metric.exporters.MetricExporter
 import dev.alluvial.runtime.MetricConfig
 import io.micrometer.core.instrument.Tag

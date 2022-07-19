@@ -1,4 +1,4 @@
-package dev.alluvial.aws.metric;
+package dev.alluvial.sink.iceberg.aws;
 
 import software.amazon.awssdk.metrics.MetricCollection;
 import software.amazon.awssdk.metrics.SdkMetric;
