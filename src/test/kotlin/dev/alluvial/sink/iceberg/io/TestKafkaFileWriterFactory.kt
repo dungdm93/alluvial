@@ -1,17 +1,22 @@
 package dev.alluvial.sink.iceberg.io
 
-import dev.alluvial.backport.iceberg.io.FileWriterFactory
-import dev.alluvial.backport.iceberg.io.TestFileWriterFactory
 import dev.alluvial.sink.iceberg.type.IcebergSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
 import dev.alluvial.source.kafka.structSchema
 import org.apache.iceberg.FileFormat
+import org.apache.iceberg.io.FileWriterFactory
+import org.apache.iceberg.io.TestFileWriterFactory
 import org.apache.iceberg.util.StructLikeSet
 import org.apache.kafka.connect.data.Schema.INT32_SCHEMA
 import org.apache.kafka.connect.data.Schema.STRING_SCHEMA
+import org.junit.Assume
 
 internal class TestKafkaFileWriterFactory(fileFormat: FileFormat, partitioned: Boolean) :
     TestFileWriterFactory<KafkaStruct>(fileFormat, partitioned) {
+
+    init {
+        Assume.assumeTrue("Skip FileFormat.ORC because of NotImplementedError", fileFormat != FileFormat.ORC)
+    }
 
     override fun newWriterFactory(
         dataSchema: IcebergSchema, equalityFieldIds: List<Int>?,
