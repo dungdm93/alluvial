@@ -140,7 +140,8 @@ dependencies {
     compileOnly("software.amazon.awssdk:dynamodb:$awsVersion")
     implementation("software.amazon.awssdk:url-connection-client:$awsVersion")
 
-    // Iceberg transient dependency
+    // Make those Iceberg's transient dependencies available in compile scope
+    implementation("org.apache.iceberg:iceberg-common:$icebergVersion")
     implementation("org.apache.iceberg:iceberg-bundled-guava:$icebergVersion")
     implementation("org.apache.avro:avro:1.10.2")
     implementation("org.apache.orc:orc-core:1.7.5")
