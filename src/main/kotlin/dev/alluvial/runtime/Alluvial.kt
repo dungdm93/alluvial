@@ -162,8 +162,11 @@ class Alluvial : Runnable {
         }
 
         fun unregisterStreamlet(streamlet: DebeziumStreamlet) {
-            streamletStatuses.remove(streamlet.name)
-                ?.close()
+            streamletStatuses.remove(streamlet.name)?.let {
+                it.close()
+                registry.remove(it)
+                logger.debug("Unwatch status of streamlet {}", streamlet.name)
+            }
         }
 
         override fun close() {
