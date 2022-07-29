@@ -5,6 +5,7 @@ import dev.alluvial.sink.iceberg.io.GenericReader
 import org.apache.iceberg.DataOperations.*
 import org.apache.iceberg.FileContent.*
 import org.apache.iceberg.MetadataColumns.*
+import org.apache.iceberg.SnapshotRef.MAIN_BRANCH
 import org.apache.iceberg.SnapshotSummary.*
 import org.apache.iceberg.exceptions.ValidationException
 import org.apache.iceberg.expressions.Expressions
@@ -18,10 +19,10 @@ internal class SquashOperation(
 ) : MergingSnapshotProducer<SquashOperation>(tableName, ops) {
     private val io = ops.io()
 
-    private lateinit var lowSnapshot: Snapshot
+    private var lowSnapshot: Snapshot? = null
     private lateinit var highSnapshot: Snapshot
     private lateinit var operation: String
-    private lateinit var rollback: SetSnapshotOperation
+    private lateinit var rollback: PendingUpdate<*>
     private var cherrypickUpdates = emptyList<SnapshotProducer<*>>()
     private val cherrypickMap = mutableMapOf<Long, SnapshotProducer<*>>()
 
@@ -40,16 +41,21 @@ internal class SquashOperation(
 
     override fun operation() = operation
 
-    fun squash(lowSnapshotId: Long, highSnapshotId: Long): SquashOperation {
+    fun squash(lowSnapshotId: Long?, highSnapshotId: Long): SquashOperation {
         val base = current()
-        lowSnapshot = base.snapshot(lowSnapshotId)
+        lowSnapshot = lowSnapshotId?.let(base::snapshot)
         highSnapshot = base.snapshot(highSnapshotId)
 
-        rollback = SetSnapshotOperation(ops)
-            .rollbackTo(lowSnapshotId)
+        rollback = if (lowSnapshotId != null) {
+            SetSnapshotOperation(ops)
+                .rollbackTo(lowSnapshotId)
+        } else {
+            RemoveBranch()
+                .name(MAIN_BRANCH)
+        }
 
         val ancestors = base.ancestorsOf(highSnapshotId)
-            .filter { it.sequenceNumber() > lowSnapshot.sequenceNumber() }
+            .filterAfter(lowSnapshot)
             .reversed()
 
         setFiles(ancestors)
@@ -88,7 +94,7 @@ internal class SquashOperation(
         val base = refresh()
 
         cherrypickUpdates = base.currentAncestors()
-            .filter { it.sequenceNumber() > highSnapshot.sequenceNumber() }
+            .filterAfter(highSnapshot)
             .reversed()
             .map { cherrypickMap.computeIfAbsent(it.snapshotId(), this::cherrypick) }
 
@@ -109,7 +115,7 @@ internal class SquashOperation(
 
     private fun validatePosDeletesReferenceToDataFileInRange(current: TableMetadata) {
         val ancestors = current.ancestorsOf(highSnapshot)
-            .filter { it.sequenceNumber() > lowSnapshot.sequenceNumber() }
+            .filterAfter(lowSnapshot)
             .reversed()
 
         val dataFiles = mutableSetOf<DataFile>()
@@ -166,9 +172,9 @@ internal class SquashOperation(
     }
 
     private fun setSummary(ancestors: List<Snapshot>) {
-        set(SQUASH_SNAPSHOT_ID_PROP, "(${lowSnapshot.snapshotId()}..${highSnapshot.snapshotId()}]")
+        set(SQUASH_SNAPSHOT_ID_PROP, "(${lowSnapshot?.snapshotId() ?: ""}..${highSnapshot.snapshotId()}]")
 
-        val originalSnapshotTs = highSnapshot.tsMs()
+        val originalSnapshotTs = highSnapshot.originalTimestampMillis()
         set(ORIGINAL_SNAPSHOT_TS_PROP, originalSnapshotTs.toString())
 
         ancestors.forEach { snapshot ->
@@ -300,10 +306,38 @@ internal class SquashOperation(
         private fun setSummary(snapshot: Snapshot) {
             set(SOURCE_SNAPSHOT_ID_PROP, snapshot.snapshotId().toString())
 
-            val originalSnapshotTs = snapshot.tsMs()
+            val originalSnapshotTs = snapshot.originalTimestampMillis()
             set(ORIGINAL_SNAPSHOT_TS_PROP, originalSnapshotTs.toString())
 
             snapshot.extraMetadata().forEach(::set)
+        }
+    }
+
+    /**
+     * `UpdateSnapshotReferencesOperation` is not allowed to remove `main` branch
+     * orphan branch (snapshotId = -1) can't be created either
+     * @see org.apache.iceberg.UpdateSnapshotReferencesOperation.removeBranch
+     * @see org.apache.iceberg.TableMetadata.Builder.setRef
+     */
+    inner class RemoveBranch : PendingUpdate<SnapshotRef> {
+        private lateinit var name: String
+
+        fun name(branchName: String): RemoveBranch {
+            this.name = branchName
+            return this
+        }
+
+        override fun apply(): SnapshotRef {
+            return SnapshotRef.branchBuilder(-1).build()
+        }
+
+        override fun commit() {
+            val base = refresh()
+            val updated = TableMetadata.buildFrom(base)
+                .removeRef(name)
+                .build()
+
+            ops.commit(base, updated)
         }
     }
 }

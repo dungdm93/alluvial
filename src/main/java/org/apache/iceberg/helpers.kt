@@ -78,11 +78,21 @@ const val SQUASH_SNAPSHOT_ID_PROP = "squash-snapshot-id"
 const val ORIGINAL_SNAPSHOT_TS_PROP = "original-snapshot-ts"
 val POS_DELETE_SCHEMA: Schema = DeleteSchemaUtil.pathPosSchema()
 
-fun Snapshot.tsMs(): Long {
+fun Snapshot.originalTimestampMillis(): Long {
     return PropertyUtil.propertyAsLong(summary(), ORIGINAL_SNAPSHOT_TS_PROP, timestampMillis())
 }
 
 fun Snapshot.extraMetadata(): Map<String, String> {
     return this.summary()
         .filterKeys { it.startsWith(EXTRA_METADATA_PREFIX) }
+}
+
+fun Iterable<Snapshot>.filterAfter(snapshot: Snapshot?): Iterable<Snapshot> {
+    if (snapshot == null) return this
+    return this.filter { it.sequenceNumber() > snapshot.sequenceNumber() }
+}
+
+fun Snapshot.isAfter(snapshot: Snapshot?): Boolean {
+    if (snapshot == null) return true
+    return this.sequenceNumber() > snapshot.sequenceNumber()
 }
