@@ -48,7 +48,7 @@ class TestSquashOperation : TableTestBase(2) {
     }
 
     @Test
-    fun testNormalCase() {
+    fun testSquashMiddleCommits() {
         setupAppendOnlyTable()
         val squash = SquashOperation(table.name(), table.ops())
             .squash(2, 4) // (B..D]
@@ -58,7 +58,35 @@ class TestSquashOperation : TableTestBase(2) {
 
         assertKeepOldSnapshots(table, setOf(1, 2))
         assertSquashSnapshot(table, Pair(2, 4), 7, Pair(listOf(FILE_G, FILE_H), listOf()))
-        assertCherrypickSnapshot(table, mapOf(5L to 8L, 6L to 9L))
+        assertCherrypickSnapshots(table, mapOf(5L to 8L, 6L to 9L))
+    }
+
+    @Test
+    fun testSquashHeadCommits() {
+        setupAppendOnlyTable()
+        val squash = SquashOperation(table.name(), table.ops())
+            .squash(3, 6) // (C..F]
+        squash.add(FILE_G)
+        squash.add(FILE_H)
+        squash.commit()
+
+        assertKeepOldSnapshots(table, setOf(1, 2, 3))
+        assertSquashSnapshot(table, Pair(3, 6), 7, Pair(listOf(FILE_G, FILE_H), listOf()))
+        Assert.assertEquals("New Commit is current", table.currentSnapshotId(), 7L)
+    }
+
+    @Test
+    fun testSquashTailCommits() {
+        setupAppendOnlyTable()
+        val squash = SquashOperation(table.name(), table.ops())
+            .squash(null, 4) // (..D]
+        squash.add(FILE_G)
+        squash.add(FILE_H)
+        squash.commit()
+
+        assertKeepOldSnapshots(table, setOf())
+        assertSquashSnapshot(table, Pair(null, 4), 7, Pair(listOf(FILE_G, FILE_H), listOf()))
+        assertCherrypickSnapshots(table, mapOf(5L to 8L, 6L to 9L))
     }
 
     private fun assertKeepOldSnapshots(table: Table, keepIds: Set<Long>) {
@@ -71,14 +99,14 @@ class TestSquashOperation : TableTestBase(2) {
     @Suppress("SameParameterValue")
     private fun assertSquashSnapshot(
         table: Table,
-        squashRange: Pair<Long, Long>, newId: Long,
+        squashRange: Pair<Long?, Long>, newId: Long,
         newFiles: Pair<List<DataFile>, List<DeleteFile>>
     ) {
         val lowSnapshotId = squashRange.first
         val highSnapshotId = squashRange.second
 
         val squashedSnapshot = table.ancestorsOf(highSnapshotId)
-            .filter { it.snapshotId() > lowSnapshotId }
+            .filterAfter(lowSnapshotId?.let(table::snapshot))
         val squashedSnapshotIds = squashedSnapshot.map { it.snapshotId() }
         val ids = table.currentAncestorIds().toMutableSet()
 
@@ -94,11 +122,11 @@ class TestSquashOperation : TableTestBase(2) {
         val newSnapshot = table.snapshot(newId)
         Assert.assertEquals(
             "SQUASH_SNAPSHOT_ID_PROP",
-            newSnapshot.summary()[SQUASH_SNAPSHOT_ID_PROP], "(${lowSnapshotId}..${highSnapshotId}]"
+            newSnapshot.summary()[SQUASH_SNAPSHOT_ID_PROP], "(${lowSnapshotId ?: ""}..${highSnapshotId}]"
         )
         Assert.assertEquals(
             "ORIGINAL_SNAPSHOT_TS_PROP",
-            newSnapshot.tsMs(), table.snapshot(highSnapshotId).tsMs()
+            newSnapshot.originalTimestampMillis(), table.snapshot(highSnapshotId).originalTimestampMillis()
         )
         Assert.assertEquals(
             "extraMetadata",
@@ -119,7 +147,7 @@ class TestSquashOperation : TableTestBase(2) {
         )
     }
 
-    private fun assertCherrypickSnapshot(table: Table, idMap: Map<Long, Long>) {
+    private fun assertCherrypickSnapshots(table: Table, idMap: Map<Long, Long>) {
         val io = table.io()
         idMap.forEach { (oldId, newId) ->
             val oldSnapshot = table.snapshot(oldId)
@@ -156,7 +184,7 @@ class TestSquashOperation : TableTestBase(2) {
             )
             Assert.assertEquals(
                 "ORIGINAL_SNAPSHOT_TS_PROP",
-                newSnapshot.tsMs(), oldSnapshot.tsMs()
+                newSnapshot.originalTimestampMillis(), oldSnapshot.originalTimestampMillis()
             )
             Assert.assertEquals(
                 "extraMetadata",
