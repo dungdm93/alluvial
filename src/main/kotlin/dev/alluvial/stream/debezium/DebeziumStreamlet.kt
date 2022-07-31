@@ -144,6 +144,7 @@ class DebeziumStreamlet(
     }
 
     override fun close() {
+        logger.warn("Closing {}", this)
         inlet.close()
         outlet.close()
         metrics.close()
@@ -154,9 +155,13 @@ class DebeziumStreamlet(
             MDC.put("streamlet.name", name)
             return block()
         } catch (e: Exception) {
-            close()
             logger.error("Streamlet {} is failed", name)
             status = FAILED
+            try {
+                close()
+            } catch (ex: Exception) {
+                e.addSuppressed(ex)
+            }
             throw e
         } finally {
             MDC.clear()

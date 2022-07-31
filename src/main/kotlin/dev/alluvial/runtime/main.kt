@@ -24,10 +24,13 @@ fun parseConfig(args: Array<out String>): Config {
     return mapper.readValue(FileReader(configFile))
 }
 
-fun main(vararg args: String) {
-    val config = parseConfig(args)
-
-    val alluvial = Alluvial()
+private fun runStreamController(config: Config) {
+    val alluvial = StreamController()
     alluvial.configure(config)
     alluvial.run()
+}
+
+fun main(vararg args: String) {
+    val config = parseConfig(args)
+    runStreamController(config)
 }

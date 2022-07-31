@@ -7,41 +7,46 @@ import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.source.kafka.KafkaSource
 import dev.alluvial.stream.debezium.DebeziumStreamlet
 import dev.alluvial.stream.debezium.DebeziumStreamletFactory
-import dev.alluvial.utils.scheduleInterval
+import dev.alluvial.utils.recommendedPoolSize
+import dev.alluvial.utils.shutdownAndAwaitTermination
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Metrics
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Runnable
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.SendChannel
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.supervisorScope
 import org.apache.iceberg.catalog.TableIdentifier
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
+import java.util.concurrent.Executors
+import java.util.concurrent.SynchronousQueue
+import java.util.concurrent.TimeUnit.MILLISECONDS
+import java.util.concurrent.TimeUnit.SECONDS
 import kotlin.concurrent.thread
 
-class Alluvial : Runnable {
+class StreamController : Runnable {
     companion object {
-        private val logger = LoggerFactory.getLogger(Alluvial::class.java)
+        private val logger = LoggerFactory.getLogger(StreamController::class.java)
+        private val executor = Executors.newScheduledThreadPool(recommendedPoolSize())
         private val registry = Metrics.globalRegistry
     }
 
+    private val metrics = AppMetrics(registry)
     private lateinit var metricService: MetricService
+
     private lateinit var source: KafkaSource
     private lateinit var sink: IcebergSink
     private lateinit var streamletFactory: DebeziumStreamletFactory
     private lateinit var examineInterval: Duration
+
+    private val topic2Table: ConcurrentMap<String, TableIdentifier> = ConcurrentHashMap()
     private val streamlets: ConcurrentMap<String, DebeziumStreamlet> = ConcurrentHashMap()
-    private val topic2Table = mutableMapOf<String, TableIdentifier>()
-    private val metrics = AppMetrics(registry)
+    private val channel = SynchronousQueue<String>() // un-buffered BlockingQueue
 
     private val terminateStreamletsHook = thread(start = false, name = "terminator") {
+        logger.warn("Shutdown Hook: shutdown the ExecutorService")
+        executor.shutdownAndAwaitTermination(60, SECONDS)
+
         logger.warn("Shutdown Hook: closing streamlets")
         streamlets.values.forEach(DebeziumStreamlet::close)
         streamlets.clear()
@@ -65,49 +70,44 @@ class Alluvial : Runnable {
         examineInterval = config.stream.examineInterval
     }
 
-    override fun run(): Unit = runBlocking {
+    override fun run() {
         metricService.run()
         Runtime.getRuntime().addShutdownHook(terminateStreamletsHook)
 
-        val channel = Channel<String>()
+        executor.scheduleWithFixedDelay(::examineStreamlets, 0, examineInterval.toMillis(), MILLISECONDS)
 
-        scheduleInterval(examineInterval.toMillis(), Dispatchers.Default) {
-            examineStreamlets(channel)
-        }
-
-        supervisorScope {
-            for (topic in channel) {
-                val streamlet = getOrCreateStreamlet(topic)
-                launch(Dispatchers.IO) {
-                    logger.info("Launching streamlet {}", streamlet.name)
-                    streamlet.run()
-                }
-            }
+        while (true) {
+            val topic = channel.take()
+            val streamlet = getOrCreateStreamlet(topic)
+            logger.info("Launching streamlet {}", streamlet.name)
+            executor.submit(streamlet)
         }
     }
 
-    private suspend fun examineStreamlets(channel: SendChannel<String>) {
+    private fun examineStreamlets() {
         logger.info("Start examine streamlets")
         val topics = source.availableTopics()
         metrics.availableTopicsCount = topics.size
 
         logger.info("Found {} topics available", topics.size)
         for (topic in topics) {
-            examineStreamlet(topic, channel)
+            examineStreamlet(topic)
         }
     }
 
-    private suspend fun examineStreamlet(topic: String, channel: SendChannel<String>) {
+    private fun examineStreamlet(topic: String) {
         val tableId = topic2Table.computeIfAbsent(topic) { source.tableIdOf(topic) }
         if (topic !in streamlets) {
-            if (currentLagOf(topic, tableId) > 0) channel.send(topic)
+            if (currentLagOf(topic, tableId) > 0) channel.put(topic)
             return
         }
         val streamlet = streamlets[topic]!!
         when (streamlet.status) {
             CREATED -> logger.warn("Streamlet {} is still in CREATED state, something may be wrong!!!", streamlet.name)
+
             RUNNING,
             COMMITTING -> logger.info("Streamlet {} is {}", streamlet.name, streamlet.status)
+
             SUSPENDED -> {
                 if (streamlet.canTerminate()) {
                     logger.info("Close streamlet {}: No more message for awhile", streamlet.name)
@@ -115,11 +115,12 @@ class Alluvial : Runnable {
                     streamlets.remove(topic)
                         ?.also(metrics::unregisterStreamlet)
                 } else if (streamlet.shouldRun()) {
-                    channel.send(topic)
+                    channel.put(topic)
                 } else {
                     logger.info("Streamlet {} still SUSPENDED for next examination", streamlet.name)
                 }
             }
+
             FAILED -> logger.error("Streamlet {} is FAILED", streamlet.name) // TODO add retry mechanism
         }
     }
