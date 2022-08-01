@@ -3,15 +3,15 @@
 package dev.alluvial.runtime
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
 import java.io.FileReader
 
-val mapper = YAMLMapper().also {
-    val kotlinModule = KotlinModule.Builder()
-        .build()
-    it.registerModule(kotlinModule)
-}
+val mapper: YAMLMapper = YAMLMapper.builder()
+    .addModule(KotlinModule.Builder().build())
+    .addModule(JavaTimeModule())
+    .build()
 
 fun parseConfig(args: Array<out String>): Config {
     if (args.isEmpty()) {

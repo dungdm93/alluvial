@@ -7,8 +7,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Class to publish AWS metric collection to multiple metric collectors.
- * Metric collections are passed to collectors by service ID.
+ * Class to publish AWS metrics collection to multiple metrics collectors.
+ * Metrics collections are passed to collectors by service ID.
  *
  * @link <a href="https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/metrics-list.html">Service client metrics</a>
  */

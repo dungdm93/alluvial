@@ -20,7 +20,7 @@ import java.util.Map;
 
 import static org.apache.iceberg.aws.AwsClientFactories.*;
 
-// client.factory=dev.alluvial.aws.metric.AlluvialAwsClientFactory
+// client.factory=dev.alluvial.sink.iceberg.aws.AlluvialAwsClientFactory
 public class AlluvialAwsClientFactory implements AwsClientFactory {
     // used to delegate all creator except s3()
     private AwsClientFactory defaultFactory;

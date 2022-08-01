@@ -10,7 +10,7 @@ data class Config(
     val source: SourceConfig,
     val sink: SinkConfig,
     val stream: StreamConfig,
-    val metric: MetricConfig,
+    val metrics: MetricsConfig,
 )
 
 data class SourceConfig(
@@ -80,17 +80,17 @@ data class PartitionSpecConfig(
     }
 }
 
-data class MetricConfig(
-    val exporters: List<MetricExporterConfig> = emptyList(),
+data class MetricsConfig(
+    val exporters: List<MetricsExporterConfig> = emptyList(),
     val commonTags: Map<String, String> = emptyMap(),
     // TODO: Support including/excluding meters by patterns
 )
 
-data class MetricExporterConfig(
+data class MetricsExporterConfig(
     val kind: String,
     val properties: Map<String, String> = emptyMap(),
 ) {
     init {
-        require(kind.isNotEmpty()) { "metric.exporters.kind cannot be empty" }
+        require(kind.isNotEmpty()) { "metrics.exporters.kind cannot be empty" }
     }
 }
