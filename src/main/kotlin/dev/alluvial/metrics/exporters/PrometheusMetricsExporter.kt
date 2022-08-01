@@ -1,4 +1,4 @@
-package dev.alluvial.metric.exporters
+package dev.alluvial.metrics.exporters
 
 import io.micrometer.core.instrument.config.validate.PropertyValidator.getBoolean
 import io.micrometer.core.instrument.config.validate.PropertyValidator.getString
@@ -7,8 +7,8 @@ import io.micrometer.prometheus.PrometheusMeterRegistry
 import io.prometheus.client.exporter.HTTPServer
 import java.net.InetSocketAddress
 
-class PrometheusMetricExporter(config: Map<String, String>) : MetricExporter() {
-    private val exporterConfig = PrometheusMetricExporterConfig(config)
+class PrometheusMetricsExporter(config: Map<String, String>) : MetricsExporter() {
+    private val exporterConfig = PrometheusMetricsExporterConfig(config)
     override val registry = PrometheusMeterRegistry(exporterConfig)
     private var server: HTTPServer? = null
 
@@ -25,7 +25,7 @@ class PrometheusMetricExporter(config: Map<String, String>) : MetricExporter() {
         server?.close()
     }
 
-    private class PrometheusMetricExporterConfig(private val config: Map<String, String>) : PrometheusConfig {
+    private class PrometheusMetricsExporterConfig(private val config: Map<String, String>) : PrometheusConfig {
         companion object {
             const val SERVER_BIND_DEFAULT = "127.0.0.1:9090"
         }

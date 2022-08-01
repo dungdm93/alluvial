@@ -1,7 +1,7 @@
 package dev.alluvial.runtime
 
 import dev.alluvial.api.Streamlet.Status.*
-import dev.alluvial.metric.MetricService
+import dev.alluvial.metrics.MetricsService
 import dev.alluvial.schema.debezium.KafkaSchemaTableCreator
 import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.source.kafka.KafkaSource
@@ -32,7 +32,7 @@ class StreamController : Runnable {
     }
 
     private val metrics = AppMetrics(registry)
-    private lateinit var metricService: MetricService
+    private lateinit var metricsService: MetricsService
 
     private lateinit var source: KafkaSource
     private lateinit var sink: IcebergSink
@@ -53,15 +53,14 @@ class StreamController : Runnable {
 
         logger.warn("Shutdown Hook: closing metrics")
         metrics.close()
-        metricService.close()
+        metricsService.close()
     }
 
     fun configure(config: Config) {
-        metricService = MetricService(registry, config.metric)
+        metricsService = MetricsService(registry, config.metric)
             .bindJvmMetrics()
             .bindSystemMetrics()
             .bindAwsClientMetrics()
-        val registry = metricService.registry
 
         source = KafkaSource(config.source, registry)
         sink = IcebergSink(config.sink, registry)
@@ -71,7 +70,7 @@ class StreamController : Runnable {
     }
 
     override fun run() {
-        metricService.run()
+        metricsService.run()
         Runtime.getRuntime().addShutdownHook(terminateStreamletsHook)
 
         executor.scheduleWithFixedDelay(::examineStreamlets, 0, examineInterval.toMillis(), MILLISECONDS)
