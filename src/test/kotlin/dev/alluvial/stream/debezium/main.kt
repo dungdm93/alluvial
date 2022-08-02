@@ -1,6 +1,8 @@
 package dev.alluvial.stream.debezium
 
+import dev.alluvial.runtime.CompactionRules
 import dev.alluvial.runtime.Config
+import dev.alluvial.runtime.ManagerConfig
 import dev.alluvial.runtime.MetricsConfig
 import dev.alluvial.runtime.SinkConfig
 import dev.alluvial.runtime.SourceConfig
@@ -35,7 +37,10 @@ val config = Config(
         tableCreation = TableCreationConfig(),
     ),
     stream = StreamConfig(kind = "debezium"),
-    metrics = MetricsConfig(),
+    manager = ManagerConfig(
+        namespace = arrayOf("alluvial"),
+    ),
+    metrics = MetricsConfig()
 )
 
 fun main() {
