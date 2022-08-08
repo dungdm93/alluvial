@@ -51,7 +51,6 @@ val mockitoVersion = "4.6.1"
 
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.6.3")
     api("org.slf4j:slf4j-api:$slf4jVersion")
     runtimeOnly("ch.qos.logback:logback-classic:$logbackVersion")
     implementation("io.micrometer:micrometer-core:$micrometerVersion")
