@@ -10,8 +10,6 @@ import dev.alluvial.sink.iceberg.transform
 import dev.alluvial.sink.iceberg.type.IcebergSchema
 import org.apache.iceberg.FileContent.POSITION_DELETES
 import org.apache.iceberg.TableProperties.*
-import org.apache.iceberg.common.DynFields
-import org.apache.iceberg.common.DynMethods
 import org.apache.iceberg.data.Record
 import org.apache.iceberg.deletes.Deletes
 import org.apache.iceberg.exceptions.ValidationException
@@ -27,6 +25,9 @@ import org.apache.iceberg.util.StructLikeMap
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.IOException
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 
 /**
  * NOTE: test the following use-cases
@@ -40,29 +41,20 @@ import java.io.IOException
  */
 class CompactSnapshots(
     private val table: Table,
-    lowSnapshotId: Long,
+    lowSnapshotId: Long?,
     highSnapshotId: Long,
 ) {
     companion object {
         private val logger = LoggerFactory.getLogger(CompactSnapshots::class.java)
-        private val transactionUpdatesField = DynFields.builder()
-            .hiddenImpl(BaseTransaction::class.java, "updates")
-            .build<MutableList<PendingUpdate<*>>>()
-        private val transactionCheckLastOperationCommittedMethod = DynMethods.builder("checkLastOperationCommitted")
-            .hiddenImpl(BaseTransaction::class.java, String::class.java)
-            .build()
-
-        private fun transactionFor(table: Table): SquashTransaction {
-            val ops = (table as HasTableOperations).operations()
-            return SquashTransaction(table.name(), ops, ops.refresh())
-        }
+        private val PARTITION_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneOffset.UTC)
+        private val TASK_FORMATTER = DateTimeFormatter.ofPattern("HHmmss").withZone(ZoneOffset.UTC)
     }
 
     private val io = table.io()
     private val specsById = table.specs()
     private val schemasById = table.schemas()
 
-    private val lowSnapshot = table.snapshot(lowSnapshotId)
+    private val lowSnapshot = lowSnapshotId?.let(table::snapshot)
     private val highSnapshot = table.snapshot(highSnapshotId)
     private val schema = highSnapshot.schema()
     private val spec = highSnapshot.spec()
@@ -76,18 +68,9 @@ class CompactSnapshots(
         assert(lowSnapshotId !in ancestorIds || highSnapshotId !in ancestorIds) {
             "lowSnapshotId & highSnapshotId MUST be in current timeline"
         }
-        assert(lowSnapshot.sequenceNumber() < highSnapshot.sequenceNumber()) {
+        assert(lowSnapshot == null || lowSnapshot.sequenceNumber() < highSnapshot.sequenceNumber()) {
             "sequenceNumber of lowSnapshot MUST be < highSnapshot"
         }
-
-        val fileFormat = PropertyUtil.propertyAsString(
-            table.properties(),
-            DEFAULT_FILE_FORMAT,
-            DEFAULT_FILE_FORMAT_DEFAULT.uppercase()
-        ).let(FileFormat::valueOf)
-        val outputFileFactory = OutputFileFactory.builderFor(table, 1, 1)
-            .format(fileFormat)
-            .build()
 
         fileWriterFactoryBuilder = GenericFileWriterFactory.builder(table).apply {
             dataSchema = schema
@@ -99,6 +82,11 @@ class CompactSnapshots(
             WRITE_TARGET_FILE_SIZE_BYTES,
             WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT
         )
+        val now = Instant.now()
+        val partitionId = PARTITION_FORMATTER.format(now).toInt()
+        val taskId = TASK_FORMATTER.format(now).toLong()
+        val outputFileFactory = OutputFileFactory.builderFor(table, partitionId, taskId)
+            .build()
         partitioningWriterFactoryBuilder = PartitioningWriterFactory.builder<Record>()
             .fileFactory(outputFileFactory)
             .io(io)
@@ -106,9 +94,9 @@ class CompactSnapshots(
     }
 
     fun execute() {
-        checkPositionDelete()
+        if (lowSnapshot != null) checkPositionDelete()
         rewriteData()
-        rewriteEqualityDelete()
+        if (lowSnapshot != null) rewriteEqualityDelete()
 
         apply()
     }
@@ -118,7 +106,7 @@ class CompactSnapshots(
      */
     private fun checkPositionDelete() {
         val ancestors = table.ancestorsOf(highSnapshot)
-            .filter { it.sequenceNumber() > lowSnapshot.sequenceNumber() }
+            .filterAfter(lowSnapshot)
             .reversed()
 
         val dataFiles = mutableSetOf<DataFile>()
@@ -134,11 +122,13 @@ class CompactSnapshots(
             val records = GenericReader(io, POS_DELETE_SCHEMA)
                 .openFile(posDelFiles, filter)
 
-            if (records.any()) {
-                throw ValidationException(
-                    "Snapshot %s contains POSITION_DELETES file reference to out of CompactionGroup",
-                    snapshot.snapshotId()
-                )
+            records.useResource {
+                if (it.any()) {
+                    throw ValidationException(
+                        "Snapshot %s contains POSITION_DELETES file reference to out of CompactionGroup",
+                        snapshot.snapshotId()
+                    )
+                }
             }
         }
     }
@@ -161,8 +151,7 @@ class CompactSnapshots(
     private fun planFileGroups(): Map<StructLike, List<FileScanTask>> {
         val fileScanTasks = ManifestGroup(io, highSnapshot.dataManifests(io), highSnapshot.deleteManifests(io))
             .specsById(specsById)
-            .filterManifests { it.minSequenceNumber() > lowSnapshot.sequenceNumber() }
-            .filterManifestEntries { it.sequenceNumber() > lowSnapshot.sequenceNumber() }
+            .filterEntryAfter(lowSnapshot)
             .ignoreDeleted()
             .planFiles()
 
@@ -216,14 +205,14 @@ class CompactSnapshots(
      */
     private fun planEqualityDeleteFiles(): Map<Set<Int>, Map<StructLike, List<DeleteFile>>> {
         val deleteEntries = highSnapshot.deleteManifests(io)
-            .filter { it.minSequenceNumber() > lowSnapshot.sequenceNumber() }
+            .filterAfter(lowSnapshot)
             .filter { it.hasAddedFiles() || it.hasExistingFiles() } // ignoreDeleted ManifestFile
             .transform {
                 ManifestFiles.readDeleteManifest(it, io, specsById)
                     .liveEntries() // ignoreDeleted ManifestFile
             }
             .concat()
-            .filter { it.sequenceNumber() > lowSnapshot.sequenceNumber() } // ignoreDeleted ManifestFile
+            .filterAfter(lowSnapshot) // ignoreDeleted ManifestFile
             .filter { it.file().content() == FileContent.EQUALITY_DELETES }
 
         val partitionType = spec.partitionType()
@@ -276,9 +265,9 @@ class CompactSnapshots(
      * @see org.apache.iceberg.RemoveSnapshots.internalApply
      */
     private fun apply() {
-        val txn = transactionFor(table)
+        val txn = AlluvialTransaction.of(table)
         val squash = txn.squash()
-        squash.squash(lowSnapshot.snapshotId(), highSnapshot.snapshotId())
+        squash.squash(lowSnapshot?.snapshotId(), highSnapshot.snapshotId())
             .validateDeleteFilesInRange(false) // already validated
 
         val result = resultBuilder.build()
@@ -319,7 +308,7 @@ class CompactSnapshots(
             try {
                 this.close()
             } catch (ioe: IOException) {
-                logger.error("Cannot properly close this Closeable", ioe)
+                logger.error("Cannot properly close this resource", ioe)
             }
         }
     }
@@ -332,29 +321,5 @@ class CompactSnapshots(
 
     private fun Snapshot.schema(): Schema {
         return schemasById[this.schemaId()]!!
-    }
-
-    class SquashTransaction(
-        tableName: String,
-        ops: TableOperations,
-        start: TableMetadata
-    ) : BaseTransaction(tableName, ops, TransactionType.SIMPLE, start) {
-        private val updates = transactionUpdatesField.get(this)
-
-        @Suppress("SameParameterValue")
-        private fun checkLastOperationCommitted(operation: String) {
-            // invoke org.apache.iceberg.BaseTransaction.checkLastOperationCommitted which is private method
-            transactionCheckLastOperationCommittedMethod.invoke<Any>(this, operation)
-        }
-
-        internal fun squash(): SquashOperation {
-            checkLastOperationCommitted("CherryPick")
-            val table = table() as TransactionTable
-
-            val squash = SquashOperation(table.name(), table.operations())
-            updates.add(squash)
-
-            return squash
-        }
     }
 }
