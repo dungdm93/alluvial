@@ -10,6 +10,7 @@ import io.micrometer.core.instrument.LongTaskTimer
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tags
 import io.micrometer.core.instrument.Timer
+import org.apache.iceberg.expressions.Expressions
 import org.apache.iceberg.io.TaskWriter
 import org.apache.kafka.connect.sink.SinkRecord
 import org.slf4j.LoggerFactory
@@ -43,7 +44,7 @@ class IcebergTableOutlet(
         }
     }
 
-    fun commit(positions: Map<Int, Long>, lastRecordTimestamp: Long) {
+    fun commit(summary: Map<String, String> = emptyMap()) {
         val result = metrics.recordCommitData(writer!!::complete)
         val rowDelta = table.newRowDelta()
 
@@ -58,18 +59,30 @@ class IcebergTableOutlet(
         // those delete records always reference to data files in the same commit.
         table.currentSnapshot()?.let { rowDelta.validateFromSnapshot(it.snapshotId()) }
 
-        rowDelta.set(ALLUVIAL_POSITION_PROP, mapper.writeValueAsString(positions))
-        rowDelta.set(ALLUVIAL_LAST_RECORD_TIMESTAMP_PROP, lastRecordTimestamp.toString())
-
+        summary.forEach(rowDelta::set)
         metrics.recordCommitMetadata(rowDelta::commit)
         writer = null
     }
 
-    fun updateSourceSchema(keySchema: KafkaSchema, valueSchema: KafkaSchema) {
+    fun updateKeySchema(keySchema: KafkaSchema) {
+        assert(writer == null) { "Must be commit before change Kafka schema" }
+        writerFactory.setEqualityDeleteKafkaSchema(keySchema)
+    }
+
+    fun updateValueSchema(valueSchema: KafkaSchema) {
         assert(writer == null) { "Must be commit before change Kafka schema" }
         val rowSchema = valueSchema.fieldSchema("after")
         writerFactory.setDataKafkaSchema(rowSchema)
-        writerFactory.setEqualityDeleteKafkaSchema(keySchema)
+    }
+
+    /**
+     * Truncate table by creating new snapshot to overwrite all rows.
+     */
+    fun truncate(summary: Map<String, String> = emptyMap()) {
+        logger.warn("Truncate table {}", table.name())
+        val overwrite = table.newOverwrite().overwriteByRowFilter(Expressions.alwaysTrue())
+        summary.forEach(overwrite::set)
+        overwrite.commit()
     }
 
     /**

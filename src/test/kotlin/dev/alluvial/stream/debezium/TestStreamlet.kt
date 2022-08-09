@@ -14,6 +14,7 @@ import org.apache.iceberg.PartitionSpec
 import org.apache.iceberg.SnapshotSummary.TOTAL_RECORDS_PROP
 import org.apache.iceberg.Table
 import org.apache.iceberg.TestTables
+import org.apache.iceberg.data.IcebergGenerics
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.connect.data.Schema
 import org.apache.kafka.connect.data.SchemaBuilder
@@ -60,11 +61,17 @@ internal class TestStreamlet {
         table = TestTables.create(tmpDir, "table", iSchema, PartitionSpec.unpartitioned(), 2)
     }
 
-    private fun record(valueSchema: KafkaSchema? = null, value: KafkaStruct? = null, offset: Long = 0) = SinkRecord(
+    private fun record(
+        keySchema: Schema? = defaultKeySchema,
+        key: KafkaStruct? = defaultKey,
+        valueSchema: KafkaSchema? = null,
+        value: KafkaStruct? = null,
+        offset: Long = 0
+    ) = SinkRecord(
         topic,
         1,
-        defaultKeySchema,
-        defaultKey,
+        keySchema,
+        key,
         valueSchema,
         value,
         offset,
@@ -88,8 +95,8 @@ internal class TestStreamlet {
     fun testCaptureChangesEncounterTombstoneAtStart() {
         val tombstoneRecord = record()
         val createRecord = record(
-            defaultValueSchema,
-            KafkaStruct(defaultValueSchema).put(
+            valueSchema = defaultValueSchema,
+            value = KafkaStruct(defaultValueSchema).put(
                 "before",
                 KafkaStruct(structSchema { field("id", Schema.INT32_SCHEMA) }).put("id", 1)
             ).put(
@@ -123,5 +130,91 @@ internal class TestStreamlet {
 
         table.refresh()
         expectThat(table.currentSnapshot().summary()[TOTAL_RECORDS_PROP]).isEqualTo("1")
+
+        val writtenRecords = IcebergGenerics.read(table).select("id").build().toList()
+        expectThat(writtenRecords.size).isEqualTo(1)
+        expectThat(writtenRecords[0].getField("id")).isEqualTo(2)
+    }
+
+    @Test
+    fun captureTruncateEvent() {
+        val createRecord = record(
+            valueSchema = defaultValueSchema,
+            value = KafkaStruct(defaultValueSchema).put(
+                "before",
+                KafkaStruct(structSchema { field("id", Schema.INT32_SCHEMA) }).put("id", 1)
+            ).put(
+                "after",
+                KafkaStruct(structSchema { field("id", Schema.INT32_SCHEMA) }).put("id", 2)
+            ).put("op", "c")
+        )
+        val truncateRecord = record(
+            keySchema = null,
+            key = null,
+            valueSchema = defaultValueSchema,
+            value = KafkaStruct(defaultValueSchema).put("op", "t")
+        )
+
+        val inlet: KafkaTopicInlet = mock()
+        whenever(inlet.read())
+            .doReturn(createRecord)
+            .thenReturn(truncateRecord)
+            .thenReturn(null)
+
+        createTable(defaultValueSchema.toIcebergSchema())
+        val outlet = spy(createOutlet())
+        val handler = KafkaSchemaSchemaHandler(outlet)
+
+        val customStreamConfig = streamConfig.copy(commitBatchSize = 1)
+        val streamlet = spy(DebeziumStreamlet("streamlet", inlet, outlet, handler, customStreamConfig, registry))
+
+        val shouldRunAnswer = listOf(true, true, false).iterator()
+        doAnswer { shouldRunAnswer.next() }.whenever(streamlet).shouldRun()
+        streamlet.run()
+
+
+        // Only "create" record should be written
+        verify(outlet, times(2)).write(any())
+        verify(outlet, times(1)).commit(any())
+
+        table.refresh()
+        expectThat(table.currentSnapshot().summary()[TOTAL_RECORDS_PROP]).isEqualTo("0")
+
+        val writtenRecords = IcebergGenerics.read(table).select().build().toList()
+        expectThat(writtenRecords.size).isEqualTo(0)
+    }
+
+    @Test
+    fun captureTruncateEventAtBeginning() {
+        val truncateRecord = record(
+            keySchema = null,
+            key = null,
+            valueSchema = defaultValueSchema,
+            value = KafkaStruct(defaultValueSchema).put("op", "t")
+        )
+
+        val inlet: KafkaTopicInlet = mock()
+        whenever(inlet.read())
+            .doReturn(truncateRecord)
+            .thenReturn(null)
+
+        createTable(defaultValueSchema.toIcebergSchema())
+        val outlet = spy(createOutlet())
+        val handler = KafkaSchemaSchemaHandler(outlet)
+        val streamlet = spy(DebeziumStreamlet("streamlet", inlet, outlet, handler, streamConfig, registry))
+
+        val shouldRunAnswer = listOf(true, false).iterator()
+        doAnswer { shouldRunAnswer.next() }.whenever(streamlet).shouldRun()
+        streamlet.run()
+
+        // Only "create" record should be written
+        verify(outlet, times(1)).write(any())
+        verify(outlet, times(0)).commit(any())
+
+        table.refresh()
+        expectThat(table.currentSnapshot().summary()[TOTAL_RECORDS_PROP]).isEqualTo("0")
+
+        val writtenRecords = IcebergGenerics.read(table).select().build().toList()
+        expectThat(writtenRecords.size).isEqualTo(0)
     }
 }

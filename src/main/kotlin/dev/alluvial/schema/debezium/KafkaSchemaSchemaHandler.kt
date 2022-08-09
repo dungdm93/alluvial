@@ -32,7 +32,7 @@ class KafkaSchemaSchemaHandler(
     }
 
     override fun shouldMigrate(record: SinkRecord): Boolean {
-        if (record.value() == null) return false
+        if (record.key() == null || record.value() == null) return false
 
         // Current schema version is null, so should perform migration to ensure the version is updated
         // and new schema is applied (if any)
