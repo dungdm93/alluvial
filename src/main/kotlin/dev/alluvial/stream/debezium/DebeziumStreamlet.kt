@@ -4,8 +4,12 @@ import dev.alluvial.api.SchemaHandler
 import dev.alluvial.api.Streamlet
 import dev.alluvial.api.Streamlet.Status.*
 import dev.alluvial.runtime.StreamConfig
+import dev.alluvial.sink.iceberg.ALLUVIAL_LAST_RECORD_TIMESTAMP_PROP
+import dev.alluvial.sink.iceberg.ALLUVIAL_POSITION_PROP
 import dev.alluvial.sink.iceberg.IcebergTableOutlet
+import dev.alluvial.sink.iceberg.mapper
 import dev.alluvial.source.kafka.KafkaTopicInlet
+import dev.alluvial.utils.TableTruncatedException
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.LongTaskTimer
@@ -67,7 +71,8 @@ class DebeziumStreamlet(
         logger.info("Committing changes {}", offsets)
         metrics.recordCommit {
             status = COMMITTING
-            outlet.commit(offsets, lastRecordTimestamp)
+            val summary = buildSummary()
+            outlet.commit(summary)
             inlet.commit(offsets)
             status = RUNNING
         }
@@ -91,33 +96,47 @@ class DebeziumStreamlet(
     private fun captureChanges(batchSize: Int) {
         var record = inlet.read()
         var count = 0
-        var sourceSchemaIsSet = false
-        while (record != null) {
-            if (schemaHandler.shouldMigrate(record)) {
-                if (count > 0) commit()
-                count = 0 // reset counter
-                schemaHandler.migrateSchema(record)
-                sourceSchemaIsSet = false
-                metrics.incrementSchemaMigration()
-                continue
-            }
-
-            // Tombstone event is ignored
-            if (record.value() != null) {
-                if (!sourceSchemaIsSet) {
-                    outlet.updateSourceSchema(record.keySchema(), record.valueSchema())
-                    sourceSchemaIsSet = true
+        var keySchemaIsSet = false
+        var valueSchemaIsSet = false
+        try {
+            while (record != null) {
+                if (schemaHandler.shouldMigrate(record)) {
+                    if (count > 0) commit()
+                    count = 0 // reset counter
+                    schemaHandler.migrateSchema(record)
+                    keySchemaIsSet = false
+                    valueSchemaIsSet = false
+                    metrics.incrementSchemaMigration()
                 }
-                outlet.write(record)
-                count++
+
+                offsets[record.kafkaPartition()] = record.kafkaOffset() + 1
+                lastRecordTimestamp = max(lastRecordTimestamp, record.timestamp())
+
+                if (!keySchemaIsSet && record.key() != null) {
+                    outlet.updateKeySchema(record.keySchema())
+                    keySchemaIsSet = true
+                }
+
+                // Tombstone event is ignored
+                if (record.value() != null) {
+                    if (!valueSchemaIsSet) {
+                        outlet.updateValueSchema(record.valueSchema())
+                        valueSchemaIsSet = true
+                    }
+                    outlet.write(record)
+                    count++
+                }
+
+                if (count >= batchSize) break
+                record = inlet.read()
             }
 
-            offsets[record.kafkaPartition()] = record.kafkaOffset() + 1
-            lastRecordTimestamp = max(lastRecordTimestamp, record.timestamp())
-            if (count >= batchSize) break
-            record = inlet.read()
+            if (count > 0) commit()
+        } catch (ex: TableTruncatedException) {
+            if (count > 0) commit()
+            val summary = buildSummary()
+            outlet.truncate(summary)
         }
-        if (count > 0) commit()
     }
 
     private fun ensureOffsets() {
@@ -150,12 +169,19 @@ class DebeziumStreamlet(
         metrics.close()
     }
 
+    private fun buildSummary(): Map<String, String> {
+        return mapOf(
+            ALLUVIAL_POSITION_PROP to mapper.writeValueAsString(offsets),
+            ALLUVIAL_LAST_RECORD_TIMESTAMP_PROP to lastRecordTimestamp.toString()
+        )
+    }
+
     private inline fun <R> withMDC(block: () -> R): R {
         try {
             MDC.put("streamlet.name", name)
             return block()
         } catch (e: Exception) {
-            logger.error("Streamlet {} is failed", name)
+            logger.error("Streamlet {} is failed", name, e)
             status = FAILED
             try {
                 close()

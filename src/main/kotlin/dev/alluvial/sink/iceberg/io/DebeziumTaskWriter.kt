@@ -3,6 +3,7 @@ package dev.alluvial.sink.iceberg.io
 import dev.alluvial.sink.iceberg.type.IcebergSchema
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
+import dev.alluvial.utils.TableTruncatedException
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tags
@@ -31,9 +32,9 @@ class DebeziumTaskWriter(
     registry: MeterRegistry,
     tags: Tags
 ) : TaskWriter<SinkRecord> {
-    private val insertWriter = partitioningWriterFactory.newDataWriter()
-    private val equalityDeleteWriter = partitioningWriterFactory.newEqualityDeleteWriter()
-    private val positionDeleteWriter = partitioningWriterFactory.newPositionDeleteWriter()
+    private val insertWriter by lazy(partitioningWriterFactory::newDataWriter)
+    private val equalityDeleteWriter by lazy(partitioningWriterFactory::newEqualityDeleteWriter)
+    private val positionDeleteWriter by lazy(partitioningWriterFactory::newPositionDeleteWriter)
     private val positionDelete: PositionDelete<KafkaStruct> = PositionDelete.create()
     private val insertedRowMap: MutableMap<StructLike, PathOffset>
     private val keyer: Keyer<SinkRecord>
@@ -52,7 +53,11 @@ class DebeziumTaskWriter(
         val value = record.value() as? KafkaStruct ?: return // Tombstone events
         val before = value.getStruct("before")
         val after = value.getStruct("after")
-        key = keyer(record)
+        if (record.key() != null) {
+            key = keyer(record)
+        } else {
+            key = null
+        }
 
         val operation = value.getString("op")
         when (operation) {
@@ -70,6 +75,8 @@ class DebeziumTaskWriter(
             }
             // delete events
             "d" -> delete(before)
+            // truncate events
+            "t" -> throw TableTruncatedException()
             else -> {} // ignore
         }
         metrics.increaseRecordCount(operation)
