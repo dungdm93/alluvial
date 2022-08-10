@@ -1,0 +1,46 @@
+configs:
+  source:
+    kind: kafka
+    topicPrefix: debezium.mysql.sakila
+    config:
+      bootstrap.servers: kafka:9092
+      group.id: alluvial
+      key.converter: io.confluent.connect.avro.AvroConverter
+      value.converter: io.confluent.connect.avro.AvroConverter
+      key.converter.schema.registry.url: http://schema-registry:8081
+      value.converter.schema.registry.url: http://schema-registry:8081
+      poll.timeout.ms: 1000
+    namingAdjusters:
+      - class: dev.alluvial.source.kafka.naming.ChangingCaseNamingAdjuster
+        case: lower
+      - class: dev.alluvial.source.kafka.naming.MappingSchemaNamingAdjuster
+        map:
+          sakila: dvdrental
+          foobar: abcxyz
+
+  sink:
+    kind: iceberg
+    catalog:
+      catalog-impl: org.apache.iceberg.hadoop.HadoopCatalog
+      warehouse: /tmp/warehouse
+    tableCreation:
+      properties:
+        write.format.default: PARQUET
+        write.target-file-size-bytes: 134217728  # 128MB
+
+  stream:
+    kind: debezium
+    examineInterval: "3m"
+    idleTimeout: "15m"
+    commitBatchSize: 1000
+    commitTimespan: "10m"
+
+  metrics:
+    exporters:
+      - kind: prometheus
+        properties:
+          prometheus.bind: 0.0.0.0:9090
+          prometheus.daemon: true
+    commonTags:
+      environment: "local"
+      service: "sakila"
