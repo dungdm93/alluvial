@@ -13,13 +13,11 @@ fun PartitionSpec.Builder.addSpec(field: Types.NestedField, transform: String): 
 }
 
 fun PartitionSpec.Builder.addSpec(field: Types.NestedField, transform: String, name: String?): PartitionSpec.Builder {
-    val targetName = if (name.isNullOrEmpty()) {
-        if (transform.contains("[")) {
-            field.name() + "_" + transform.substring(0, transform.indexOf('['))
-        } else {
-            field.name() + "_" + transform
-        }
-    } else name
+    val targetName = when {
+        !name.isNullOrEmpty() -> name
+        transform.contains('[') -> field.name() + "_" + transform.substring(0, transform.indexOf('['))
+        else -> field.name() + "_" + transform
+    }
     return this.add(field.fieldId(), targetName.lowercase(), transform)
 }
 

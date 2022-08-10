@@ -33,11 +33,11 @@ class AlluvialTransaction(
         checkLastOperationCommittedMethod.invoke<Any>(this, operation)
     }
 
-    internal fun squash(): SquashOperation {
+    fun squash(): SquashOperation {
         checkLastOperationCommitted("SquashOperation")
         val table = table() as TransactionTable
 
-        val squash = SquashOperation(table.name(), table.operations())
+        val squash = BaseSquashOperation(table.name(), table.operations())
         updates.add(squash)
 
         return squash

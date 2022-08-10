@@ -5,7 +5,7 @@ import org.hamcrest.MatcherAssert
 import org.junit.Assert
 import org.junit.Test
 
-class TestSquashOperation : TableTestBase(2) {
+class TestBaseSquashOperation : TableTestBase(2) {
     companion object {
         val FILE_E = DataFiles.builder(SPEC)
             .withPath("/path/to/data-e.parquet")
@@ -50,7 +50,7 @@ class TestSquashOperation : TableTestBase(2) {
     @Test
     fun testSquashMiddleCommits() {
         setupAppendOnlyTable()
-        val squash = SquashOperation(table.name(), table.ops())
+        val squash = BaseSquashOperation(table.name(), table.ops())
             .squash(2, 4) // (B..D]
         squash.add(FILE_G)
         squash.add(FILE_H)
@@ -64,7 +64,7 @@ class TestSquashOperation : TableTestBase(2) {
     @Test
     fun testSquashHeadCommits() {
         setupAppendOnlyTable()
-        val squash = SquashOperation(table.name(), table.ops())
+        val squash = BaseSquashOperation(table.name(), table.ops())
             .squash(3, 6) // (C..F]
         squash.add(FILE_G)
         squash.add(FILE_H)
@@ -78,7 +78,7 @@ class TestSquashOperation : TableTestBase(2) {
     @Test
     fun testSquashTailCommits() {
         setupAppendOnlyTable()
-        val squash = SquashOperation(table.name(), table.ops())
+        val squash = BaseSquashOperation(table.name(), table.ops())
             .squash(null, 4) // (..D]
         squash.add(FILE_G)
         squash.add(FILE_H)

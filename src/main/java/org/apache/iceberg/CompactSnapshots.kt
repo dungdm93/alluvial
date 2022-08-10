@@ -102,7 +102,7 @@ class CompactSnapshots(
     }
 
     /**
-     * @see org.apache.iceberg.SquashOperation.validatePosDeletesReferenceToDataFileInRange
+     * @see org.apache.iceberg.BaseSquashOperation.validatePosDeletesReferenceToDataFileInRange
      */
     private fun checkPositionDelete() {
         val ancestors = table.ancestorsOf(highSnapshot)
