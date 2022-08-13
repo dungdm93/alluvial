@@ -30,13 +30,13 @@ internal class BaseSquashOperation(
     private var validated = false
     private var validatePosDeletesFilesInRange = true
 
-    private lateinit var aggAddedDataFiles: Set<DataFile>
-    private lateinit var aggRemovedDataFiles: Set<DataFile>
-    private lateinit var aggAddedDeleteFiles: Set<DeleteFile>
-    private lateinit var aggRemovedDeleteFiles: Set<DeleteFile>
+    private lateinit var aggAddedDataFiles: Set<CharSequence>
+    private lateinit var aggRemovedDataFiles: Set<CharSequence>
+    private lateinit var aggAddedDeleteFiles: Set<CharSequence>
+    private lateinit var aggRemovedDeleteFiles: Set<CharSequence>
 
     // files added in compaction group but no longer exist after squash
-    private val deadFiles = mutableSetOf<ContentFile<*>>()
+    private val deadFiles = mutableSetOf<CharSequence>()
 
     override fun self() = this
 
@@ -47,20 +47,17 @@ internal class BaseSquashOperation(
         lowSnapshot = lowSnapshotId?.let(base::snapshot)
         highSnapshot = base.snapshot(highSnapshotId)
 
-        rollback = if (lowSnapshotId != null) {
-            SetSnapshotOperation(ops)
-                .rollbackTo(lowSnapshotId)
-        } else {
-            RemoveBranch()
-                .name(MAIN_BRANCH)
-        }
+        rollback = if (lowSnapshotId != null)
+            SetSnapshotOperation(ops).rollbackTo(lowSnapshotId)
+        else
+            RemoveBranch().name(MAIN_BRANCH)
 
         val ancestors = base.ancestorsOf(highSnapshotId)
             .filterAfter(lowSnapshot)
             .reversed()
 
         setFiles(ancestors)
-        setSummary(ancestors)
+        setSummary()
         operation = determineOperator(ancestors)
         return this
     }
@@ -71,7 +68,7 @@ internal class BaseSquashOperation(
     }
 
     override fun add(file: DataFile) {
-        deadFiles.remove(file)
+        deadFiles.remove(file.path())
         super.add(file)
     }
 
@@ -80,7 +77,7 @@ internal class BaseSquashOperation(
             file.content() == EQUALITY_DELETES,
             "Expected only add EQUALITY_DELETES for now, got %s", file
         )
-        deadFiles.remove(file)
+        deadFiles.remove(file.path())
         super.add(file)
     }
 
@@ -150,37 +147,35 @@ internal class BaseSquashOperation(
         ancestors.forEach { snapshot ->
             aggAddedDataFiles.addAll(snapshot.addedDataFiles(io))
             aggAddedDeleteFiles.addAll(snapshot.addedDeleteFiles(io))
-            snapshot.removedDataFiles(io).forEach {
-                val present = aggAddedDataFiles.remove(it)
-                if (!present) aggRemovedDataFiles.add(it)
+            snapshot.removedDataFiles(io).forEach { removedDataFile ->
+                val present = aggAddedDataFiles.removeIf { it.path() == removedDataFile.path() }
+                if (!present) aggRemovedDataFiles.add(removedDataFile)
             }
-            snapshot.removedDeleteFiles(io).forEach {
-                val present = aggAddedDeleteFiles.remove(it)
-                if (!present) aggRemovedDeleteFiles.add(it)
+            snapshot.removedDeleteFiles(io).forEach { removedDeleteFile ->
+                val present = aggAddedDeleteFiles.removeIf { it.path() == removedDeleteFile.path() }
+                if (!present) aggRemovedDeleteFiles.add(removedDeleteFile)
             }
         }
-        this.aggAddedDataFiles = aggAddedDataFiles
-        this.aggRemovedDataFiles = aggRemovedDataFiles
-        this.aggAddedDeleteFiles = aggAddedDeleteFiles
-        this.aggRemovedDeleteFiles = aggRemovedDeleteFiles
+        this.aggAddedDataFiles = aggAddedDataFiles.map(DataFile::path).toSet()
+        this.aggRemovedDataFiles = aggRemovedDataFiles.map(DataFile::path).toSet()
+        this.aggAddedDeleteFiles = aggAddedDeleteFiles.map(DeleteFile::path).toSet()
+        this.aggRemovedDeleteFiles = aggRemovedDeleteFiles.map(DeleteFile::path).toSet()
 
-        deadFiles.addAll(aggAddedDataFiles)
-        deadFiles.addAll(aggAddedDeleteFiles)
+        this.deadFiles.addAll(this.aggAddedDataFiles)
+        this.deadFiles.addAll(this.aggAddedDeleteFiles)
 
         aggRemovedDataFiles.forEach(::delete)
         aggRemovedDeleteFiles.forEach(::delete)
         failMissingDeletePaths()
     }
 
-    private fun setSummary(ancestors: List<Snapshot>) {
+    private fun setSummary() {
         set(SQUASH_SNAPSHOT_ID_PROP, "(${lowSnapshot?.snapshotId() ?: ""}..${highSnapshot.snapshotId()}]")
 
         val originalSnapshotTs = highSnapshot.originalTimestampMillis()
         set(ORIGINAL_SNAPSHOT_TS_PROP, originalSnapshotTs.toString())
 
-        ancestors.forEach { snapshot ->
-            snapshot.extraMetadata().forEach(::set)
-        }
+        highSnapshot.extraMetadata().forEach(::set)
     }
 
     private fun determineOperator(ancestors: List<Snapshot>): String {
@@ -285,7 +280,7 @@ internal class BaseSquashOperation(
 
             val filter = Expressions.`in`(
                 DELETE_FILE_PATH.name(),
-                *deadFiles.map(ContentFile<*>::path).toTypedArray()
+                *deadFiles.toTypedArray()
             )
             val records = GenericReader(io, POS_DELETE_SCHEMA)
                 .openFile(posDel, filter)

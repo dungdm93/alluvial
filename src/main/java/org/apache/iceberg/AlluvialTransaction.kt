@@ -28,10 +28,9 @@ class AlluvialTransaction(
     private val updates = updatesField.get(this)
 
     @Suppress("SameParameterValue")
-    private fun checkLastOperationCommitted(operation: String) {
+    private fun checkLastOperationCommitted(operation: String): Unit =
         // invoke org.apache.iceberg.BaseTransaction.checkLastOperationCommitted which is private method
-        checkLastOperationCommittedMethod.invoke<Any>(this, operation)
-    }
+        checkLastOperationCommittedMethod.invoke(this, operation)
 
     fun squash(): SquashOperation {
         checkLastOperationCommitted("SquashOperation")
