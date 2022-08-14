@@ -65,7 +65,7 @@ class CompactSnapshots(
 
     init {
         val ancestorIds = table.currentAncestorIds()
-        assert(lowSnapshotId !in ancestorIds || highSnapshotId !in ancestorIds) {
+        assert((lowSnapshotId == null || lowSnapshotId in ancestorIds) && highSnapshotId in ancestorIds) {
             "lowSnapshotId & highSnapshotId MUST be in current timeline"
         }
         assert(lowSnapshot == null || lowSnapshot.sequenceNumber() < highSnapshot.sequenceNumber()) {
@@ -109,15 +109,17 @@ class CompactSnapshots(
             .filterAfter(lowSnapshot)
             .reversed()
 
-        val dataFiles = mutableSetOf<DataFile>()
+        val dataFiles = mutableSetOf<CharSequence>()
         ancestors.forEach { snapshot ->
-            dataFiles.addAll(snapshot.addedDataFiles(io))
+            snapshot.addedDataFiles(io)
+                .map(DataFile::path)
+                .let(dataFiles::addAll)
             val posDelFiles = snapshot.addedDeleteFiles(io)
                 .filter { it.content() == POSITION_DELETES }
 
             val filter = Expressions.notIn(
                 MetadataColumns.DELETE_FILE_PATH.name(),
-                *dataFiles.map(DataFile::path).toTypedArray()
+                *dataFiles.toTypedArray()
             )
             val records = GenericReader(io, POS_DELETE_SCHEMA)
                 .openFile(posDelFiles, filter)
@@ -218,7 +220,8 @@ class CompactSnapshots(
         val partitionType = spec.partitionType()
         val fileGroups = mutableMapOf<Set<Int>, StructLikeMap<MutableList<DeleteFile>>>()
 
-        deleteEntries.transform(ManifestEntry<DeleteFile>::file)
+        deleteEntries
+            .transform { it.copy().file() } // ManifestReader.open using reuseContainers
             .forEach {
                 if (it.specId() != spec.specId()) {
                     throw IllegalStateException("Detect specId changed in middle of CompactionGroup")

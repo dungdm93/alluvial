@@ -285,8 +285,13 @@ internal class BaseSquashOperation(
             val records = GenericReader(io, POS_DELETE_SCHEMA)
                 .openFile(posDel, filter)
 
-            if (records.any()) {
-                throw ValidationException("Found POSITION_DELETES reference to the dead files in CompactionGroup")
+            records.use {
+                if (it.any()) {
+                    throw ValidationException(
+                        "Cannot cherry-pick snapshot %s: Found POSITION_DELETES reference to the dead files",
+                        cs.snapshotId()
+                    )
+                }
             }
         }
 

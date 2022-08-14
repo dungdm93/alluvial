@@ -13,7 +13,6 @@ import org.apache.iceberg.Schema
 import org.apache.iceberg.avro.Avro
 import org.apache.iceberg.data.GenericDeleteFilter
 import org.apache.iceberg.data.IdentityPartitionConverters
-import org.apache.iceberg.data.InternalRecordWrapper
 import org.apache.iceberg.data.Record
 import org.apache.iceberg.data.avro.DataReader
 import org.apache.iceberg.data.orc.GenericOrcReader
@@ -67,11 +66,10 @@ class GenericReader(
         val deletes = GenericDeleteFilter(io, task, schema, schema)
         val readSchema = deletes.requiredSchema()
 
-        var records = open(task, readSchema)
-        records = deletes.filter(records)
-        records = applyResidual(records, readSchema, task.residual())
-
-        return records
+        return applyResidual(readSchema, task.residual()) {
+            val records = open(task, readSchema)
+            deletes.filter(records)
+        }
     }
 
     fun openFile(files: Iterable<ContentFile<*>>, filter: Expression): CloseableIterable<Record> {
@@ -85,24 +83,26 @@ class GenericReader(
     }
 
     fun openFile(file: ContentFile<*>, filter: Expression): CloseableIterable<Record> {
-        return open(file, schema, filter)
+        return applyResidual(schema, filter) {
+            open(file, schema, filter)
+        }
     }
 
     fun openFile(file: ContentFile<*>): CloseableIterable<Record> {
-        return open(file, schema, Expressions.alwaysTrue())
+        return openFile(file, Expressions.alwaysTrue())
     }
 
     private fun applyResidual(
-        records: CloseableIterable<Record>,
         recordSchema: Schema,
-        residual: Expression?
+        residual: Expression?,
+        recordProducer: () -> CloseableIterable<Record>,
     ): CloseableIterable<Record> {
-        if (residual != null && residual !== Expressions.alwaysTrue()) {
-            val wrapper = InternalRecordWrapper(recordSchema.asStruct())
-            val filter = Evaluator(recordSchema.asStruct(), residual, caseSensitive)
-            return records.filter { filter.eval(wrapper.wrap(it)) }
-        }
-        return records
+        if (residual === Expressions.alwaysFalse()) return CloseableIterable.empty()
+        val records = recordProducer()
+        if (residual == null || residual === Expressions.alwaysTrue()) return records
+
+        val filter = Evaluator(recordSchema.asStruct(), residual, caseSensitive)
+        return records.filter { filter.eval(it) }
     }
 
     private fun open(task: FileScanTask, fileProjection: Schema): CloseableIterable<Record> {
@@ -117,25 +117,14 @@ class GenericReader(
             }
         }
         return when (file.format()) {
-            FileFormat.AVRO -> {
-                if (task.residual() == Expressions.alwaysFalse()) return CloseableIterable.empty()
-
-                val records = Avro.read(input)
-                    .project(fileProjection)
-                    .createReaderFunc { fileSchema ->
-                        DataReader.create<DatumReader<*>>(fileProjection, fileSchema, partition)
-                    }
-                    .split(task.start(), task.length())
-                    .reuseContainers(reuseContainers)
-                    .build<Record>()
-
-                return if (task.residual() == Expressions.alwaysTrue()) {
-                    records
-                } else {
-                    val evaluator = Evaluator(fileProjection.asStruct(), task.residual())
-                    records.filter { evaluator.eval(it) }
+            FileFormat.AVRO -> Avro.read(input)
+                .project(fileProjection)
+                .createReaderFunc { fileSchema ->
+                    DataReader.create<DatumReader<*>>(fileProjection, fileSchema, partition)
                 }
-            }
+                .split(task.start(), task.length())
+                .reuseContainers(reuseContainers)
+                .build()
 
             FileFormat.PARQUET -> Parquet.read(input)
                 .project(fileProjection)
@@ -171,24 +160,13 @@ class GenericReader(
 
         logger.debug("Open ContentFile {}({}): {}", file.content(), file.format(), file.path())
         return when (file.format()) {
-            FileFormat.AVRO -> {
-                if (filter == Expressions.alwaysFalse()) return CloseableIterable.empty()
-
-                val records = Avro.read(input)
-                    .project(fileProjection)
-                    .reuseContainers(reuseContainers)
-                    .createReaderFunc { fileSchema ->
-                        DataReader.create<DatumReader<*>>(fileProjection, fileSchema)
-                    }
-                    .build<Record>()
-
-                return if (filter == Expressions.alwaysTrue()) {
-                    records
-                } else {
-                    val evaluator = Evaluator(fileProjection.asStruct(), filter)
-                    records.filter { evaluator.eval(it) }
+            FileFormat.AVRO -> Avro.read(input)
+                .project(fileProjection)
+                .reuseContainers(reuseContainers)
+                .createReaderFunc { fileSchema ->
+                    DataReader.create<DatumReader<*>>(fileProjection, fileSchema)
                 }
-            }
+                .build()
 
             FileFormat.PARQUET -> Parquet.read(input)
                 .project(fileProjection)
