@@ -1,0 +1,80 @@
+{{- $tableManager := mergeOverwrite (deepCopy .Values.commons) .Values.tableManager -}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "alluvial.fullname" . }}-table-manager
+  labels:
+    {{- include "alluvial.tableManager.labels" . | nindent 4 }}
+    {{- with $tableManager.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  annotations:
+    {{- toYaml $tableManager.annotations | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "alluvial.tableManager.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "alluvial.tableManager.selectorLabels" . | nindent 8 }}
+        {{- with $tableManager.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        {{- include "alluvial.checksum" . | nindent 8 }}
+        {{- with $tableManager.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+    {{- with .Values.image.pullSecrets }}
+    imagePullSecrets:
+      {{- toYaml . | nindent 8 }}
+    {{- end }}
+    enableServiceLinks: false
+    containers:
+      - name: table-manager
+        image: {{ include "alluvial.image" . }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: [alluvial]
+        args: [manage, /etc/alluvial/config.yaml]
+        env:
+          {{- toYaml $tableManager.env | nindent 12 }}
+        ports:
+        - name: metrics
+          protocol: TCP
+          containerPort: 9090
+        volumeMounts:
+          {{- include "alluvial.volumeMounts" . | nindent 12 }}
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: metrics
+        resources:
+          {{- toYaml $tableManager.resources | nindent 12 }}
+        securityContext:
+          {{- toYaml $tableManager.securityContext | nindent 12 }}
+    serviceAccountName: {{ include "alluvial.serviceAccountName" . }}
+    priorityClassName:  {{ $tableManager.priorityClassName }}
+    runtimeClassName:   {{ $tableManager.runtimeClassName }}
+    schedulerName:      {{ $tableManager.schedulerName }}
+    securityContext:
+      {{- toYaml $tableManager.podSecurityContext | nindent 8 }}
+    volumes:
+      {{- include "alluvial.volumes" . | nindent 8 }}
+    {{- with $tableManager.nodeSelector }}
+    nodeSelector:
+      {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with $tableManager.affinity }}
+    affinity:
+      {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with $tableManager.tolerations }}
+    tolerations:
+      {{- toYaml . | nindent 8 }}
+    {{- end }}

@@ -1,0 +1,80 @@
+{{- $streamController := mergeOverwrite (deepCopy .Values.commons) .Values.streamController -}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "alluvial.fullname" . }}-table-manager
+  labels:
+    {{- include "alluvial.streamController.labels" . | nindent 4 }}
+    {{- with $streamController.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  annotations:
+    {{- toYaml $streamController.annotations | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "alluvial.streamController.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "alluvial.streamController.selectorLabels" . | nindent 8 }}
+          {{- with $streamController.podLabels }}
+          {{- toYaml . | nindent 8 }}
+          {{- end }}
+      annotations:
+        {{- include "alluvial.checksum" . | nindent 8 }}
+          {{- with $streamController.podAnnotations }}
+          {{- toYaml . | nindent 8 }}
+          {{- end }}
+    spec:
+    {{- with .Values.image.pullSecrets }}
+    imagePullSecrets:
+      {{- toYaml . | nindent 8 }}
+    {{- end }}
+    enableServiceLinks: false
+    containers:
+      - name: stream-controller
+        image: {{ include "alluvial.image" . }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: [alluvial]
+        args: [stream, /etc/alluvial/config.yaml]
+        env:
+          {{- toYaml $streamController.env | nindent 12 }}
+        ports:
+          - name: metrics
+            protocol: TCP
+            containerPort: 9090
+        volumeMounts:
+          {{- include "alluvial.volumeMounts" . | nindent 12 }}
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: metrics
+        resources:
+          {{- toYaml $streamController.resources | nindent 12 }}
+        securityContext:
+          {{- toYaml $streamController.securityContext | nindent 12 }}
+    serviceAccountName: {{ include "alluvial.serviceAccountName" . }}
+    priorityClassName:  {{ $streamController.priorityClassName }}
+    runtimeClassName:   {{ $streamController.runtimeClassName }}
+    schedulerName:      {{ $streamController.schedulerName }}
+    securityContext:
+      {{- toYaml $streamController.podSecurityContext | nindent 8 }}
+    volumes:
+      {{- include "alluvial.volumes" . | nindent 8 }}
+    {{- with $streamController.nodeSelector }}
+    nodeSelector:
+      {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with $streamController.affinity }}
+    affinity:
+      {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with $streamController.tolerations }}
+    tolerations:
+      {{- toYaml . | nindent 8 }}
+    {{- end }}
