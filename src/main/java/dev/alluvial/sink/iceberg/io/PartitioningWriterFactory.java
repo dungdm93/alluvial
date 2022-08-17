@@ -47,8 +47,12 @@ public abstract class PartitioningWriterFactory<T> {
 
     public abstract PartitioningWriter<PositionDelete<T>, DeleteWriteResult> newPositionDeleteWriter();
 
+    public static <T> Builder<T> builder() {
+        return new Builder<>();
+    }
+
     public static <T> Builder<T> builder(FileWriterFactory<T> writerFactory) {
-        return new Builder<>(writerFactory);
+        return new Builder<T>().writerFactory(writerFactory);
     }
 
     public static class Builder<T> {
@@ -56,10 +60,6 @@ public abstract class PartitioningWriterFactory<T> {
         private OutputFileFactory fileFactory = null;
         private FileIO io = null;
         private long targetFileSizeInBytes = 0;
-
-        public Builder(FileWriterFactory<T> writerFactory) {
-            this.writerFactory = writerFactory;
-        }
 
         private void checkArguments() {
             Preconditions.checkArgument(writerFactory != null, "writerFactory is required non-null");
@@ -75,6 +75,11 @@ public abstract class PartitioningWriterFactory<T> {
         public PartitioningWriterFactory<T> buildForFanoutPartition() {
             checkArguments();
             return new FanoutWriterFactory<>(writerFactory, fileFactory, io, targetFileSizeInBytes);
+        }
+
+        public Builder<T> writerFactory(FileWriterFactory<T> writerFactory) {
+            this.writerFactory = writerFactory;
+            return this;
         }
 
         public Builder<T> fileFactory(OutputFileFactory fileFactory) {
