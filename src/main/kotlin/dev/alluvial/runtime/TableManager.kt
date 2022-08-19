@@ -17,6 +17,9 @@ import org.apache.iceberg.CachingCatalog
 import org.apache.iceberg.CatalogProperties
 import org.apache.iceberg.CatalogUtil
 import org.apache.iceberg.CompactSnapshots
+import org.apache.iceberg.Snapshot
+import org.apache.iceberg.TableOperations
+import org.apache.iceberg.ancestorsOf
 import org.apache.iceberg.catalog.Catalog
 import org.apache.iceberg.catalog.Namespace
 import org.apache.iceberg.catalog.TableIdentifier
@@ -67,6 +70,7 @@ class TableManager : Runnable {
     private lateinit var rules: CompactionRules
     private lateinit var catalog: Catalog
     private lateinit var namespace: Namespace
+    private lateinit var expireRunner: LanePoolRunner<TableIdentifier, TableIdentifier, Unit>
     private lateinit var compactRunner: LanePoolRunner<TableIdentifier, CompactionGroup, Unit>
     private lateinit var compactionGroups: SetMultimap<TableIdentifier, CompactionGroup>
     private lateinit var examineInterval: Duration
@@ -82,6 +86,7 @@ class TableManager : Runnable {
         examineInterval = config.manager.examineInterval
         rules = config.manager.rules
 
+        expireRunner = LanePoolRunner(executor, this::executeExpiration)
         compactRunner = LanePoolRunner(executor, this::executeCompaction)
         compactRunner.addListener(object : Callback<CompactionGroup, Unit> {
             override fun onSuccess(input: CompactionGroup, result: Unit) {
@@ -108,8 +113,8 @@ class TableManager : Runnable {
         executor.scheduleWithFixedDelay(::examineTables, 0, examineIntervalMs, MILLISECONDS)
 
         while (true) {
-            val id = channel.take()
-            compactRunner.enqueue(id.tableId, id)
+            val cg = channel.take()
+            compactRunner.enqueue(cg.tableId, cg)
         }
     }
 
@@ -128,6 +133,10 @@ class TableManager : Runnable {
                 metrics
             }
 
+            if (!expireRunner.isEmpty(id)) {
+                expireRunner.enqueue(id, id)
+            }
+
             CompactionGroup.fromSnapshots(id, table.snapshots(), points::keyOf)
                 .filter { it.size > 1 }
                 .forEach {
@@ -143,5 +152,26 @@ class TableManager : Runnable {
         val table = catalog.loadTable(cg.tableId)
         val action = CompactSnapshots(table, cg.lowSnapshotId, cg.highSnapshotId)
         action.execute()
+    }
+
+    private fun executeExpiration(tableId: TableIdentifier) {
+        val table = catalog.loadTable(tableId)
+        val meta = (table as TableOperations).current()
+        val orphanSnapshots = table.snapshots()
+            .mapTo(mutableSetOf(), Snapshot::snapshotId)
+
+        // Keep all snapshots that referenced by a branch/tag
+        meta.refs().forEach { (_, ref) ->
+            table.ancestorsOf(ref.snapshotId()).forEach {
+                orphanSnapshots.remove(it.snapshotId())
+            }
+        }
+
+        if (orphanSnapshots.isEmpty()) return
+
+        val action = table.expireSnapshots()
+            .cleanExpiredFiles(true)
+        orphanSnapshots.forEach(action::expireSnapshotId)
+        action.commit()
     }
 }
