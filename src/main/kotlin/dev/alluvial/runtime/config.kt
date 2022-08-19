@@ -5,12 +5,14 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import dev.alluvial.utils.DurationDeserializer
 import dev.alluvial.utils.DurationSerializer
 import java.time.Duration
+import java.time.ZoneOffset
 
 data class Config(
     val source: SourceConfig,
     val sink: SinkConfig,
     val stream: StreamConfig,
-    val metric: MetricConfig,
+    val manager: ManagerConfig,
+    val metrics: MetricsConfig,
 )
 
 data class SourceConfig(
@@ -80,17 +82,58 @@ data class PartitionSpecConfig(
     }
 }
 
-data class MetricConfig(
-    val exporters: List<MetricExporterConfig> = emptyList(),
+data class ManagerConfig(
+    @Suppress("ArrayInDataClass")
+    val namespace: Array<String>,
+
+    val rules: CompactionRules = CompactionRules(),
+
+    @JsonSerialize(using = DurationSerializer::class)
+    @JsonDeserialize(using = DurationDeserializer::class)
+    val examineInterval: Duration = Duration.ofMinutes(30),
+)
+
+data class CompactionRules(
+    val tz: ZoneOffset = ZoneOffset.UTC,
+
+    /**
+     * Number of hours snapshots will be kept as it is.
+     * Snapshots after this point will be compacted.
+     */
+    val retainRaw: Long = 3,
+
+    /**
+     * Number of hours that HourCompact snapshots will be kept at least.
+     * After that, it can be compacted to Day range.
+     */
+    val retainHourCompact: Long = 24,
+
+    /**
+     * Number of days that DayCompact snapshots will be kept at least.
+     * After that, it can be compacted to Month range.
+     */
+    val retainDayCompact: Long = 30,
+
+    /**
+     * Number of months that MonthCompact snapshots will be kept at least.
+     * After that, it can be compacted to Year range.
+     */
+    val retainMonthCompact: Long = 12,
+
+    // val keepYearCompact: Int,
+)
+
+data class MetricsConfig(
+    val exporters: List<MetricsExporterConfig> = emptyList(),
     val commonTags: Map<String, String> = emptyMap(),
     // TODO: Support including/excluding meters by patterns
 )
 
-data class MetricExporterConfig(
+data class MetricsExporterConfig(
     val kind: String,
     val properties: Map<String, String> = emptyMap(),
 ) {
     init {
-        require(kind.isNotEmpty()) { "metric.exporters.kind cannot be empty" }
+        require(kind.isNotEmpty()) { "metrics.exporters.kind cannot be empty" }
     }
 }

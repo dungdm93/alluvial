@@ -4,7 +4,7 @@ import dev.alluvial.sink.iceberg.aws.HttpClientMetricCollector
 import dev.alluvial.sink.iceberg.aws.MicrometerMetricPublisher
 import dev.alluvial.sink.iceberg.aws.ServiceClientMetricCollector
 import dev.alluvial.metrics.exporters.MetricsExporter
-import dev.alluvial.runtime.MetricConfig
+import dev.alluvial.runtime.MetricsConfig
 import io.micrometer.core.instrument.Tag
 import io.micrometer.core.instrument.Tags
 import io.micrometer.core.instrument.binder.jvm.JvmGcMetrics
@@ -18,7 +18,7 @@ import java.io.Closeable
 
 class MetricsService(
     private val registry: CompositeMeterRegistry,
-    config: MetricConfig
+    config: MetricsConfig
 ) : Runnable, Closeable {
     private val exporters: List<MetricsExporter>
 

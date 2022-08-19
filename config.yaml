@@ -95,7 +95,12 @@ stream:
   commitBatchSize: 1000
   commitTimespan: "10m"
 
-metric:
+manager:
+  namespace: [sakila]
+  rules:
+    tz: "+07"
+
+metrics:
   exporters:
     - kind: prometheus
       properties:

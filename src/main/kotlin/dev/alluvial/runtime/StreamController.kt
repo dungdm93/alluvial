@@ -57,7 +57,7 @@ class StreamController : Runnable {
     }
 
     fun configure(config: Config) {
-        metricsService = MetricsService(registry, config.metric)
+        metricsService = MetricsService(registry, config.metrics)
             .bindJvmMetrics()
             .bindSystemMetrics()
             .bindAwsClientMetrics()
