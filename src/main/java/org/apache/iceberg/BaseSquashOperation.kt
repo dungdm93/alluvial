@@ -24,6 +24,7 @@ internal class BaseSquashOperation(
     private lateinit var highSnapshot: Snapshot
     private lateinit var operation: String
     private lateinit var rollback: PendingUpdate<*>
+    private var highSchemaId: Int? = null
     private var cherrypickUpdates = emptyList<SnapshotProducer<*>>()
     private val cherrypickMap = mutableMapOf<Long, SnapshotProducer<*>>()
 
@@ -46,6 +47,7 @@ internal class BaseSquashOperation(
         val base = current()
         lowSnapshot = lowSnapshotId?.let(base::snapshot)
         highSnapshot = base.snapshot(highSnapshotId)
+        highSchemaId = highSnapshot.schemaId()
 
         rollback = if (lowSnapshotId != null)
             SetSnapshotOperation(ops).rollbackTo(lowSnapshotId)
@@ -88,6 +90,13 @@ internal class BaseSquashOperation(
         validated = true
     }
 
+    override fun apply(): Snapshot {
+        val snapshot = super.apply()
+        return if (snapshot.schemaId() == highSchemaId)
+            snapshot else
+            snapshot.copy { schemaId = highSchemaId }
+    }
+
     override fun commit() {
         val base = refresh()
 
@@ -116,24 +125,28 @@ internal class BaseSquashOperation(
             .filterAfter(lowSnapshot)
             .reversed()
 
-        val dataFiles = mutableSetOf<DataFile>()
+        val dataFiles = mutableSetOf<CharSequence>()
         ancestors.forEach { snapshot ->
-            dataFiles.addAll(snapshot.addedDataFiles(io))
+            snapshot.addedDataFiles(io)
+                .map(DataFile::path)
+                .let(dataFiles::addAll)
             val posDelFiles = snapshot.addedDeleteFiles(io)
                 .filter { it.content() == POSITION_DELETES }
 
             val filter = Expressions.notIn(
                 DELETE_FILE_PATH.name(),
-                *dataFiles.map(DataFile::path).toTypedArray()
+                *dataFiles.toTypedArray()
             )
             val records = GenericReader(io, POS_DELETE_SCHEMA)
                 .openFile(posDelFiles, filter)
 
-            if (records.any()) {
-                throw ValidationException(
-                    "Snapshot %s contains POSITION_DELETES file reference to out of CompactionGroup",
-                    snapshot.snapshotId()
-                )
+            records.use {
+                if (it.any()) {
+                    throw ValidationException(
+                        "Snapshot %s contains POSITION_DELETES file reference to out of CompactionGroup",
+                        snapshot.snapshotId()
+                    )
+                }
             }
         }
     }
@@ -218,6 +231,7 @@ internal class BaseSquashOperation(
 
     inner class SquashCherrypickOperation : MergingSnapshotProducer<SquashCherrypickOperation>(tableName, ops) {
         private var cherrypickSnapshot: Snapshot? = null
+        private var sourceSchemaId: Int? = null
         private var requireFastForward = false // TODO
         private var validated: Int? = null
 
@@ -243,6 +257,7 @@ internal class BaseSquashOperation(
             setFiles(cs)
             setSummary(cs)
             cherrypickSnapshot = cs
+            sourceSchemaId = cs.schemaId()
 
             return this
         }
@@ -266,7 +281,10 @@ internal class BaseSquashOperation(
                 return cs
             }
 
-            return super.apply()
+            val snapshot = super.apply()
+            return if (snapshot.schemaId() == sourceSchemaId)
+                snapshot else
+                snapshot.copy { schemaId = sourceSchemaId }
         }
 
         override fun validate(currentMetadata: TableMetadata) {

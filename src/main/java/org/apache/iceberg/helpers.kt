@@ -72,7 +72,7 @@ fun TableMetadata.isFastForward(snapshot: Snapshot): Boolean {
     return snapshot.parentId() == this.currentSnapshotId()
 }
 
-/////////////////// TableMetadata ///////////////////
+/////////////////// Snapshot ///////////////////
 const val NOOP = "" // Special DataOperations for zero aggregate changes
 const val SQUASH_SNAPSHOT_ID_PROP = "squash-snapshot-id"
 const val ORIGINAL_SNAPSHOT_TS_PROP = "original-snapshot-ts"
@@ -118,4 +118,29 @@ internal fun ManifestGroup.filterEntryAfter(snapshot: Snapshot?): ManifestGroup 
     if (snapshot == null) return this
     return this.filterManifests { it.minSequenceNumber() > snapshot.sequenceNumber() }
         .filterManifestEntries { it.sequenceNumber() > snapshot.sequenceNumber() }
+}
+
+@Suppress("MemberVisibilityCanBePrivate")
+class SnapshotBuilder(snapshot: Snapshot) {
+    var sequenceNumber: Long = snapshot.sequenceNumber()
+    var snapshotId: Long = snapshot.snapshotId()
+    var parentId: Long? = snapshot.parentId()
+    var timestampMillis: Long = snapshot.timestampMillis()
+    var operation: String = snapshot.operation()
+    var summary: Map<String, String> = snapshot.summary()
+    var schemaId: Int? = snapshot.schemaId()
+    var manifestList: String = snapshot.manifestListLocation()
+
+    internal fun build(): Snapshot {
+        return BaseSnapshot(
+            sequenceNumber, snapshotId, parentId, timestampMillis,
+            operation, summary, schemaId, manifestList,
+        )
+    }
+}
+
+fun Snapshot.copy(block: SnapshotBuilder.() -> Unit): Snapshot {
+    val builder = SnapshotBuilder(this)
+    builder.block()
+    return builder.build()
 }
