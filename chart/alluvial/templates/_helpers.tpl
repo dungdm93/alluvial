@@ -82,7 +82,7 @@ Alluvial volumes
 {{- define "alluvial.volumes" -}}
 - name: alluvial-config
   configMap:
-    name: {{ include "alluvial.fullname" . }}-config
+    name: {{ include "alluvial.fullname" . }}
 {{- end -}}
 
 {{/*
