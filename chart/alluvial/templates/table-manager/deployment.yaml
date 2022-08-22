@@ -31,50 +31,50 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
-    {{- with .Values.image.pullSecrets }}
-    imagePullSecrets:
-      {{- toYaml . | nindent 8 }}
-    {{- end }}
-    enableServiceLinks: false
-    containers:
-      - name: table-manager
-        image: {{ include "alluvial.image" . }}
-        imagePullPolicy: {{ .Values.image.pullPolicy }}
-        command: [alluvial]
-        args: [manage, /etc/alluvial/config.yaml]
-        env:
-          {{- toYaml $tableManager.env | nindent 12 }}
-        ports:
-        - name: metrics
-          protocol: TCP
-          containerPort: 9090
-        volumeMounts:
-          {{- include "alluvial.volumeMounts" . | nindent 12 }}
-        livenessProbe:
-          httpGet:
-            path: /-/healthy
-            port: metrics
-        resources:
-          {{- toYaml $tableManager.resources | nindent 12 }}
-        securityContext:
-          {{- toYaml $tableManager.securityContext | nindent 12 }}
-    serviceAccountName: {{ include "alluvial.serviceAccountName" . }}
-    priorityClassName:  {{ $tableManager.priorityClassName }}
-    runtimeClassName:   {{ $tableManager.runtimeClassName }}
-    schedulerName:      {{ $tableManager.schedulerName }}
-    securityContext:
-      {{- toYaml $tableManager.podSecurityContext | nindent 8 }}
-    volumes:
-      {{- include "alluvial.volumes" . | nindent 8 }}
-    {{- with $tableManager.nodeSelector }}
-    nodeSelector:
-      {{- toYaml . | nindent 8 }}
-    {{- end }}
-    {{- with $tableManager.affinity }}
-    affinity:
-      {{- toYaml . | nindent 8 }}
-    {{- end }}
-    {{- with $tableManager.tolerations }}
-    tolerations:
-      {{- toYaml . | nindent 8 }}
-    {{- end }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      enableServiceLinks: false
+      containers:
+        - name: table-manager
+          image: {{ include "alluvial.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: [alluvial]
+          args: [manage, /etc/alluvial/config.yaml]
+          env:
+            {{- toYaml $tableManager.env | nindent 12 }}
+          ports:
+          - name: metrics
+            protocol: TCP
+            containerPort: 9090
+          volumeMounts:
+            {{- include "alluvial.volumeMounts" . | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: metrics
+          resources:
+            {{- toYaml $tableManager.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml $tableManager.securityContext | nindent 12 }}
+      serviceAccountName: {{ include "alluvial.serviceAccountName" . }}
+      priorityClassName:  {{ $tableManager.priorityClassName }}
+      runtimeClassName:   {{ $tableManager.runtimeClassName }}
+      schedulerName:      {{ $tableManager.schedulerName }}
+      securityContext:
+        {{- toYaml $tableManager.podSecurityContext | nindent 8 }}
+      volumes:
+        {{- include "alluvial.volumes" . | nindent 8 }}
+      {{- with $tableManager.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $tableManager.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $tableManager.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
