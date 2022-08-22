@@ -74,6 +74,7 @@ class TableManager : Runnable {
     private lateinit var compactRunner: LanePoolRunner<TableIdentifier, CompactionGroup, Unit>
     private lateinit var compactionGroups: SetMultimap<TableIdentifier, CompactionGroup>
     private lateinit var examineInterval: Duration
+    private var expireOrphanSnapshots: Boolean = true
 
     fun configure(config: Config) {
         metricsService = MetricsService(registry, config.metrics)
@@ -87,6 +88,7 @@ class TableManager : Runnable {
         rules = config.manager.rules
 
         expireRunner = LanePoolRunner(executor, this::executeExpiration)
+        expireOrphanSnapshots = config.manager.expireOrphanSnapshots
         compactRunner = LanePoolRunner(executor, this::executeCompaction)
         compactRunner.addListener(object : Callback<CompactionGroup, Unit> {
             override fun onSuccess(input: CompactionGroup, result: Unit) {
@@ -133,7 +135,7 @@ class TableManager : Runnable {
                 metrics
             }
 
-            if (!expireRunner.isEmpty(id)) {
+            if (expireOrphanSnapshots && !expireRunner.isEmpty(id)) {
                 expireRunner.enqueue(id, id)
             }
 
@@ -170,6 +172,7 @@ class TableManager : Runnable {
         if (orphanSnapshots.isEmpty()) return
 
         val action = table.expireSnapshots()
+            .expireOlderThan(Long.MIN_VALUE)
             .cleanExpiredFiles(true)
         orphanSnapshots.forEach(action::expireSnapshotId)
         action.commit()

@@ -91,6 +91,8 @@ data class ManagerConfig(
     @JsonSerialize(using = DurationSerializer::class)
     @JsonDeserialize(using = DurationDeserializer::class)
     val examineInterval: Duration = Duration.ofMinutes(30),
+
+    val expireOrphanSnapshots: Boolean = true
 )
 
 data class CompactionRules(
