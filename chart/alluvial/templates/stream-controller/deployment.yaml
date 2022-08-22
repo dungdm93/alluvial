@@ -3,7 +3,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "alluvial.fullname" . }}-table-manager
+  name: {{ include "alluvial.fullname" . }}-stream-controller
   labels:
     {{- include "alluvial.streamController.labels" . | nindent 4 }}
     {{- with $streamController.labels }}
