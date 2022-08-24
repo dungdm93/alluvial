@@ -32,6 +32,7 @@ import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.Executors
 import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.TimeUnit.MILLISECONDS
+import java.util.concurrent.TimeUnit.MINUTES
 
 class TableManager : Runnable {
     companion object {
@@ -112,6 +113,7 @@ class TableManager : Runnable {
         metricsService.run()
 
         val examineIntervalMs = examineInterval.toMillis()
+        executor.scheduleWithFixedDelay(::refreshMonitors, 0, 1, MINUTES)
         executor.scheduleWithFixedDelay(::examineTables, 0, examineIntervalMs, MILLISECONDS)
 
         while (true) {
@@ -120,10 +122,8 @@ class TableManager : Runnable {
         }
     }
 
-    private fun examineTables() {
+    private fun refreshMonitors() {
         val tableIds = catalog.listTables(namespace)
-        val now = ZonedDateTime.now(rules.tz)
-        val points = CompactionPoints.from(now, rules)
 
         tableIds.forEach { id ->
             val table = catalog.loadTable(id)
@@ -134,6 +134,16 @@ class TableManager : Runnable {
                 metrics.bindTo(registry)
                 metrics
             }
+        }
+    }
+
+    private fun examineTables() {
+        val tableIds = catalog.listTables(namespace)
+        val now = ZonedDateTime.now(rules.tz)
+        val points = CompactionPoints.from(now, rules)
+
+        tableIds.forEach { id ->
+            val table = catalog.loadTable(id)
 
             if (expireOrphanSnapshots && !expireRunner.isEmpty(id)) {
                 expireRunner.enqueue(id, id)
