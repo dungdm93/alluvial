@@ -2,7 +2,6 @@ package dev.alluvial.utils
 
 import org.apache.iceberg.Snapshot
 import org.apache.iceberg.catalog.TableIdentifier
-import org.apache.iceberg.exceptions.ValidationException
 import java.util.function.Function
 
 data class CompactionGroup(
@@ -15,10 +14,6 @@ data class CompactionGroup(
     val highSequenceNumber: Long,
 ) : Comparable<CompactionGroup> {
     companion object {
-        fun builderFor(tableId: TableIdentifier): Builder {
-            return Builder(tableId)
-        }
-
         fun fromSnapshots(
             tableId: TableIdentifier,
             snapshots: Iterable<Snapshot>,
@@ -36,34 +31,35 @@ data class CompactionGroup(
         return "CompactGroup($tableId range=($lowSnapshotId..$highSnapshotId], key=$key, size=$size)"
     }
 
-    data class Builder(val tableId: TableIdentifier) {
-        var key: String = ""
+    class Builder(
+        val tableId: TableIdentifier,
+        val key: String,
+        snapshot: Snapshot
+    ) {
+        private val highSnapshotId: Long = snapshot.snapshotId()
+        private val highSequenceNumber: Long = snapshot.sequenceNumber()
+        private var lowSnapshotId: Long? = snapshot.snapshotId()
+        private var lowSequenceNumber: Long? = snapshot.sequenceNumber()
+        private var parentSnapshotId: Long? = snapshot.parentId()
         var size: Int = 0
-        var lowSnapshotId: Long? = null
-        var lowSequenceNumber: Long? = null
-        var highSnapshotId: Long? = null
-        var highSequenceNumber: Long? = null
+
+        fun moveLowWatermarkTo(snapshot: Snapshot?): Builder {
+            assert(snapshot == null || parentSnapshotId == snapshot.snapshotId())
+
+            lowSnapshotId = snapshot?.snapshotId()
+            lowSequenceNumber = snapshot?.sequenceNumber()
+            parentSnapshotId = snapshot?.parentId()
+            size++
+
+            return this
+        }
 
         fun build(): CompactionGroup {
-            val highSnapshotId = this.highSnapshotId
-                ?: throw ValidationException("highSnapshotId is required")
-            val highSequenceNumber = this.highSequenceNumber
-                ?: throw ValidationException("highSequenceNumber is required")
-
             return CompactionGroup(
                 tableId, key, size,
                 lowSnapshotId, lowSequenceNumber,
                 highSnapshotId, highSequenceNumber,
             )
-        }
-
-        fun clear() {
-            key = ""
-            size = 0
-            lowSnapshotId = null
-            lowSequenceNumber = null
-            highSnapshotId = null
-            highSequenceNumber = null
         }
     }
 
@@ -78,15 +74,15 @@ data class CompactionGroup(
     }
 
     class CompactionGroupIterator(
-        tableId: TableIdentifier,
+        private val tableId: TableIdentifier,
         private val snapshots: Iterator<Snapshot>,
         private val keyExtractor: Function<Snapshot, String>
     ) : Iterator<CompactionGroup> {
-        private val builder = builderFor(tableId)
+        private var builder: Builder? = null
         private var next: CompactionGroup? = null
 
         override fun hasNext(): Boolean {
-            return next == null || advance()
+            return next != null || advance()
         }
 
         override fun next(): CompactionGroup {
@@ -98,40 +94,30 @@ data class CompactionGroup(
         }
 
         private fun advance(): Boolean {
+            var builder: Builder? = this.builder
             while (snapshots.hasNext()) {
                 val snapshot = snapshots.next()
                 val key = keyExtractor.apply(snapshot)
 
-                if (key != builder.key) {
-                    next = builder.build()
-                    resetBuilderTo(key, snapshot)
-                    return true
+                when {
+                    builder == null -> builder = Builder(tableId, key, snapshot)
+
+                    builder.key != key -> {
+                        next = builder.moveLowWatermarkTo(snapshot).build()
+                        this.builder = Builder(tableId, key, snapshot)
+                        return true
+                    }
+
+                    else -> builder.moveLowWatermarkTo(snapshot)
                 }
-                addSnapshotToBuilder(snapshot)
             }
 
-            if (builder.size <= 0) return false
+            if (builder == null)
+                return false
 
-            addSnapshotToBuilder(null) // null mean root snapshot
-            next = builder.build()
-            builder.clear()
-
+            next = builder.moveLowWatermarkTo(null).build()
+            this.builder = null
             return true
-        }
-
-        private fun resetBuilderTo(key: String, snapshot: Snapshot) {
-            builder.clear()
-            builder.key = key
-            builder.highSnapshotId = snapshot.snapshotId()
-            builder.highSequenceNumber = snapshot.sequenceNumber()
-            builder.lowSnapshotId = snapshot.snapshotId()
-            builder.lowSequenceNumber = snapshot.sequenceNumber()
-        }
-
-        private fun addSnapshotToBuilder(snapshot: Snapshot?) {
-            builder.lowSnapshotId = snapshot?.snapshotId()
-            builder.lowSequenceNumber = snapshot?.sequenceNumber()
-            builder.size++
         }
     }
 }
