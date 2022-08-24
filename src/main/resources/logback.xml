@@ -5,7 +5,7 @@
             <!-- ISO-8601 format: https://jira.qos.ch/browse/LOGBACK-262 -->
             <!-- https://logback.qos.ch/manual/layouts.html -->
             <pattern>
-                %date{"yyyy-MM-dd'T'HH:mm:ss,SSSXXX", UTC} %highlight(%-5level) [%thread] [%boldGreen(%mdc{streamlet.name:-*})] %logger{25} - %message%n
+                %date{"yyyy-MM-dd'T'HH:mm:ss,SSSXXX", UTC} %highlight(%-5level) [%thread] [%boldGreen(%mdc{name:-*})] %logger{25} - %message%n
             </pattern>
         </encoder>
     </appender>

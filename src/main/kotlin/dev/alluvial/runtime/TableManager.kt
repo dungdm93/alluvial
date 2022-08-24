@@ -25,6 +25,7 @@ import org.apache.iceberg.catalog.Namespace
 import org.apache.iceberg.catalog.TableIdentifier
 import org.apache.iceberg.util.PropertyUtil
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import java.time.Duration
 import java.time.ZonedDateTime
 import java.util.concurrent.ConcurrentHashMap
@@ -160,13 +161,13 @@ class TableManager : Runnable {
         }
     }
 
-    private fun executeCompaction(cg: CompactionGroup) {
+    private fun executeCompaction(cg: CompactionGroup) = withMDC("compactSnapshots(${cg.tableId}/${cg.key})") {
         val table = catalog.loadTable(cg.tableId)
         val action = CompactSnapshots(table, cg.lowSnapshotId, cg.highSnapshotId)
         action.execute()
     }
 
-    private fun executeExpiration(tableId: TableIdentifier) {
+    private fun executeExpiration(tableId: TableIdentifier) = withMDC("expireSnapshots($tableId)") {
         val table = catalog.loadTable(tableId)
         val meta = (table as TableOperations).current()
         val orphanSnapshots = table.snapshots()
@@ -186,5 +187,14 @@ class TableManager : Runnable {
             .cleanExpiredFiles(true)
         orphanSnapshots.forEach(action::expireSnapshotId)
         action.commit()
+    }
+
+    private inline fun <R> withMDC(name: String, block: () -> R): R {
+        try {
+            MDC.put("name", name)
+            return block()
+        } finally {
+            MDC.clear()
+        }
     }
 }
