@@ -193,8 +193,8 @@ class KafkaTopicInlet(
             .register(registry)
 
         override fun close() {
-            queueSize.close()
             registry.remove(queueSize)
+            queueSize.close()
             kafkaClientMetrics.close()
         }
     }

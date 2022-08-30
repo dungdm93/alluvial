@@ -182,27 +182,27 @@ class DebeziumTaskWriter(
 
     private inner class Metrics(
         private val registry: MeterRegistry,
-        private val tags: Tags
+        tags: Tags
     ) : Closeable {
         private val opCounters = mapOf(
-            "c" to Counter.builder("alluvial.task.writer.record.type")
-                .tags(tags.and("op", "create"))
-                .description("Total create events")
+            "c" to Counter.builder("alluvial.task.writer.records")
+                .tags(tags).tag("op", "create")
+                .description("Total CREATE events")
                 .register(registry),
 
-            "r" to Counter.builder("alluvial.task.writer.record.type")
-                .tags(tags.and("op", "read"))
-                .description("Total read events")
+            "r" to Counter.builder("alluvial.task.writer.records")
+                .tags(tags).tag("op", "read")
+                .description("Total READ events")
                 .register(registry),
 
-            "u" to Counter.builder("alluvial.task.writer.record.type")
-                .tags(tags.and("op", "update"))
-                .description("Total update events")
+            "u" to Counter.builder("alluvial.task.writer.records")
+                .tags(tags).tag("op", "update")
+                .description("Total UPDATE events")
                 .register(registry),
 
-            "d" to Counter.builder("alluvial.task.writer.record.type")
-                .tags(tags.and("op", "delete"))
-                .description("Total delete events")
+            "d" to Counter.builder("alluvial.task.writer.records")
+                .tags(tags).tag("op", "delete")
+                .description("Total DELETE events")
                 .register(registry)
         )
 
@@ -211,9 +211,9 @@ class DebeziumTaskWriter(
         }
 
         override fun close() {
-            opCounters.values.forEach {
-                it.close()
-                registry.remove(it)
+            opCounters.forEach { (_, meter) ->
+                registry.remove(meter)
+                meter.close()
             }
         }
     }
