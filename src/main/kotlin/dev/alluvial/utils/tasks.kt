@@ -5,8 +5,9 @@ fun interface Task<I, O> {
 }
 
 interface Callback<I, O> {
-    fun onSuccess(input: I, result: O)
-    fun onFailure(input: I, throwable: Throwable)
+    fun beforeExecute(input: I) {}
+    fun onSuccess(input: I, result: O) {}
+    fun onFailure(input: I, throwable: Throwable) {}
 }
 
 class CallbackTask<I, O>(
@@ -20,12 +21,19 @@ class CallbackTask<I, O>(
 
     override fun run(input: I): O {
         try {
+            beforeExecute(input)
             val output = task.run(input)
             onSuccess(input, output)
             return output
         } catch (throwable: Throwable) {
             onFailure(input, throwable)
             throw throwable
+        }
+    }
+
+    private fun beforeExecute(input: I) {
+        for (callback in callbacks) {
+            callback.beforeExecute(input)
         }
     }
 

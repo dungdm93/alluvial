@@ -10,6 +10,8 @@ import dev.alluvial.utils.CompactionGroup
 import dev.alluvial.utils.CompactionPoints
 import dev.alluvial.utils.LanePoolRunner
 import dev.alluvial.utils.recommendedPoolSize
+import dev.alluvial.utils.schedule
+import dev.alluvial.utils.shutdownAndAwaitTermination
 import io.micrometer.core.instrument.Metrics
 import io.micrometer.core.instrument.binder.iceberg.IcebergTableMetrics
 import org.apache.hadoop.conf.Configuration
@@ -31,9 +33,9 @@ import java.time.ZonedDateTime
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.Executors
-import java.util.concurrent.SynchronousQueue
-import java.util.concurrent.TimeUnit.MILLISECONDS
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeUnit.MINUTES
+import kotlin.concurrent.thread
 
 class TableManager : Runnable {
     companion object {
@@ -68,7 +70,6 @@ class TableManager : Runnable {
     private val tableMetrics: ConcurrentMap<TableIdentifier, IcebergTableMetrics> = ConcurrentHashMap()
     private lateinit var metricsService: MetricsService
 
-    private val channel = SynchronousQueue<CompactionGroup>() // un-buffered BlockingQueue
     private lateinit var rules: CompactionRules
     private lateinit var catalog: Catalog
     private lateinit var namespace: Namespace
@@ -77,6 +78,14 @@ class TableManager : Runnable {
     private lateinit var compactionGroups: SetMultimap<TableIdentifier, CompactionGroup>
     private lateinit var examineInterval: Duration
     private var expireOrphanSnapshots: Boolean = true
+
+    private val terminatingHook = thread(start = false, name = "terminator") {
+        logger.warn("Shutdown Hook: shutdown the ExecutorService")
+        executor.shutdownAndAwaitTermination(60, TimeUnit.SECONDS)
+
+        logger.warn("Shutdown Hook: closing metrics")
+        metricsService.close()
+    }
 
     fun configure(config: Config) {
         metricsService = MetricsService(registry, config.metrics)
@@ -89,38 +98,52 @@ class TableManager : Runnable {
         examineInterval = config.manager.examineInterval
         rules = config.manager.rules
 
-        expireRunner = LanePoolRunner(executor, this::executeExpiration)
         expireOrphanSnapshots = config.manager.expireOrphanSnapshots
+        expireRunner = LanePoolRunner(executor, this::executeExpiration)
+        expireRunner.addListener(object : Callback<TableIdentifier, Unit> {
+            override fun beforeExecute(input: TableIdentifier) {
+                MDC.put("name", "expireSnapshots($input)")
+            }
+
+            override fun onSuccess(input: TableIdentifier, result: Unit) {
+                MDC.remove("name")
+            }
+
+            override fun onFailure(input: TableIdentifier, throwable: Throwable) {
+                MDC.remove("name")
+            }
+        })
+
+        compactionGroups = Multimaps.newSetMultimap(Maps.newConcurrentMap(), Sets::newHashSet)
         compactRunner = LanePoolRunner(executor, this::executeCompaction)
         compactRunner.addListener(object : Callback<CompactionGroup, Unit> {
+            override fun beforeExecute(input: CompactionGroup) {
+                MDC.put("name", "compactSnapshots(${input.tableId}/${input.key})")
+            }
+
             override fun onSuccess(input: CompactionGroup, result: Unit) {
                 if (compactionGroups.remove(input.tableId, input)) {
                     logger.info("Finish compact on {}", input)
                 } else {
                     logger.error("Something when wrong, {} has gone", input)
                 }
+                MDC.remove("name")
             }
 
             override fun onFailure(input: CompactionGroup, throwable: Throwable) {
                 compactionGroups.remove(input.tableId, input)
                 logger.error("Error while compact on {}", input, throwable)
+                MDC.remove("name")
             }
         })
-
-        compactionGroups = Multimaps.newSetMultimap(Maps.newConcurrentMap(), Sets::newHashSet)
     }
 
     override fun run() {
         metricsService.run()
+        Runtime.getRuntime().addShutdownHook(terminatingHook)
 
-        val examineIntervalMs = examineInterval.toMillis()
         executor.scheduleWithFixedDelay(::refreshMonitors, 0, 1, MINUTES)
-        executor.scheduleWithFixedDelay(::examineTables, 0, examineIntervalMs, MILLISECONDS)
-
-        while (true) {
-            val cg = channel.take()
-            compactRunner.enqueue(cg.tableId, cg)
-        }
+        schedule(examineInterval, ::examineTables)
     }
 
     private fun refreshMonitors() {
@@ -139,35 +162,46 @@ class TableManager : Runnable {
     }
 
     private fun examineTables() {
+        logger.info("Start examine tables")
         val tableIds = catalog.listTables(namespace)
         val now = ZonedDateTime.now(rules.tz)
         val points = CompactionPoints.from(now, rules)
 
         tableIds.forEach { id ->
+            logger.info("Examine table {}", id)
             val table = catalog.loadTable(id)
 
             if (expireOrphanSnapshots && !expireRunner.isEmpty(id)) {
+                logger.info("Enqueue expireSnapshots for {}", id)
                 expireRunner.enqueue(id, id)
             }
 
-            CompactionGroup.fromSnapshots(id, table.snapshots(), points::keyOf)
+            var cgs = CompactionGroup.fromSnapshots(id, table.snapshots(), points::keyOf)
                 .filter { it.size > 1 }
-                .forEach {
-                    if (compactionGroups.put(id, it)) {
-                        logger.info("Creating new {}", it)
-                        channel.put(it)
-                    }
+            val runningItem = compactRunner.runningItem(id)
+            if (runningItem != null) {
+                // All CompactionGroup has highSequenceNumber >= runningItem.highSequenceNumber will cause an exception
+                // Should be filtered them out and waiting for next examine
+                cgs = cgs.filter { it < runningItem }
+            }
+
+            cgs.forEach {
+                if (compactionGroups.put(id, it)) {
+                    logger.info("Enqueue compactSnapshots for {}", it)
+                    compactRunner.enqueue(it.tableId, it)
                 }
+            }
         }
     }
 
-    private fun executeCompaction(cg: CompactionGroup) = withMDC("compactSnapshots(${cg.tableId}/${cg.key})") {
+    private fun executeCompaction(cg: CompactionGroup) {
+        logger.info("Run compaction on {}", cg)
         val table = catalog.loadTable(cg.tableId)
         val action = CompactSnapshots(table, cg.lowSnapshotId, cg.highSnapshotId)
         action.execute()
     }
 
-    private fun executeExpiration(tableId: TableIdentifier) = withMDC("expireSnapshots($tableId)") {
+    private fun executeExpiration(tableId: TableIdentifier) {
         val table = catalog.loadTable(tableId)
         val meta = (table as TableOperations).current()
         val orphanSnapshots = table.snapshots()
@@ -187,14 +221,5 @@ class TableManager : Runnable {
             .cleanExpiredFiles(true)
         orphanSnapshots.forEach(action::expireSnapshotId)
         action.commit()
-    }
-
-    private inline fun <R> withMDC(name: String, block: () -> R): R {
-        try {
-            MDC.put("name", name)
-            return block()
-        } finally {
-            MDC.clear()
-        }
     }
 }

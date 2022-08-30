@@ -34,9 +34,8 @@ class LanePoolRunner<K, I, O>(
         lane.enqueue(input)
     }
 
-    fun isRunning(key: K): Boolean {
-        val lane = laneMap[key] ?: return false
-        return lane.isRunning()
+    fun runningItem(key: K): I? {
+        return laneMap[key]?.runningItem()
     }
 
     fun isEmpty(key: K): Boolean {
@@ -53,12 +52,12 @@ class LanePoolRunner<K, I, O>(
         private var currentItem = AtomicReference<I?>(null)
         private val queue: Queue<I> = ConcurrentLinkedQueue()
 
-        fun isRunning(): Boolean {
-            return currentItem.get() != null
+        fun runningItem(): I? {
+            return currentItem.get()
         }
 
         fun isEmpty(): Boolean {
-            return !isRunning() && queue.isEmpty()
+            return runningItem() == null && queue.isEmpty()
         }
 
         fun size(): Int {

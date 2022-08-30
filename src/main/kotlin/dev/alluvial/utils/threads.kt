@@ -1,5 +1,6 @@
 package dev.alluvial.utils
 
+import java.time.Duration
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.TimeUnit
 import kotlin.math.max
@@ -37,4 +38,14 @@ fun ExecutorService.shutdownAndAwaitTermination(timeout: Long, unit: TimeUnit): 
     }
 
     return this.isTerminated
+}
+
+fun schedule(interval: Duration, block: () -> Unit) {
+    assert(interval > Duration.ZERO) { "interval must be positive value" }
+
+    val intervalMs = interval.toMillis()
+    while (true) {
+        block()
+        Thread.sleep(intervalMs)
+    }
 }
