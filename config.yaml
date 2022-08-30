@@ -96,7 +96,7 @@ stream:
   commitTimespan: "10m"
 
 manager:
-  namespace: [sakila]
+  namespace: [dvdrental]
   rules:
     tz: "+07"
 

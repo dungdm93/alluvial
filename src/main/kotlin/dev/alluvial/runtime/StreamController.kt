@@ -43,7 +43,7 @@ class StreamController : Runnable {
     private val streamlets: ConcurrentMap<String, DebeziumStreamlet> = ConcurrentHashMap()
     private val channel = SynchronousQueue<String>() // un-buffered BlockingQueue
 
-    private val terminateStreamletsHook = thread(start = false, name = "terminator") {
+    private val terminatingHook = thread(start = false, name = "terminator") {
         logger.warn("Shutdown Hook: shutdown the ExecutorService")
         executor.shutdownAndAwaitTermination(60, SECONDS)
 
@@ -71,7 +71,7 @@ class StreamController : Runnable {
 
     override fun run() {
         metricsService.run()
-        Runtime.getRuntime().addShutdownHook(terminateStreamletsHook)
+        Runtime.getRuntime().addShutdownHook(terminatingHook)
 
         executor.scheduleWithFixedDelay(::examineStreamlets, 0, examineInterval.toMillis(), MILLISECONDS)
 
