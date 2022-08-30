@@ -10,6 +10,7 @@ import io.micrometer.core.instrument.LongTaskTimer
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tags
 import io.micrometer.core.instrument.Timer
+import org.apache.iceberg.AlluvialRowDelta
 import org.apache.iceberg.expressions.Expressions
 import org.apache.iceberg.io.TaskWriter
 import org.apache.kafka.connect.sink.SinkRecord
@@ -46,18 +47,14 @@ class IcebergTableOutlet(
 
     fun commit(summary: Map<String, String> = emptyMap()) {
         val result = metrics.recordCommitData(writer!!::complete)
-        val rowDelta = table.newRowDelta()
+        val rowDelta = AlluvialRowDelta.of(table)
+            .validateFromHead()
 
         result.dataFiles().forEach(rowDelta::addRows)
         metrics.increaseDatafiles(result.dataFiles().size)
         result.deleteFiles().forEach(rowDelta::addDeletes)
         metrics.increaseDeleteFiles(result.deleteFiles().size)
-        rowDelta.validateDeletedFiles()
-            .validateDataFilesExist(result.referencedDataFiles().asIterable())
-
-        // Set rowDelta.startingSnapshotId to the current snapshot since we only validate positional delete files and
-        // those delete records always reference to data files in the same commit.
-        table.currentSnapshot()?.let { rowDelta.validateFromSnapshot(it.snapshotId()) }
+        rowDelta.validateDataFilesExist(result.referencedDataFiles().asIterable())
 
         summary.forEach(rowDelta::set)
         metrics.recordCommitMetadata(rowDelta::commit)
