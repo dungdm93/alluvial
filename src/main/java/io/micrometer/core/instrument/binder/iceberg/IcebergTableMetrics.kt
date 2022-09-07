@@ -102,11 +102,11 @@ class IcebergTableMetrics(
         //) { it.totalSnapshotSummaryAsDouble(ADDED_FILES_PROP, ZERO) }
         //registerGauge(
         //    "files.history.total", "Total POSITION_DELETES files in history",
-        //    Tags.of("content", "position-deletes"), table
+        //    Tags.of("content", "position_deletes"), table
         //) { it.totalSnapshotSummaryAsDouble(ADD_EQ_DELETE_FILES_PROP, ZERO) }
         //registerGauge(
         //    "files.history.total", "Total EQUALITY_DELETES files in history",
-        //    Tags.of("content", "equality-deletes"), table
+        //    Tags.of("content", "equality_deletes"), table
         //) { it.totalSnapshotSummaryAsDouble(ADD_POS_DELETE_FILES_PROP, ZERO) }
 
         ///// Records /////
@@ -116,11 +116,11 @@ class IcebergTableMetrics(
         ) { it.currentSnapshotSummaryAsDouble(TOTAL_RECORDS_PROP, ZERO) }
         registerGauge(
             "records.timeline.total", "Total POSITION_DELETES records in main branch timeline",
-            Tags.of("content", "position-deletes"), table
+            Tags.of("content", "position_deletes"), table
         ) { it.currentSnapshotSummaryAsDouble(TOTAL_POS_DELETES_PROP, ZERO) }
         registerGauge(
             "records.timeline.total", "Total EQUALITY_DELETES records in main branch timeline",
-            Tags.of("content", "equality-deletes"), table
+            Tags.of("content", "equality_deletes"), table
         ) { it.currentSnapshotSummaryAsDouble(TOTAL_EQ_DELETES_PROP, ZERO) }
         //registerGauge(
         //    "records.history.total", "Total DATA records in history",
@@ -128,11 +128,11 @@ class IcebergTableMetrics(
         //) { it.totalSnapshotSummaryAsDouble(ADDED_RECORDS_PROP, ZERO) }
         //registerGauge(
         //    "records.history.total", "Total POSITION_DELETES records in history",
-        //    Tags.of("content", "position-deletes"), table
+        //    Tags.of("content", "position_deletes"), table
         //) { it.totalSnapshotSummaryAsDouble(ADDED_POS_DELETES_PROP, ZERO) }
         //registerGauge(
         //    "records.history.total", "Total EQUALITY_DELETES records in history",
-        //    Tags.of("content", "equality-deletes"), table
+        //    Tags.of("content", "equality_deletes"), table
         //) { it.totalSnapshotSummaryAsDouble(ADDED_EQ_DELETES_PROP, ZERO) }
 
         ///// Files Size /////

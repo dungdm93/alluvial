@@ -5,19 +5,23 @@ import dev.alluvial.sink.iceberg.io.DebeziumTaskWriterFactory
 import dev.alluvial.sink.iceberg.type.IcebergTable
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.source.kafka.fieldSchema
-import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.DistributionSummary
 import io.micrometer.core.instrument.LongTaskTimer
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tags
 import io.micrometer.core.instrument.Timer
 import org.apache.iceberg.AlluvialRowDelta
+import org.apache.iceberg.ContentFile
+import org.apache.iceberg.FileContent
 import org.apache.iceberg.expressions.Expressions
 import org.apache.iceberg.io.TaskWriter
+import org.apache.iceberg.io.WriteResult
 import org.apache.kafka.connect.sink.SinkRecord
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.time.Clock
 import java.util.concurrent.TimeUnit
+import java.util.function.Supplier
 
 class IcebergTableOutlet(
     val name: String,
@@ -51,10 +55,9 @@ class IcebergTableOutlet(
             .validateFromHead()
 
         result.dataFiles().forEach(rowDelta::addRows)
-        metrics.increaseDatafiles(result.dataFiles().size)
         result.deleteFiles().forEach(rowDelta::addDeletes)
-        metrics.increaseDeleteFiles(result.deleteFiles().size)
         rowDelta.validateDataFilesExist(result.referencedDataFiles().asIterable())
+        metrics.measureWriteResult(result)
 
         summary.forEach(rowDelta::set)
         metrics.recordCommitMetadata(rowDelta::commit)
@@ -138,25 +141,55 @@ class IcebergTableOutlet(
             .description("Duration from the time record appeared in Kafka until it is written")
             .register(registry)
 
-        private val deleteFilesCount = Counter.builder("alluvial.outlet.commit.files")
-            .tags(tags.and("type", "delete"))
-            .description("Number of delete files")
-            .register(registry)
+        ///////////// Records per file /////////////
+        private val recordCountSummaries = buildMap {
+            FileContent.values().forEach {
+                val name = it.name.lowercase()
+                val summary = DistributionSummary.builder("alluvial.outlet.records")
+                    .tags(tags).tag("content", name)
+                    .description("Number of records per file")
+                    .maximumExpectedValue(500_000.0)
+                    .serviceLevelObjectives(1.0, 10.0, 100.0, 1_000.0, 10_000.0, 100_000.0, 500_000.0)
+                    .register(registry)
+                put(it, summary)
+            }
+        }
 
-        private val dataFilesCount = Counter.builder("alluvial.outlet.commit.files")
-            .tags(tags.and("type", "data"))
-            .description("Number of data files")
-            .register(registry)
+        ///////////// File size in bytes /////////////
+        private val fileSizeSummaries = buildMap {
+            FileContent.values().forEach {
+                val name = it.name.lowercase()
+                val summary = DistributionSummary.builder("alluvial.outlet.file_size")
+                    .tags(tags).tag("content", name)
+                    .description("File size in bytes")
+                    .baseUnit("bytes")
+                    .maximumExpectedValue(512.0 * 1024 * 1024) // 512MiB
+                    .serviceLevelObjectives(
+                        1.0 * 1024, // 1KiB
+                        10.0 * 1024, // 10KiB
+                        100.0 * 1024, // 100KiB
+                        1.0 * 1024 * 1024, // 1MiB
+                        10.0 * 1024 * 1024, // 10MiB
+                        32.0 * 1024 * 1024, // 32MiB
+                        64.0 * 1024 * 1024, // 64MiB
+                        128.0 * 1024 * 1024, // 128MiB
+                        256.0 * 1024 * 1024, // 256MiB
+                        512.0 * 1024 * 1024, // 512MiB
+                    )
+                    .register(registry)
+                put(it, summary)
+            }
+        }
 
-        val registeredMetrics = listOf(
-            commitDataDuration, commitMetadataDuration, recordWriteLag, deleteFilesCount, dataFilesCount
-        )
+        private val meters = listOf(commitDataDuration, commitMetadataDuration, recordWriteLag) +
+            recordCountSummaries.values +
+            fileSizeSummaries.values
 
-        fun <T> recordCommitData(block: () -> T): T {
+        fun <T> recordCommitData(block: Supplier<T>): T {
             return commitDataDuration.record(block)
         }
 
-        fun <T> recordCommitMetadata(block: () -> T): T {
+        fun <T> recordCommitMetadata(block: Supplier<T>): T {
             return commitMetadataDuration.record(block)
         }
 
@@ -164,18 +197,27 @@ class IcebergTableOutlet(
             recordWriteLag.record(clock.millis() - recordTs, TimeUnit.MILLISECONDS)
         }
 
-        fun increaseDatafiles(amount: Int) {
-            dataFilesCount.increment(amount.toDouble())
+        fun measureWriteResult(result: WriteResult) {
+            result.dataFiles().forEach(::trackRecordCount)
+            result.deleteFiles().forEach(::trackRecordCount)
+            result.dataFiles().forEach(::trackFileSize)
+            result.deleteFiles().forEach(::trackFileSize)
         }
 
-        fun increaseDeleteFiles(amount: Int) {
-            deleteFilesCount.increment(amount.toDouble())
+        private fun trackRecordCount(file: ContentFile<*>) {
+            val summary = recordCountSummaries[file.content()] ?: return
+            summary.record(file.recordCount().toDouble())
+        }
+
+        private fun trackFileSize(file: ContentFile<*>) {
+            val summary = fileSizeSummaries[file.content()] ?: return
+            summary.record(file.fileSizeInBytes().toDouble())
         }
 
         override fun close() {
-            registeredMetrics.forEach {
-                it.close()
+            meters.forEach {
                 registry.remove(it)
+                it.close()
             }
         }
     }

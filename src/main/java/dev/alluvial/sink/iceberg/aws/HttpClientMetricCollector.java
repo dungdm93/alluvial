@@ -37,7 +37,7 @@ public class HttpClientMetricCollector implements ClientMetricCollector {
             httpCode,
             code -> Timer.builder(String.format("%s.duration", prefix))
                 .description("AWS's HTTP request duration")
-                .tags(tags.and("code", code.toString()))
+                .tags(tags).tag("code", code.toString())
                 .register(registry)
         );
         metricCollection.metricValues(SERVICE_CALL_DURATION)
@@ -46,8 +46,10 @@ public class HttpClientMetricCollector implements ClientMetricCollector {
 
     public void close() {
         logger.info("Closing HttpClientMetricCollector");
-        httpDurations.values()
-            .forEach(Timer::close);
+        httpDurations.forEach((code, meter) -> {
+            registry.remove(meter);
+            meter.close();
+        });
         httpDurations.clear();
     }
 }

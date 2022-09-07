@@ -162,20 +162,19 @@ class StreamController : Runnable {
         }
 
         fun unregisterStreamlet(streamlet: DebeziumStreamlet) {
-            streamletStatuses.remove(streamlet.name)?.let {
-                it.close()
-                registry.remove(it)
-                logger.debug("Unwatch status of streamlet {}", streamlet.name)
-            }
+            val meter = streamletStatuses.remove(streamlet.name) ?: return
+            registry.remove(meter)
+            meter.close()
+            logger.debug("Unwatch status of streamlet {}", streamlet.name)
         }
 
         override fun close() {
-            availableTopics.close()
             registry.remove(availableTopics)
+            availableTopics.close()
 
             streamletStatuses.forEach { (_, meter) ->
-                meter.close()
                 registry.remove(meter)
+                meter.close()
             }
             streamletStatuses.clear()
         }

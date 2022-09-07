@@ -218,7 +218,7 @@ class DebeziumStreamlet(
             .description("Streamlet schema migration count")
             .register(registry)
 
-        private val registeredMetrics = listOf(lastRecordTimestamp, commitDuration, schemaMigration)
+        private val meters = listOf(lastRecordTimestamp, commitDuration, schemaMigration)
 
         fun <T> recordCommit(block: () -> T): T {
             return commitDuration.record(block)
@@ -229,9 +229,9 @@ class DebeziumStreamlet(
         }
 
         override fun close() {
-            registeredMetrics.forEach {
-                it.close()
+            meters.forEach {
                 registry.remove(it)
+                it.close()
             }
         }
     }
