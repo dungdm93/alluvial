@@ -11,13 +11,17 @@ import org.apache.iceberg.exceptions.ValidationException
 import org.apache.iceberg.expressions.Expressions
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions
 import org.apache.iceberg.util.Tasks
+import org.slf4j.LoggerFactory
 import java.util.Objects
 
 internal class BaseSquashOperation(
     private val tableName: String,
     private val ops: TableOperations,
-) : MergingSnapshotProducer<SquashOperation>(tableName, ops),
-    SquashOperation {
+) : MergingSnapshotProducer<SquashOperation>(tableName, ops), SquashOperation {
+    companion object {
+        private val logger = LoggerFactory.getLogger(BaseSquashOperation::class.java)
+    }
+
     private val io = ops.io()
 
     private var lowSnapshot: Snapshot? = null
@@ -27,6 +31,7 @@ internal class BaseSquashOperation(
     private var highSchemaId: Int? = null
     private var cherrypickUpdates = emptyList<SnapshotProducer<*>>()
     private val cherrypickMap = mutableMapOf<Long, SnapshotProducer<*>>()
+    private var cacheSnapshot: Snapshot? = null
 
     private var validated = false
     private var validatePosDeletesFilesInRange = true
@@ -91,10 +96,16 @@ internal class BaseSquashOperation(
     }
 
     override fun apply(): Snapshot {
-        val snapshot = super.apply()
-        return if (snapshot.schemaId() == highSchemaId)
-            snapshot else
-            snapshot.copy { schemaId = highSchemaId }
+        cacheSnapshot = if (cacheSnapshot == null) {
+            val snapshot = super.apply()
+            logger.info("Squash snapshots {} to {}", snapshot.summary()[SQUASH_SNAPSHOT_ID_PROP], snapshot.snapshotId())
+            if (snapshot.schemaId() == highSchemaId)
+                snapshot else
+                snapshot.copy { schemaId = highSchemaId }
+        } else {
+            cacheSnapshot?.copy { timestampMillis = System.currentTimeMillis() }
+        }
+        return cacheSnapshot!!
     }
 
     override fun commit() {
@@ -234,6 +245,7 @@ internal class BaseSquashOperation(
         private var sourceSchemaId: Int? = null
         private var requireFastForward = false // TODO
         private var validated: Int? = null
+        private var cacheSnapshot: Snapshot? = null
 
         override fun self() = this
 
@@ -281,10 +293,16 @@ internal class BaseSquashOperation(
                 return cs
             }
 
-            val snapshot = super.apply()
-            return if (snapshot.schemaId() == sourceSchemaId)
-                snapshot else
-                snapshot.copy { schemaId = sourceSchemaId }
+            cacheSnapshot = if (cacheSnapshot == null) {
+                val snapshot = super.apply()
+                logger.info("Cherrypick snapshot {} to {}", cs.snapshotId(), snapshot.snapshotId())
+                if (snapshot.schemaId() == sourceSchemaId)
+                    snapshot else
+                    snapshot.copy { schemaId = sourceSchemaId }
+            } else {
+                cacheSnapshot?.copy { timestampMillis = System.currentTimeMillis() }
+            }
+            return cacheSnapshot!!
         }
 
         override fun validate(currentMetadata: TableMetadata) {
