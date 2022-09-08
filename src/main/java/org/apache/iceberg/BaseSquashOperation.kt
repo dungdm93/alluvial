@@ -343,6 +343,10 @@ internal class BaseSquashOperation(
         private fun setSummary(snapshot: Snapshot) {
             set(SOURCE_SNAPSHOT_ID_PROP, snapshot.snapshotId().toString())
 
+            if (SQUASH_SNAPSHOT_ID_PROP in snapshot.summary()) {
+                set(SQUASH_SNAPSHOT_ID_PROP, snapshot.summary()[SQUASH_SNAPSHOT_ID_PROP])
+            }
+
             val originalSnapshotTs = snapshot.originalTimestampMillis()
             set(ORIGINAL_SNAPSHOT_TS_PROP, originalSnapshotTs.toString())
 
