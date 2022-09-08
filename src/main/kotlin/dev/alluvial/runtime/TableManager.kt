@@ -25,6 +25,7 @@ import org.apache.iceberg.ancestorsOf
 import org.apache.iceberg.catalog.Catalog
 import org.apache.iceberg.catalog.Namespace
 import org.apache.iceberg.catalog.TableIdentifier
+import org.apache.iceberg.currentAncestors
 import org.apache.iceberg.util.PropertyUtil
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
@@ -176,7 +177,7 @@ class TableManager : Runnable {
                 expireRunner.enqueue(id, id)
             }
 
-            var cgs = CompactionGroup.fromSnapshots(id, table.snapshots(), points::keyOf)
+            var cgs = CompactionGroup.fromSnapshots(id, table.currentAncestors(), points::keyOf)
                 .filter { it.size > 1 }
             val runningItem = compactRunner.runningItem(id)
             if (runningItem != null) {
