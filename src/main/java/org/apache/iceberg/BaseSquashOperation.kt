@@ -103,7 +103,11 @@ internal class BaseSquashOperation(
                 snapshot else
                 snapshot.copy { schemaId = highSchemaId }
         } else {
-            cacheSnapshot?.copy { timestampMillis = System.currentTimeMillis() }
+            val base = refresh()
+            cacheSnapshot?.copy {
+                sequenceNumber = base.nextSequenceNumber()
+                timestampMillis = System.currentTimeMillis()
+            }
         }
         return cacheSnapshot!!
     }
@@ -300,7 +304,10 @@ internal class BaseSquashOperation(
                     snapshot else
                     snapshot.copy { schemaId = sourceSchemaId }
             } else {
-                cacheSnapshot?.copy { timestampMillis = System.currentTimeMillis() }
+                cacheSnapshot?.copy {
+                    sequenceNumber = base.nextSequenceNumber()
+                    timestampMillis = System.currentTimeMillis()
+                }
             }
             return cacheSnapshot!!
         }
