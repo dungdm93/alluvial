@@ -8,8 +8,14 @@ import dev.alluvial.sink.iceberg.io.PartitioningWriter
 import dev.alluvial.sink.iceberg.io.PartitioningWriterFactory
 import dev.alluvial.sink.iceberg.transform
 import dev.alluvial.sink.iceberg.type.IcebergSchema
+import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.DistributionSummary
+import io.micrometer.core.instrument.LongTaskTimer
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Tags
 import org.apache.iceberg.FileContent.POSITION_DELETES
 import org.apache.iceberg.TableProperties.*
+import org.apache.iceberg.catalog.TableIdentifier
 import org.apache.iceberg.data.Record
 import org.apache.iceberg.deletes.Deletes
 import org.apache.iceberg.exceptions.ValidationException
@@ -28,6 +34,7 @@ import java.io.IOException
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.util.function.Supplier
 
 /**
  * NOTE: test the following use-cases
@@ -41,6 +48,7 @@ import java.time.format.DateTimeFormatter
  */
 class CompactSnapshots(
     private val table: Table,
+    private val metrics: Metrics,
     lowSnapshotId: Long?,
     highSnapshotId: Long,
 ) {
@@ -94,9 +102,9 @@ class CompactSnapshots(
     }
 
     fun execute() {
-        if (lowSnapshot != null) checkPositionDelete()
-        rewriteData()
-        if (lowSnapshot != null) rewriteEqualityDelete()
+        if (lowSnapshot != null) metrics.recordCheckPositionDelete(::checkPositionDelete)
+        metrics.recordRewriteData(::rewriteData)
+        if (lowSnapshot != null) metrics.recordRewriteEqualityDelete(::rewriteEqualityDelete)
 
         apply()
     }
@@ -276,9 +284,12 @@ class CompactSnapshots(
         val result = resultBuilder.build()
         result.dataFiles().forEach(squash::add)
         result.deleteFiles().forEach(squash::add)
+        metrics.measureWriteResult(result)
 
-        squash.commit()
-        txn.commitTransaction()
+        metrics.recordCommit {
+            squash.commit()
+            txn.commitTransaction()
+        }
     }
 
     private fun newDataWriter(): PartitioningWriter<Record, DataWriteResult> {
@@ -324,5 +335,134 @@ class CompactSnapshots(
 
     private fun Snapshot.schema(): Schema {
         return schemasById[this.schemaId()]!!
+    }
+
+    class Metrics(
+        private val registry: MeterRegistry,
+        tableId: TableIdentifier,
+    ) : Closeable {
+        private val tags: Tags = Tags.of("table", tableId.toString())
+
+        private val successCount = Counter.builder("alluvial.compact")
+            .tags(tags).tag("status", "success")
+            .description("Total number of compaction run")
+            .register(registry)
+
+        private val failureCount = Counter.builder("alluvial.compact")
+            .tags(tags).tag("status", "failure")
+            .description("Total number of compaction run")
+            .register(registry)
+
+        ///////////// Duration /////////////
+        private val checkPositionDeleteDuration =
+            LongTaskTimer.builder("alluvial.compact.duration")
+                .tags(tags).tag("step", "check_position_deletes")
+                .description("CompactSnapshots check POSITION_DELETES duration")
+                .register(registry)
+
+        private val rewriteDataDuration = LongTaskTimer.builder("alluvial.compact.duration")
+            .tags(tags).tag("step", "rewrite_data")
+            .description("CompactSnapshots rewrite DATA duration")
+            .register(registry)
+
+        private val rewriteEqualityDeleteDuration =
+            LongTaskTimer.builder("alluvial.compact.duration")
+                .tags(tags).tag("step", "rewrite_equality_deletes")
+                .description("CompactSnapshots rewrite EQUALITY_DELETES duration")
+                .register(registry)
+
+        private val commitDuration = LongTaskTimer.builder("alluvial.compact.duration")
+            .tags(tags).tag("step", "commit")
+            .description("CompactSnapshots commit duration")
+            .register(registry)
+
+        ///////////// Records per file /////////////
+        private val recordCountSummaries = buildMap {
+            FileContent.values().forEach {
+                val name = it.name.lowercase()
+                val summary = DistributionSummary.builder("alluvial.compact.records")
+                    .tags(tags).tag("content", name)
+                    .description("Number of records per file")
+                    .maximumExpectedValue(500_000.0)
+                    .serviceLevelObjectives(1.0, 10.0, 100.0, 1_000.0, 10_000.0, 100_000.0, 500_000.0)
+                    .register(registry)
+                put(it, summary)
+            }
+        }
+
+        ///////////// File size in bytes /////////////
+        private val fileSizeSummaries = buildMap {
+            FileContent.values().forEach {
+                val name = it.name.lowercase()
+                val summary = DistributionSummary.builder("alluvial.compact.file_size")
+                    .tags(tags).tag("content", name)
+                    .description("File size in bytes")
+                    .baseUnit("bytes")
+                    .maximumExpectedValue(512.0 * 1024 * 1024) // 512MiB
+                    .serviceLevelObjectives(
+                        1.0 * 1024, // 1KiB
+                        10.0 * 1024, // 10KiB
+                        100.0 * 1024, // 100KiB
+                        1.0 * 1024 * 1024, // 1MiB
+                        10.0 * 1024 * 1024, // 10MiB
+                        32.0 * 1024 * 1024, // 32MiB
+                        64.0 * 1024 * 1024, // 64MiB
+                        128.0 * 1024 * 1024, // 128MiB
+                        256.0 * 1024 * 1024, // 256MiB
+                        512.0 * 1024 * 1024, // 512MiB
+                    )
+                    .register(registry)
+                put(it, summary)
+            }
+        }
+        private val meters = listOf(
+            successCount, failureCount, commitDuration,
+            checkPositionDeleteDuration, rewriteDataDuration, rewriteEqualityDeleteDuration,
+        ) + recordCountSummaries.values + fileSizeSummaries.values
+
+        fun increment(success: Boolean) {
+            val meter = if (success) successCount else failureCount
+            meter.increment()
+        }
+
+        fun <T> recordCheckPositionDelete(block: Supplier<T>): T {
+            return checkPositionDeleteDuration.record(block)
+        }
+
+        fun <T> recordRewriteData(block: Supplier<T>): T {
+            return rewriteDataDuration.record(block)
+        }
+
+        fun <T> recordRewriteEqualityDelete(block: Supplier<T>): T {
+            return rewriteEqualityDeleteDuration.record(block)
+        }
+
+        fun <T> recordCommit(block: Supplier<T>): T {
+            return commitDuration.record(block)
+        }
+
+        fun measureWriteResult(result: WriteResult) {
+            result.dataFiles().forEach(::trackRecordCount)
+            result.deleteFiles().forEach(::trackRecordCount)
+            result.dataFiles().forEach(::trackFileSize)
+            result.deleteFiles().forEach(::trackFileSize)
+        }
+
+        private fun trackRecordCount(file: ContentFile<*>) {
+            val summary = recordCountSummaries[file.content()] ?: return
+            summary.record(file.recordCount().toDouble())
+        }
+
+        private fun trackFileSize(file: ContentFile<*>) {
+            val summary = fileSizeSummaries[file.content()] ?: return
+            summary.record(file.fileSizeInBytes().toDouble())
+        }
+
+        override fun close() {
+            meters.forEach {
+                registry.remove(it)
+                it.close()
+            }
+        }
     }
 }
