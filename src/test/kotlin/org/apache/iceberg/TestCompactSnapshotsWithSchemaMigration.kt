@@ -68,7 +68,7 @@ class TestCompactSnapshotsWithSchemaMigration : TestCompactSnapshotsBase() {
         val oldHeadId = table.currentSnapshotId()!!
         val highSnapshotId = 3L
 
-        CompactSnapshots(table, 1, highSnapshotId)
+        CompactSnapshots(table, metrics, 1, highSnapshotId)
             .execute()
 
         val newHeadId = table.currentSnapshotId()!!
@@ -89,7 +89,7 @@ class TestCompactSnapshotsWithSchemaMigration : TestCompactSnapshotsBase() {
         val oldHeadId = table.currentSnapshotId()!!
         val highSnapshotId = 2L
 
-        CompactSnapshots(table, null, highSnapshotId)
+        CompactSnapshots(table, metrics, null, highSnapshotId)
             .execute()
 
         val newHeadId = table.currentSnapshotId()!!
@@ -108,7 +108,7 @@ class TestCompactSnapshotsWithSchemaMigration : TestCompactSnapshotsBase() {
     fun testCompactAfterSchemaChanged() {
         setupTableWithMigration()
         val oldHeadId = table.currentSnapshotId()!!
-        CompactSnapshots(table, 2, oldHeadId)
+        CompactSnapshots(table, metrics, 2, oldHeadId)
             .execute()
         val newHeadId = table.currentSnapshotId()!!
 

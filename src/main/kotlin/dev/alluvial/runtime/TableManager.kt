@@ -69,6 +69,7 @@ class TableManager : Runnable {
     }
 
     private val tableMetrics: ConcurrentMap<TableIdentifier, IcebergTableMetrics> = ConcurrentHashMap()
+    private val compactMetrics: ConcurrentMap<TableIdentifier, CompactSnapshots.Metrics> = ConcurrentHashMap()
     private lateinit var metricsService: MetricsService
 
     private lateinit var rules: CompactionRules
@@ -128,12 +129,14 @@ class TableManager : Runnable {
                 } else {
                     logger.error("Something when wrong, {} has gone", input)
                 }
+                compactMetrics[input.tableId]?.increment(true)
                 MDC.remove("name")
             }
 
             override fun onFailure(input: CompactionGroup, throwable: Throwable) {
                 compactionGroups.remove(input.tableId, input)
                 logger.error("Error while compact on {}", input, throwable)
+                compactMetrics[input.tableId]?.increment(false)
                 MDC.remove("name")
             }
         })
@@ -171,6 +174,7 @@ class TableManager : Runnable {
         tableIds.forEach { id ->
             logger.info("Examine table {}", id)
             val table = catalog.loadTable(id)
+            compactMetrics.computeIfAbsent(id) { CompactSnapshots.Metrics(registry, id) }
 
             if (expireOrphanSnapshots && !expireRunner.isEmpty(id)) {
                 logger.info("Enqueue expireSnapshots for {}", id)
@@ -198,7 +202,8 @@ class TableManager : Runnable {
     private fun executeCompaction(cg: CompactionGroup) {
         logger.info("Run compaction on {}", cg)
         val table = catalog.loadTable(cg.tableId)
-        val action = CompactSnapshots(table, cg.lowSnapshotId, cg.highSnapshotId)
+        val metrics = compactMetrics[cg.tableId]!!
+        val action = CompactSnapshots(table, metrics, cg.lowSnapshotId, cg.highSnapshotId)
         action.execute()
     }
 

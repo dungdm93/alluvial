@@ -73,7 +73,7 @@ class TestCompactSnapshotsSimple : TestCompactSnapshotsBase() {
     @Test
     fun testSimpleCompact() {
         setupTableForNormalCompact()
-        val compaction = CompactSnapshots(table, 1, 3)
+        val compaction = CompactSnapshots(table, metrics, 1, 3)
         compaction.execute()
 
         Assertions.assertEquals(6, table.snapshots().count())
@@ -94,7 +94,7 @@ class TestCompactSnapshotsSimple : TestCompactSnapshotsBase() {
     @Test
     fun testSimpleCompactFromRoot() {
         setupTableForNormalCompact()
-        val compaction = CompactSnapshots(table, null, 3)
+        val compaction = CompactSnapshots(table, metrics, null, 3)
         compaction.execute()
 
         Assertions.assertEquals(6, table.snapshots().count())
@@ -116,7 +116,7 @@ class TestCompactSnapshotsSimple : TestCompactSnapshotsBase() {
     @Test
     fun testNotAbleToSquash() {
         setupTableForNormalCompact()
-        val compaction = CompactSnapshots(table, 2, 4)
+        val compaction = CompactSnapshots(table, metrics, 2, 4)
         val exception = assertThrows<ValidationException>(compaction::execute)
         Assertions.assertEquals(
             exception.message,
@@ -127,7 +127,7 @@ class TestCompactSnapshotsSimple : TestCompactSnapshotsBase() {
     @Test
     fun testNotAbleToCherrypick() {
         setupTableForNormalCompact()
-        val compaction = CompactSnapshots(table, null, 2)
+        val compaction = CompactSnapshots(table, metrics, null, 2)
         val exception = assertThrows<ValidationException>(compaction::execute)
         Assertions.assertEquals(
             exception.message,
@@ -198,7 +198,7 @@ class TestCompactSnapshotsSimple : TestCompactSnapshotsBase() {
     @Test
     fun testCompactWithRemovedFiles() {
         setupTableWithRemovedFiles()
-        val compaction = CompactSnapshots(table, 1, 5)
+        val compaction = CompactSnapshots(table, metrics, 1, 5)
         compaction.execute()
 
         Assertions.assertEquals(8, table.snapshots().count())

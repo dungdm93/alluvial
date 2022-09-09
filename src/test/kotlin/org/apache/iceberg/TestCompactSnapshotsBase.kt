@@ -1,6 +1,8 @@
 package org.apache.iceberg
 
 import dev.alluvial.sink.iceberg.io.GenericReader
+import io.micrometer.core.instrument.Metrics
+import org.apache.iceberg.catalog.TableIdentifier
 import org.apache.iceberg.data.GenericRecord
 import org.apache.iceberg.data.Record
 import org.apache.iceberg.types.Types
@@ -27,11 +29,13 @@ open class TestCompactSnapshotsBase {
     @TempDir
     protected lateinit var tableDir: File
     protected lateinit var table: TestTables.TestTable
+    protected lateinit var metrics: CompactSnapshots.Metrics
 
     @BeforeEach
     fun setupTable() {
         tableDir.delete()
         table = TestTables.create(tableDir, "test", schema, spec, 2)
+        metrics = CompactSnapshots.Metrics(Metrics.globalRegistry, TableIdentifier.of("test"))
     }
 
     @AfterEach
