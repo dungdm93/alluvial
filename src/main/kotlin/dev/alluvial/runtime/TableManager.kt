@@ -19,8 +19,8 @@ import org.apache.iceberg.CachingCatalog
 import org.apache.iceberg.CatalogProperties
 import org.apache.iceberg.CatalogUtil
 import org.apache.iceberg.CompactSnapshots
+import org.apache.iceberg.HasTableOperations
 import org.apache.iceberg.Snapshot
-import org.apache.iceberg.TableOperations
 import org.apache.iceberg.ancestorsOf
 import org.apache.iceberg.catalog.Catalog
 import org.apache.iceberg.catalog.Namespace
@@ -75,6 +75,7 @@ class TableManager : Runnable {
     private lateinit var rules: CompactionRules
     private lateinit var catalog: Catalog
     private lateinit var namespace: Namespace
+    private lateinit var tagRunner: LanePoolRunner<TableIdentifier, TableIdentifier, Unit>
     private lateinit var expireRunner: LanePoolRunner<TableIdentifier, TableIdentifier, Unit>
     private lateinit var compactRunner: LanePoolRunner<TableIdentifier, CompactionGroup, Unit>
     private lateinit var compactionGroups: SetMultimap<TableIdentifier, CompactionGroup>
@@ -100,27 +101,18 @@ class TableManager : Runnable {
         examineInterval = config.manager.examineInterval
         rules = config.manager.rules
 
+        tagRunner = LanePoolRunner(executor, this::executeTagging)
+        tagRunner.addListener(newMdcListener("tagging"))
+
         expireOrphanSnapshots = config.manager.expireOrphanSnapshots
         expireRunner = LanePoolRunner(executor, this::executeExpiration)
-        expireRunner.addListener(object : Callback<TableIdentifier, Unit> {
-            override fun beforeExecute(input: TableIdentifier) {
-                MDC.put("name", "expireSnapshots($input)")
-            }
-
-            override fun onSuccess(input: TableIdentifier, result: Unit) {
-                MDC.remove("name")
-            }
-
-            override fun onFailure(input: TableIdentifier, throwable: Throwable) {
-                MDC.remove("name")
-            }
-        })
+        expireRunner.addListener(newMdcListener("expiration"))
 
         compactionGroups = Multimaps.newSetMultimap(Maps.newConcurrentMap(), Sets::newHashSet)
         compactRunner = LanePoolRunner(executor, this::executeCompaction)
         compactRunner.addListener(object : Callback<CompactionGroup, Unit> {
             override fun beforeExecute(input: CompactionGroup) {
-                MDC.put("name", "compactSnapshots(${input.tableId}/${input.key})")
+                MDC.put("name", "compaction(${input.tableId}/${input.key})")
             }
 
             override fun onSuccess(input: CompactionGroup, result: Unit) {
@@ -176,7 +168,12 @@ class TableManager : Runnable {
             val table = catalog.loadTable(id)
             compactMetrics.computeIfAbsent(id) { CompactSnapshots.Metrics(registry, id) }
 
-            if (expireOrphanSnapshots && !expireRunner.isEmpty(id)) {
+            if (tagRunner.isEmpty(id)) {
+                logger.info("Enqueue taggingSnapshots for {}", id)
+                tagRunner.enqueue(id, id)
+            }
+
+            if (expireOrphanSnapshots && expireRunner.isEmpty(id)) {
                 logger.info("Enqueue expireSnapshots for {}", id)
                 expireRunner.enqueue(id, id)
             }
@@ -208,8 +205,9 @@ class TableManager : Runnable {
     }
 
     private fun executeExpiration(tableId: TableIdentifier) {
+        logger.info("Run expiration on {}", tableId)
         val table = catalog.loadTable(tableId)
-        val meta = (table as TableOperations).current()
+        val meta = (table as HasTableOperations).operations().current()
         val orphanSnapshots = table.snapshots()
             .mapTo(mutableSetOf(), Snapshot::snapshotId)
 
@@ -227,5 +225,49 @@ class TableManager : Runnable {
             .cleanExpiredFiles(true)
         orphanSnapshots.forEach(action::expireSnapshotId)
         action.commit()
+    }
+
+    private fun executeTagging(tableId: TableIdentifier) {
+        logger.info("Run tagging on {}", tableId)
+        val now = ZonedDateTime.now(rules.tz)
+        val points = CompactionPoints.from(now, rules)
+        val taggingPoint = points.dayCompactionPoint.toEpochMilli()
+
+        val table = catalog.loadTable(tableId)
+        val refs = (table as HasTableOperations).operations().current().refs()
+
+        val cgs = CompactionGroup
+            .fromSnapshots(tableId, table.currentAncestors(), points::keyOf)
+            .reversed()
+
+        val manageSnapshots = table.manageSnapshots()
+        for (cg in cgs) {
+            if (cg.size > 1) break
+            val snapshot = table.snapshot(cg.highSnapshotId)
+            if (snapshot.timestampMillis() > taggingPoint) break
+
+            if (cg.key in refs) continue
+            logger.info("Creating tag {} from {}", cg.key, cg.highSnapshotId)
+            manageSnapshots.createTag(cg.key, cg.highSnapshotId)
+        }
+        manageSnapshots.commit()
+    }
+
+    private fun <I, O> newMdcListener(action: String): Callback<I, O> {
+        return object : Callback<I, O> {
+            override fun beforeExecute(input: I) {
+                MDC.put("name", "$action($input)")
+            }
+
+            override fun onSuccess(input: I, result: O) {
+                logger.info("Finish {} on {}", action, input)
+                MDC.remove("name")
+            }
+
+            override fun onFailure(input: I, throwable: Throwable) {
+                logger.error("Error while {} on {}", action, input, throwable)
+                MDC.remove("name")
+            }
+        }
     }
 }
