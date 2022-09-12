@@ -35,6 +35,9 @@ open class TestCompactSnapshotsBase {
     fun setupTable() {
         tableDir.delete()
         table = TestTables.create(tableDir, "test", schema, spec, 2)
+        table.updateSchema()
+            .setIdentifierFields("id")
+            .commit()
         metrics = CompactSnapshots.Metrics(Metrics.globalRegistry, TableIdentifier.of("test"))
     }
 
