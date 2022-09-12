@@ -355,23 +355,23 @@ class CompactSnapshots(
 
         ///////////// Duration /////////////
         private val checkPositionDeleteDuration =
-            LongTaskTimer.builder("alluvial.compact.duration")
+            LongTaskTimer.builder("alluvial.compact")
                 .tags(tags).tag("step", "check_position_deletes")
                 .description("CompactSnapshots check POSITION_DELETES duration")
                 .register(registry)
 
-        private val rewriteDataDuration = LongTaskTimer.builder("alluvial.compact.duration")
+        private val rewriteDataDuration = LongTaskTimer.builder("alluvial.compact")
             .tags(tags).tag("step", "rewrite_data")
             .description("CompactSnapshots rewrite DATA duration")
             .register(registry)
 
         private val rewriteEqualityDeleteDuration =
-            LongTaskTimer.builder("alluvial.compact.duration")
+            LongTaskTimer.builder("alluvial.compact")
                 .tags(tags).tag("step", "rewrite_equality_deletes")
                 .description("CompactSnapshots rewrite EQUALITY_DELETES duration")
                 .register(registry)
 
-        private val commitDuration = LongTaskTimer.builder("alluvial.compact.duration")
+        private val commitDuration = LongTaskTimer.builder("alluvial.compact")
             .tags(tags).tag("step", "commit")
             .description("CompactSnapshots commit duration")
             .register(registry)

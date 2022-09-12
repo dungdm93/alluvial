@@ -46,19 +46,19 @@ class IcebergTableMetrics(
 
     private fun createAndBindMeter() {
         ///// Metadata /////
-        registerCounter("meta.lastUpdatedMillis", "lastSequenceNumber of table", ops) {
+        registerGauge("meta.lastUpdatedMillis", "lastUpdatedMillis of table", ops) {
             it.current().lastUpdatedMillis().toDouble()
         }
-        registerCounter("meta.lastSequenceNumber", "lastSequenceNumber of table", ops) {
+        registerGauge("meta.lastSequenceNumber", "lastSequenceNumber of table", ops) {
             it.current().lastSequenceNumber().toDouble()
         }
-        registerCounter("meta.lastColumnId", "lastColumnId", ops) {
+        registerGauge("meta.lastColumnId", "lastColumnId", ops) {
             it.current().lastColumnId().toDouble()
         }
         registerCounter("meta.schemas.total", "total schema version in the history", ops) {
             it.current().schemas().count().toDouble()
         }
-        registerCounter("meta.schemas.current", "current schema id of table", ops) {
+        registerGauge("meta.schemas.current", "current schema id of table", ops) {
             it.current().currentSchemaId().toDouble()
         }
         registerCounter("meta.specs.total", "total partition specs in the history", ops) {

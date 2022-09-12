@@ -126,13 +126,13 @@ class IcebergTableOutlet(
         private val tags = Tags.of("outlet", name)
         private val clock = Clock.systemUTC()
 
-        private val commitDataDuration = LongTaskTimer.builder("alluvial.outlet.commit.data.duration")
-            .tags(tags)
+        private val commitDataDuration = LongTaskTimer.builder("alluvial.outlet.commit")
+            .tags(tags).tag("step", "write_data")
             .description("Outlet commit data duration")
             .register(registry)
 
-        private val commitMetadataDuration = LongTaskTimer.builder("alluvial.outlet.commit.metadata.duration")
-            .tags(tags)
+        private val commitMetadataDuration = LongTaskTimer.builder("alluvial.outlet.commit")
+            .tags(tags).tag("step", "write_metadata")
             .description("Outlet commit metadata duration")
             .register(registry)
 
