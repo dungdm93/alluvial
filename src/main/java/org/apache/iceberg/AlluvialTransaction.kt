@@ -36,7 +36,7 @@ class AlluvialTransaction(
         checkLastOperationCommitted("SquashOperation")
         val table = table() as TransactionTable
 
-        val squash = BaseSquashOperation(table.name(), table.operations())
+        val squash = AlluvialSquashOperation(table.name(), table.operations())
         updates.add(squash)
 
         return squash

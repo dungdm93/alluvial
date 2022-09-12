@@ -14,12 +14,12 @@ import org.apache.iceberg.util.Tasks
 import org.slf4j.LoggerFactory
 import java.util.Objects
 
-internal class BaseSquashOperation(
+internal class AlluvialSquashOperation(
     private val tableName: String,
     private val ops: TableOperations,
 ) : MergingSnapshotProducer<SquashOperation>(tableName, ops), SquashOperation {
     companion object {
-        private val logger = LoggerFactory.getLogger(BaseSquashOperation::class.java)
+        private val logger = LoggerFactory.getLogger(AlluvialSquashOperation::class.java)
     }
 
     private val io = ops.io()

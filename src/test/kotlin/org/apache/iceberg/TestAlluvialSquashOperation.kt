@@ -8,7 +8,7 @@ import org.hamcrest.MatcherAssert
 import org.junit.Assert
 import org.junit.Test
 
-class TestBaseSquashOperation : TableTestBase(2) {
+class TestAlluvialSquashOperation : TableTestBase(2) {
     data class CommitFiles(
         val addedDataFiles: List<DataFile> = emptyList(),
         val addedDeleteFiles: List<DeleteFile> = emptyList(),
@@ -44,7 +44,7 @@ class TestBaseSquashOperation : TableTestBase(2) {
             .build()
 
         private val operationMethod = DynMethods.builder("operation")
-            .hiddenImpl(BaseSquashOperation::class.java)
+            .hiddenImpl(AlluvialSquashOperation::class.java)
             .build()
     }
 
@@ -64,7 +64,7 @@ class TestBaseSquashOperation : TableTestBase(2) {
     @Test
     fun testSquashMiddleCommits() {
         setupTableForAppendSquash()
-        val squash = BaseSquashOperation(table.name(), table.ops())
+        val squash = AlluvialSquashOperation(table.name(), table.ops())
             .squash(2, 4) // (B..D]
         squash.add(FILE_G)
         squash.add(FILE_H)
@@ -78,7 +78,7 @@ class TestBaseSquashOperation : TableTestBase(2) {
     @Test
     fun testSquashHeadCommits() {
         setupTableForAppendSquash()
-        val squash = BaseSquashOperation(table.name(), table.ops())
+        val squash = AlluvialSquashOperation(table.name(), table.ops())
             .squash(3, 6) // (C..F]
         squash.add(FILE_G)
         squash.add(FILE_H)
@@ -92,7 +92,7 @@ class TestBaseSquashOperation : TableTestBase(2) {
     @Test
     fun testSquashTailCommits() {
         setupTableForAppendSquash()
-        val squash = BaseSquashOperation(table.name(), table.ops())
+        val squash = AlluvialSquashOperation(table.name(), table.ops())
             .squash(null, 4) // (..D]
         squash.add(FILE_G)
         squash.add(FILE_H)
@@ -116,7 +116,7 @@ class TestBaseSquashOperation : TableTestBase(2) {
     fun testNoop() {
         setupTableForNoopSquash()
 
-        val squash = BaseSquashOperation(table.name(), table.ops())
+        val squash = AlluvialSquashOperation(table.name(), table.ops())
             .squash(1, 4)
         Assert.assertEquals("squash.operation MUST be noop", NOOP, operationMethod.invoke(squash))
         squash.commit()
@@ -129,7 +129,7 @@ class TestBaseSquashOperation : TableTestBase(2) {
     fun testNoopAtTheEnd() {
         setupTableForNoopSquash()
 
-        val squash = BaseSquashOperation(table.name(), table.ops())
+        val squash = AlluvialSquashOperation(table.name(), table.ops())
             .squash(1, 6)
         Assert.assertEquals("squash.operation MUST be noop", NOOP, operationMethod.invoke(squash))
         squash.commit()
@@ -159,7 +159,7 @@ class TestBaseSquashOperation : TableTestBase(2) {
     fun testDeleteDataFiles() {
         setupTableForDeleteSquash()
 
-        val squash = BaseSquashOperation(table.name(), table.ops())
+        val squash = AlluvialSquashOperation(table.name(), table.ops())
             .squash(1, 3)
         Assert.assertEquals("squash.operation MUST be noop", DELETE, operationMethod.invoke(squash))
         squash.commit()
@@ -173,7 +173,7 @@ class TestBaseSquashOperation : TableTestBase(2) {
     fun testDeleteDeleteFiles() {
         setupTableForDeleteSquash()
 
-        val squash = BaseSquashOperation(table.name(), table.ops())
+        val squash = AlluvialSquashOperation(table.name(), table.ops())
             .squash(4, 6)
         Assert.assertEquals("squash.operation MUST be noop", DELETE, operationMethod.invoke(squash))
         squash.commit()
@@ -196,7 +196,7 @@ class TestBaseSquashOperation : TableTestBase(2) {
             .commit() // 4
         table.newAppend().appendFile(FILE_E).commit() // 5
 
-        val squash = BaseSquashOperation(table.name(), table.ops())
+        val squash = AlluvialSquashOperation(table.name(), table.ops())
             .squash(1, 4)
         squash.add(FILE_F)
         squash.add(FILE_G)
