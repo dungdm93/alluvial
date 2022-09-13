@@ -98,7 +98,10 @@ internal class AlluvialSquashOperation(
     override fun apply(): Snapshot {
         cacheSnapshot = if (cacheSnapshot == null) {
             val snapshot = super.apply()
-            logger.info("Squash snapshots {} to {}", snapshot.summary()[SQUASH_SNAPSHOT_ID_PROP], snapshot.snapshotId())
+            logger.info(
+                "Squashed snapshots {} to {}",
+                snapshot.summary()[SQUASH_SNAPSHOTS_ID_PROP], snapshot.snapshotId()
+            )
             if (snapshot.schemaId() == highSchemaId)
                 snapshot else
                 snapshot.copy { schemaId = highSchemaId }
@@ -198,10 +201,10 @@ internal class AlluvialSquashOperation(
     }
 
     private fun setSummary() {
-        set(SQUASH_SNAPSHOT_ID_PROP, "(${lowSnapshot?.snapshotId() ?: ""}..${highSnapshot.snapshotId()}]")
+        set(SQUASH_SNAPSHOTS_ID_PROP, "(${lowSnapshot?.snapshotId() ?: ""}..${highSnapshot.snapshotId()}]")
 
-        val originalSnapshotTs = highSnapshot.originalTimestampMillis()
-        set(ORIGINAL_SNAPSHOT_TS_PROP, originalSnapshotTs.toString())
+        val sourceTimestampMillis = highSnapshot.sourceTimestampMillis()
+        set(SOURCE_TIMESTAMP_PROP, sourceTimestampMillis.toString())
 
         highSnapshot.extraMetadata().forEach(::set)
     }
@@ -299,7 +302,7 @@ internal class AlluvialSquashOperation(
 
             cacheSnapshot = if (cacheSnapshot == null) {
                 val snapshot = super.apply()
-                logger.info("Cherrypick snapshot {} to {}", cs.snapshotId(), snapshot.snapshotId())
+                logger.info("Cherry-picked snapshot {} to {}", cs.snapshotId(), snapshot.snapshotId())
                 if (snapshot.schemaId() == sourceSchemaId)
                     snapshot else
                     snapshot.copy { schemaId = sourceSchemaId }
@@ -350,12 +353,12 @@ internal class AlluvialSquashOperation(
         private fun setSummary(snapshot: Snapshot) {
             set(SOURCE_SNAPSHOT_ID_PROP, snapshot.snapshotId().toString())
 
-            if (SQUASH_SNAPSHOT_ID_PROP in snapshot.summary()) {
-                set(SQUASH_SNAPSHOT_ID_PROP, snapshot.summary()[SQUASH_SNAPSHOT_ID_PROP])
+            if (SQUASH_SNAPSHOTS_ID_PROP in snapshot.summary()) {
+                set(SQUASH_SNAPSHOTS_ID_PROP, snapshot.summary()[SQUASH_SNAPSHOTS_ID_PROP])
             }
 
-            val originalSnapshotTs = snapshot.originalTimestampMillis()
-            set(ORIGINAL_SNAPSHOT_TS_PROP, originalSnapshotTs.toString())
+            val sourceTimestampMillis = snapshot.sourceTimestampMillis()
+            set(SOURCE_TIMESTAMP_PROP, sourceTimestampMillis.toString())
 
             snapshot.extraMetadata().forEach(::set)
         }

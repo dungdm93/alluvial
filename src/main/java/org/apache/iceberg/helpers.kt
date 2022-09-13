@@ -74,12 +74,12 @@ fun TableMetadata.isFastForward(snapshot: Snapshot): Boolean {
 
 /////////////////// Snapshot ///////////////////
 const val NOOP = "" // Special DataOperations for zero aggregate changes
-const val SQUASH_SNAPSHOT_ID_PROP = "squash-snapshot-id"
-const val ORIGINAL_SNAPSHOT_TS_PROP = "original-snapshot-ts"
+const val SOURCE_TIMESTAMP_PROP = "source-ts"
+const val SQUASH_SNAPSHOTS_ID_PROP = "squash-snapshots-id"
 val POS_DELETE_SCHEMA: Schema = DeleteSchemaUtil.pathPosSchema()
 
-fun Snapshot.originalTimestampMillis(): Long {
-    return PropertyUtil.propertyAsLong(summary(), ORIGINAL_SNAPSHOT_TS_PROP, timestampMillis())
+fun Snapshot.sourceTimestampMillis(): Long {
+    return PropertyUtil.propertyAsLong(summary(), SOURCE_TIMESTAMP_PROP, timestampMillis())
 }
 
 fun Snapshot.extraMetadata(): Map<String, String> {

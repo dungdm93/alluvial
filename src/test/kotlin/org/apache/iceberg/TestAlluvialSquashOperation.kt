@@ -244,12 +244,12 @@ class TestAlluvialSquashOperation : TableTestBase(2) {
 
         val newSnapshot = table.snapshot(newId)
         Assert.assertEquals(
-            "SQUASH_SNAPSHOT_ID_PROP",
-            newSnapshot.summary()[SQUASH_SNAPSHOT_ID_PROP], "(${lowSnapshotId ?: ""}..${highSnapshotId}]"
+            SQUASH_SNAPSHOTS_ID_PROP,
+            newSnapshot.summary()[SQUASH_SNAPSHOTS_ID_PROP], "(${lowSnapshotId ?: ""}..${highSnapshotId}]"
         )
         Assert.assertEquals(
-            "ORIGINAL_SNAPSHOT_TS_PROP",
-            newSnapshot.originalTimestampMillis(), table.snapshot(highSnapshotId).originalTimestampMillis()
+            SOURCE_TIMESTAMP_PROP,
+            newSnapshot.sourceTimestampMillis(), table.snapshot(highSnapshotId).sourceTimestampMillis()
         )
         Assert.assertEquals(
             "extraMetadata",
@@ -310,12 +310,12 @@ class TestAlluvialSquashOperation : TableTestBase(2) {
             )
 
             Assert.assertEquals(
-                "SOURCE_SNAPSHOT_ID_PROP",
+                SOURCE_SNAPSHOT_ID_PROP,
                 newSnapshot.summary()[SOURCE_SNAPSHOT_ID_PROP], oldSnapshot.snapshotId().toString()
             )
             Assert.assertEquals(
-                "ORIGINAL_SNAPSHOT_TS_PROP",
-                newSnapshot.originalTimestampMillis(), oldSnapshot.originalTimestampMillis()
+                SOURCE_TIMESTAMP_PROP,
+                newSnapshot.sourceTimestampMillis(), oldSnapshot.sourceTimestampMillis()
             )
             Assert.assertEquals(
                 "extraMetadata",
