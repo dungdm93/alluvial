@@ -22,3 +22,12 @@ fun SinkRecord.sourceTimestamp(): Long? {
     val value = (this.value() as KafkaStruct?) ?: return null
     return value.sourceTimestamp()
 }
+
+fun KafkaStruct.debeziumTimestamp(): Long? {
+    return this["ts_ms"] as Long?
+}
+
+fun SinkRecord.debeziumTimestamp(): Long? {
+    val value = (this.value() as KafkaStruct?) ?: return null
+    return value.debeziumTimestamp()
+}

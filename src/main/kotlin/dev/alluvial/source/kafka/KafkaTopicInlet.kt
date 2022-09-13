@@ -28,12 +28,31 @@ class KafkaTopicInlet(
 ) : Inlet {
     companion object {
         private val logger = LoggerFactory.getLogger(KafkaTopicInlet::class.java)
+        private val kafkaTimestampComparator = Comparator.comparing(SinkRecord::timestamp)
+        private val debeziumTimestampComparator = Comparator<SinkRecord> { o1, o2 ->
+            val o1Ts = o1.debeziumTimestamp()!!
+            val o2T2 = o2.debeziumTimestamp()!!
+            o1Ts.compareTo(o2T2)
+        }
+        private val sourceTimestampComparator = Comparator<SinkRecord> { o1, o2 ->
+            val o1Ts = o1.sourceTimestamp()!!
+            val o2T2 = o2.sourceTimestamp()!!
+            o1Ts.compareTo(o2T2)
+        }
+
+        private val comparator = Comparator<SinkRecord> { o1, o2 ->
+            if (o1.value() != null && o2.value() != null) {
+                sourceTimestampComparator.compare(o1, o2)
+            } else {
+                kafkaTimestampComparator.compare(o1, o2)
+            }
+        }
     }
 
     @Suppress("JoinDeclarationAndAssignment")
     private val partitions: Set<TopicPartition>
     private val partitionQueues = mutableMapOf<Int, Queue<SinkRecord>>()
-    private val heap = PriorityQueue(Comparator.comparing(SinkRecord::timestamp))
+    private val heap = PriorityQueue(comparator)
     private val metrics = Metrics(registry)
 
     init {
