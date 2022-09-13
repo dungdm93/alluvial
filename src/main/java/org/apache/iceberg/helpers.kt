@@ -1,5 +1,7 @@
 package org.apache.iceberg
 
+import com.fasterxml.jackson.core.type.TypeReference
+import com.fasterxml.jackson.databind.json.JsonMapper
 import dev.alluvial.sink.iceberg.filter
 import org.apache.iceberg.SnapshotSummary.EXTRA_METADATA_PREFIX
 import org.apache.iceberg.io.CloseableIterable
@@ -75,11 +77,19 @@ fun TableMetadata.isFastForward(snapshot: Snapshot): Boolean {
 /////////////////// Snapshot ///////////////////
 const val NOOP = "" // Special DataOperations for zero aggregate changes
 const val SOURCE_TIMESTAMP_PROP = "source-ts"
+const val BROKER_OFFSETS_PROP = "broker-offsets"
 const val SQUASH_SNAPSHOTS_ID_PROP = "squash-snapshots-id"
 val POS_DELETE_SCHEMA: Schema = DeleteSchemaUtil.pathPosSchema()
+val mapper = JsonMapper()
+internal val offsetsTypeRef = object : TypeReference<Map<Int, Long>>() {}
 
 fun Snapshot.sourceTimestampMillis(): Long {
-    return PropertyUtil.propertyAsLong(summary(), SOURCE_TIMESTAMP_PROP, timestampMillis())
+    return PropertyUtil.propertyAsLong(summary(), SOURCE_TIMESTAMP_PROP, Long.MIN_VALUE)
+}
+
+fun Snapshot.brokerOffsets(): Map<Int, Long> {
+    val serialized = summary()[BROKER_OFFSETS_PROP] ?: return emptyMap()
+    return mapper.readValue(serialized, offsetsTypeRef)
 }
 
 fun Snapshot.extraMetadata(): Map<String, String> {

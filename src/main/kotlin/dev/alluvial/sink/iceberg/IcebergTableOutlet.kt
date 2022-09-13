@@ -13,9 +13,11 @@ import io.micrometer.core.instrument.Timer
 import org.apache.iceberg.AlluvialRowDelta
 import org.apache.iceberg.ContentFile
 import org.apache.iceberg.FileContent
+import org.apache.iceberg.brokerOffsets
 import org.apache.iceberg.expressions.Expressions
 import org.apache.iceberg.io.TaskWriter
 import org.apache.iceberg.io.WriteResult
+import org.apache.iceberg.sourceTimestampMillis
 import org.apache.kafka.connect.sink.SinkRecord
 import org.slf4j.LoggerFactory
 import java.io.Closeable
@@ -89,29 +91,16 @@ class IcebergTableOutlet(
      * @return offsets of last snapshot or null
      * if outlet doesn't have any snapshot.
      */
-    fun committedOffsets(): Map<Int, Long> {
-        return table.committedOffsets()
-    }
-
-    /**
-     * @return timestamp in millisecond of last snapshot or null
-     * if outlet doesn't have any snapshot.
-     */
-    fun committedTimestamp(): Long? {
-        return table.currentSnapshot()
-            ?.timestampMillis()
+    fun committedBrokerOffsets(): Map<Int, Long> {
+        return table.currentSnapshot()?.brokerOffsets() ?: emptyMap()
     }
 
     /**
      * @return timestamp in millisecond of last record committed or null
      * if outlet doesn't have any snapshot.
      */
-    fun lastRecordTimestamp(): Long? {
-        val ts = table.currentSnapshot()
-            ?.summary()
-            ?.get(ALLUVIAL_LAST_RECORD_TIMESTAMP_PROP)
-            ?: return null
-        return ts.toLong()
+    fun committedSourceTimestamp(): Long {
+        return table.currentSnapshot()?.sourceTimestampMillis() ?: Long.MIN_VALUE
     }
 
     override fun close() {
