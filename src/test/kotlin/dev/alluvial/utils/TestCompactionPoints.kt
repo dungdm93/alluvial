@@ -1,6 +1,7 @@
 package dev.alluvial.utils
 
 import dev.alluvial.runtime.CompactionRules
+import org.apache.iceberg.SOURCE_TIMESTAMP_PROP
 import org.apache.iceberg.Snapshot
 import org.junit.Assert
 import org.junit.Test
@@ -97,6 +98,7 @@ internal class TestCompactionPoints {
     private fun snapshotOfTimestamp(timestampMillis: Long): Snapshot {
         return mock {
             on { timestampMillis() } doReturn timestampMillis
+            on { summary() } doReturn mapOf(SOURCE_TIMESTAMP_PROP to timestampMillis.toString())
         }
     }
 }
