@@ -3,7 +3,6 @@ package dev.alluvial.stream.debezium
 import dev.alluvial.runtime.StreamConfig
 import dev.alluvial.schema.debezium.KafkaSchemaSchemaHandler
 import dev.alluvial.sink.iceberg.IcebergTableOutlet
-import dev.alluvial.sink.iceberg.type.IcebergSchema
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
 import dev.alluvial.sink.iceberg.type.toIcebergSchema
@@ -20,6 +19,7 @@ import org.apache.kafka.connect.data.Schema
 import org.apache.kafka.connect.data.SchemaBuilder
 import org.apache.kafka.connect.sink.SinkRecord
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -31,18 +31,23 @@ import org.mockito.kotlin.spy
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
-import strikt.api.expectThat
-import strikt.assertions.isEqualTo
 import java.io.File
 
-internal class TestStreamlet {
+internal class TestDebeziumStreamlet {
     companion object {
         private const val topic = "topic"
         private val streamConfig = StreamConfig("iceberg")
         private val registry = SimpleMeterRegistry()
+        private val recordSchema = structSchema {
+            field("id", Schema.INT32_SCHEMA)
+        }
+        private val sourceInfoSchema = structSchema {
+            field("ts_ms", Schema.INT64_SCHEMA)
+        }
         private val defaultValueSchema = structSchema {
-            field("before", structSchema { field("id", Schema.INT32_SCHEMA) })
-            field("after", structSchema { field("id", Schema.INT32_SCHEMA) })
+            field("before", recordSchema)
+            field("after", recordSchema)
+            field("source", sourceInfoSchema)
             field("op", Schema.STRING_SCHEMA)
         }
         private val defaultKeySchema = structSchema {
@@ -54,12 +59,6 @@ internal class TestStreamlet {
     @TempDir
     private lateinit var tmpDir: File
     private lateinit var table: Table
-
-    private fun createOutlet() = IcebergTableOutlet(table.name(), table, registry)
-
-    private fun createTable(iSchema: IcebergSchema) {
-        table = TestTables.create(tmpDir, "table", iSchema, PartitionSpec.unpartitioned(), 2)
-    }
 
     private fun record(
         keySchema: Schema? = defaultKeySchema,
@@ -79,10 +78,11 @@ internal class TestStreamlet {
         TimestampType.CREATE_TIME
     )
 
-
     @BeforeEach
     fun before() {
         assert(tmpDir.deleteRecursively()) { "folder should be deleted" }
+        val iSchema = defaultValueSchema.toIcebergSchema()
+        table = TestTables.create(tmpDir, "table", iSchema, PartitionSpec.unpartitioned(), 2)
     }
 
     @AfterEach
@@ -91,62 +91,71 @@ internal class TestStreamlet {
         assert(tmpDir.deleteRecursively()) { "folder should be deleted" }
     }
 
+    private fun mockInlet(record: SinkRecord?, vararg records: SinkRecord?): KafkaTopicInlet {
+        return mock {
+            on { read() }.doReturn(record, *records)
+        }
+    }
+
+    private fun spyOutlet(): IcebergTableOutlet {
+        return spy(IcebergTableOutlet(table.name(), table, registry))
+    }
+
+    private fun spyStreamlet(
+        inlet: KafkaTopicInlet,
+        outlet: IcebergTableOutlet,
+        config: StreamConfig,
+        shouldRuns: List<Boolean>,
+    ): DebeziumStreamlet {
+        val handler = KafkaSchemaSchemaHandler(outlet)
+        val iter = shouldRuns.iterator()
+        val streamlet = spy(DebeziumStreamlet("streamlet", inlet, outlet, handler, config, registry))
+        // Partial mock. Refer: https://groups.google.com/g/mockito/c/9WUvkhZUy90
+        doAnswer { iter.next() }.whenever(streamlet).shouldRun()
+        return streamlet
+    }
+
     @Test
     fun testCaptureChangesEncounterTombstoneAtStart() {
         val tombstoneRecord = record()
         val createRecord = record(
             valueSchema = defaultValueSchema,
-            value = KafkaStruct(defaultValueSchema).put(
-                "before",
-                KafkaStruct(structSchema { field("id", Schema.INT32_SCHEMA) }).put("id", 1)
-            ).put(
-                "after",
-                KafkaStruct(structSchema { field("id", Schema.INT32_SCHEMA) }).put("id", 2)
-            ).put("op", "c")
+            value = KafkaStruct(defaultValueSchema)
+                .put("before", KafkaStruct(recordSchema).put("id", 1))
+                .put("after", KafkaStruct(recordSchema).put("id", 2))
+                .put("op", "c")
         )
-        val inlet: KafkaTopicInlet = mock()
-        whenever(inlet.read())
-            .doReturn(tombstoneRecord)
-            .thenReturn(createRecord)
-            .thenReturn(null)
+        val inlet = mockInlet(tombstoneRecord, createRecord, null)
+        val outlet = spyOutlet()
 
-        createTable(defaultValueSchema.toIcebergSchema())
-        val outlet = spy(createOutlet())
-        val handler = KafkaSchemaSchemaHandler(outlet)
-
-        val streamlet = spy(DebeziumStreamlet("streamlet", inlet, outlet, handler, streamConfig, registry))
         val shouldRunAnswer = listOf(
             true, // Start
             true, // Streamlet has read 2 records, then got null
             true, // Streamlet still run but got null record
             false
-        ).iterator()
-        // Partial mock. Refer: https://groups.google.com/g/mockito/c/9WUvkhZUy90
-        doAnswer { shouldRunAnswer.next() }.whenever(streamlet).shouldRun()
+        )
+        val streamlet = spyStreamlet(inlet, outlet, streamConfig, shouldRunAnswer)
         streamlet.run()
 
         // Only one valid record should be written
         verify(outlet, times(1)).write(any())
 
         table.refresh()
-        expectThat(table.currentSnapshot().summary()[TOTAL_RECORDS_PROP]).isEqualTo("1")
+        Assertions.assertEquals(table.currentSnapshot().summary()[TOTAL_RECORDS_PROP], "1")
 
         val writtenRecords = IcebergGenerics.read(table).select("id").build().toList()
-        expectThat(writtenRecords.size).isEqualTo(1)
-        expectThat(writtenRecords[0].getField("id")).isEqualTo(2)
+        Assertions.assertEquals(writtenRecords.size, 1)
+        Assertions.assertEquals(writtenRecords[0].getField("id"), 2)
     }
 
     @Test
     fun captureTruncateEvent() {
         val createRecord = record(
             valueSchema = defaultValueSchema,
-            value = KafkaStruct(defaultValueSchema).put(
-                "before",
-                KafkaStruct(structSchema { field("id", Schema.INT32_SCHEMA) }).put("id", 1)
-            ).put(
-                "after",
-                KafkaStruct(structSchema { field("id", Schema.INT32_SCHEMA) }).put("id", 2)
-            ).put("op", "c")
+            value = KafkaStruct(defaultValueSchema)
+                .put("before", KafkaStruct(recordSchema).put("id", 1))
+                .put("after", KafkaStruct(recordSchema).put("id", 2))
+                .put("op", "c")
         )
         val truncateRecord = record(
             keySchema = null,
@@ -154,34 +163,22 @@ internal class TestStreamlet {
             valueSchema = defaultValueSchema,
             value = KafkaStruct(defaultValueSchema).put("op", "t")
         )
+        val inlet = mockInlet(createRecord, truncateRecord, null)
+        val outlet = spyOutlet()
 
-        val inlet: KafkaTopicInlet = mock()
-        whenever(inlet.read())
-            .doReturn(createRecord)
-            .thenReturn(truncateRecord)
-            .thenReturn(null)
-
-        createTable(defaultValueSchema.toIcebergSchema())
-        val outlet = spy(createOutlet())
-        val handler = KafkaSchemaSchemaHandler(outlet)
-
-        val customStreamConfig = streamConfig.copy(commitBatchSize = 1)
-        val streamlet = spy(DebeziumStreamlet("streamlet", inlet, outlet, handler, customStreamConfig, registry))
-
-        val shouldRunAnswer = listOf(true, true, false).iterator()
-        doAnswer { shouldRunAnswer.next() }.whenever(streamlet).shouldRun()
+        val shouldRunAnswer = listOf(true, true, false)
+        val streamlet = spyStreamlet(inlet, outlet, streamConfig.copy(commitBatchSize = 1), shouldRunAnswer)
         streamlet.run()
-
 
         // Only "create" record should be written
         verify(outlet, times(2)).write(any())
         verify(outlet, times(1)).commit(any())
 
         table.refresh()
-        expectThat(table.currentSnapshot().summary()[TOTAL_RECORDS_PROP]).isEqualTo("0")
+        Assertions.assertEquals(table.currentSnapshot().summary()[TOTAL_RECORDS_PROP], "0")
 
         val writtenRecords = IcebergGenerics.read(table).select().build().toList()
-        expectThat(writtenRecords.size).isEqualTo(0)
+        Assertions.assertEquals(writtenRecords.size, 0)
     }
 
     @Test
@@ -192,19 +189,11 @@ internal class TestStreamlet {
             valueSchema = defaultValueSchema,
             value = KafkaStruct(defaultValueSchema).put("op", "t")
         )
+        val inlet = mockInlet(truncateRecord, null)
+        val outlet = spyOutlet()
 
-        val inlet: KafkaTopicInlet = mock()
-        whenever(inlet.read())
-            .doReturn(truncateRecord)
-            .thenReturn(null)
-
-        createTable(defaultValueSchema.toIcebergSchema())
-        val outlet = spy(createOutlet())
-        val handler = KafkaSchemaSchemaHandler(outlet)
-        val streamlet = spy(DebeziumStreamlet("streamlet", inlet, outlet, handler, streamConfig, registry))
-
-        val shouldRunAnswer = listOf(true, false).iterator()
-        doAnswer { shouldRunAnswer.next() }.whenever(streamlet).shouldRun()
+        val shouldRunAnswer = listOf(true, false)
+        val streamlet = spyStreamlet(inlet, outlet, streamConfig, shouldRunAnswer)
         streamlet.run()
 
         // Only "create" record should be written
@@ -212,9 +201,9 @@ internal class TestStreamlet {
         verify(outlet, times(0)).commit(any())
 
         table.refresh()
-        expectThat(table.currentSnapshot().summary()[TOTAL_RECORDS_PROP]).isEqualTo("0")
+        Assertions.assertEquals(table.currentSnapshot().summary()[TOTAL_RECORDS_PROP], "0")
 
         val writtenRecords = IcebergGenerics.read(table).select().build().toList()
-        expectThat(writtenRecords.size).isEqualTo(0)
+        Assertions.assertEquals(writtenRecords.size, 0)
     }
 }

@@ -126,7 +126,7 @@ class StreamController : Runnable {
 
     private fun currentLagOf(topic: String, tableId: TableIdentifier): Long {
         val latestOffsets = source.latestOffsets(topic)
-        val committedOffsets = sink.committedOffsets(tableId)
+        val committedOffsets = sink.committedBrokerOffsets(tableId)
 
         var lag = 0L
         latestOffsets.forEach { (partition, latestOffset) ->

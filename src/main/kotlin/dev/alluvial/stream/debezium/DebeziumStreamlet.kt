@@ -4,22 +4,22 @@ import dev.alluvial.api.SchemaHandler
 import dev.alluvial.api.Streamlet
 import dev.alluvial.api.Streamlet.Status.*
 import dev.alluvial.runtime.StreamConfig
-import dev.alluvial.sink.iceberg.ALLUVIAL_LAST_RECORD_TIMESTAMP_PROP
-import dev.alluvial.sink.iceberg.ALLUVIAL_POSITION_PROP
 import dev.alluvial.sink.iceberg.IcebergTableOutlet
-import dev.alluvial.sink.iceberg.mapper
 import dev.alluvial.source.kafka.KafkaTopicInlet
+import dev.alluvial.source.kafka.sourceTimestamp
 import dev.alluvial.utils.TableTruncatedException
 import io.micrometer.core.instrument.Counter
-import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.LongTaskTimer
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tags
+import org.apache.iceberg.BROKER_OFFSETS_PROP
+import org.apache.iceberg.SOURCE_TIMESTAMP_PROP
+import org.apache.iceberg.mapper
+import org.apache.kafka.connect.sink.SinkRecord
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import java.io.Closeable
 import java.time.Clock
-import kotlin.math.max
 
 @Suppress("MemberVisibilityCanBePrivate")
 class DebeziumStreamlet(
@@ -35,7 +35,7 @@ class DebeziumStreamlet(
     }
 
     private val offsets = mutableMapOf<Int, Long>()
-    private var lastRecordTimestamp = Long.MIN_VALUE
+    private var lastSourceTimestamp = Long.MIN_VALUE
     private val clock = Clock.systemUTC()
     private val idleTimeoutMs = streamConfig.idleTimeout.toMillis()
     private val commitBatchSize = streamConfig.commitBatchSize
@@ -82,14 +82,14 @@ class DebeziumStreamlet(
         val lag = inlet.currentLag()
         if (lag <= 0) return false
         if (lag > commitBatchSize) return true
-        return lastRecordTimestamp < clock.millis() - commitTimespanMs
+        return lastSourceTimestamp < clock.millis() - commitTimespanMs
     }
 
     fun canTerminate(): Boolean {
         if (status != SUSPENDED) return false
 
         val lag = inlet.currentLag()
-        val committedTime = outlet.committedTimestamp() ?: Long.MIN_VALUE
+        val committedTime = outlet.committedSourceTimestamp()
         return lag <= 0 && committedTime < clock.millis() - idleTimeoutMs
     }
 
@@ -109,8 +109,7 @@ class DebeziumStreamlet(
                     metrics.incrementSchemaMigration()
                 }
 
-                offsets[record.kafkaPartition()] = record.kafkaOffset() + 1
-                lastRecordTimestamp = max(lastRecordTimestamp, record.timestamp())
+                trackRecordInfo(record)
 
                 if (!keySchemaIsSet && record.key() != null) {
                     outlet.updateKeySchema(record.keySchema())
@@ -140,9 +139,9 @@ class DebeziumStreamlet(
     }
 
     private fun ensureOffsets() {
-        val outletOffsets = outlet.committedOffsets()
+        val outletOffsets = outlet.committedBrokerOffsets()
         offsets.putAll(outletOffsets)
-        lastRecordTimestamp = outlet.lastRecordTimestamp() ?: Long.MIN_VALUE
+        lastSourceTimestamp = outlet.committedSourceTimestamp()
 
         val inletOffsets = inlet.committedOffsets()
         val isUpToDate = offsets.all { (partition, offset) ->
@@ -169,10 +168,25 @@ class DebeziumStreamlet(
         metrics.close()
     }
 
+    private fun trackRecordInfo(record: SinkRecord) {
+        offsets[record.kafkaPartition()] = record.kafkaOffset() + 1
+
+        val sourceTimestamp = record.sourceTimestamp() ?: return
+        if (lastSourceTimestamp <= sourceTimestamp)
+            lastSourceTimestamp = sourceTimestamp
+        else
+            logger.warn(
+                "Receive un-ordered message at partition {}, offset {}\n" +
+                    "\tsourceTimestamp={}, lastSourceTimestamp={}",
+                record.kafkaPartition(), record.kafkaOffset(),
+                sourceTimestamp, lastSourceTimestamp
+            )
+    }
+
     private fun buildSummary(): Map<String, String> {
         return mapOf(
-            ALLUVIAL_POSITION_PROP to mapper.writeValueAsString(offsets),
-            ALLUVIAL_LAST_RECORD_TIMESTAMP_PROP to lastRecordTimestamp.toString()
+            SOURCE_TIMESTAMP_PROP to lastSourceTimestamp.toString(),
+            BROKER_OFFSETS_PROP to mapper.writeValueAsString(offsets)
         )
     }
 
@@ -201,13 +215,6 @@ class DebeziumStreamlet(
     private inner class Metrics(private val registry: MeterRegistry) : Closeable {
         private val tags: Tags = Tags.of("streamlet", this@DebeziumStreamlet.name)
 
-        private val lastRecordTimestamp = Gauge.builder(
-            "alluvial.streamlet.record.last-timestamp", this@DebeziumStreamlet
-        ) { it.lastRecordTimestamp.toDouble() }
-            .tags(tags)
-            .description("Streamlet last record timestamp")
-            .register(registry)
-
         private val commitDuration = LongTaskTimer.builder("alluvial.streamlet.commit.duration")
             .tags(tags)
             .description("Streamlet commit duration")
@@ -218,7 +225,7 @@ class DebeziumStreamlet(
             .description("Streamlet schema migration count")
             .register(registry)
 
-        private val meters = listOf(lastRecordTimestamp, commitDuration, schemaMigration)
+        private val meters = listOf(commitDuration, schemaMigration)
 
         fun <T> recordCommit(block: () -> T): T {
             return commitDuration.record(block)

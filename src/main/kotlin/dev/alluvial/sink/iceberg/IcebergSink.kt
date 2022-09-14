@@ -9,6 +9,7 @@ import org.apache.iceberg.CatalogUtil
 import org.apache.iceberg.CatalogUtil.ICEBERG_CATALOG_HADOOP
 import org.apache.iceberg.Schema
 import org.apache.iceberg.Table
+import org.apache.iceberg.brokerOffsets
 import org.apache.iceberg.catalog.Catalog
 import org.apache.iceberg.catalog.Catalog.TableBuilder
 import org.apache.iceberg.catalog.Namespace
@@ -71,10 +72,10 @@ class IcebergSink(sinkConfig: SinkConfig, private val registry: MeterRegistry) {
         supportsNamespaces.createNamespace(ns)
     }
 
-    fun committedOffsets(tableId: TableIdentifier): Map<Int, Long> {
+    fun committedBrokerOffsets(tableId: TableIdentifier): Map<Int, Long> {
         return try {
             val table = catalog.loadTable(tableId)
-            return table.committedOffsets()
+            return table.currentSnapshot()?.brokerOffsets() ?: emptyMap()
         } catch (e: NoSuchTableException) {
             emptyMap()
         }

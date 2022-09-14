@@ -2,7 +2,7 @@ package dev.alluvial.utils
 
 import dev.alluvial.runtime.CompactionRules
 import org.apache.iceberg.Snapshot
-import org.apache.iceberg.originalTimestampMillis
+import org.apache.iceberg.sourceTimestampMillis
 import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneOffset
@@ -52,8 +52,8 @@ class CompactionPoints(
     }
 
     fun keyOf(snapshot: Snapshot): String {
-        val ts = Instant.ofEpochMilli(snapshot.originalTimestampMillis())
-        val zdt = ZonedDateTimes.ofEpochTime(snapshot.originalTimestampMillis(), TimePrecision.MILLIS, tz)
+        val ts = Instant.ofEpochMilli(snapshot.sourceTimestampMillis())
+        val zdt = ZonedDateTimes.ofEpochTime(snapshot.sourceTimestampMillis(), TimePrecision.MILLIS, tz)
 
         return when {
             hourCompactionPoint <= ts -> RAW_FORMATTER.format(zdt)
