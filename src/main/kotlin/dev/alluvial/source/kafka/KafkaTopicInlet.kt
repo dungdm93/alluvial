@@ -42,10 +42,10 @@ class KafkaTopicInlet(
 
         private val comparator = Comparator<SinkRecord> { o1, o2 ->
             if (o1.value() != null && o2.value() != null) {
-                sourceTimestampComparator.compare(o1, o2)
-            } else {
-                kafkaTimestampComparator.compare(o1, o2)
+                val res = sourceTimestampComparator.compare(o1, o2)
+                if (res != 0) return@Comparator res
             }
+            return@Comparator kafkaTimestampComparator.compare(o1, o2)
         }
     }
 
