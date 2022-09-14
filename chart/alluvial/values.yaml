@@ -1,6 +1,8 @@
 nameOverride: ""
 fullnameOverride: ""
 
+separator: "-"
+
 image:
   repository: hub.teko.vn/dataops/alluvial
   tag: ""
