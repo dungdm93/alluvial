@@ -125,10 +125,7 @@ class CompactSnapshots(
             val posDelFiles = snapshot.addedDeleteFiles(io)
                 .filter { it.content() == POSITION_DELETES }
 
-            val filter = Expressions.notIn(
-                MetadataColumns.DELETE_FILE_PATH.name(),
-                *dataFiles.toTypedArray()
-            )
+            val filter = Expressions.notIn(MetadataColumns.DELETE_FILE_PATH.name(), dataFiles)
             val records = GenericReader(io, POS_DELETE_SCHEMA)
                 .openFile(posDelFiles, filter)
 

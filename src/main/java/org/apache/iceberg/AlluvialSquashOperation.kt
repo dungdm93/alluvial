@@ -203,8 +203,12 @@ internal class AlluvialSquashOperation(
     private fun setSummary() {
         set(SQUASH_SNAPSHOTS_ID_PROP, "(${lowSnapshot?.snapshotId() ?: ""}..${highSnapshot.snapshotId()}]")
 
-        val sourceTimestampMillis = highSnapshot.sourceTimestampMillis()
-        set(SOURCE_TIMESTAMP_PROP, sourceTimestampMillis.toString())
+        if (SOURCE_TIMESTAMP_PROP in highSnapshot.summary()) {
+            set(SOURCE_TIMESTAMP_PROP, highSnapshot.summary()[SOURCE_TIMESTAMP_PROP])
+        }
+        if (BROKER_OFFSETS_PROP in highSnapshot.summary()) {
+            set(BROKER_OFFSETS_PROP, highSnapshot.summary()[BROKER_OFFSETS_PROP])
+        }
 
         highSnapshot.extraMetadata().forEach(::set)
     }
@@ -249,7 +253,6 @@ internal class AlluvialSquashOperation(
 
     inner class SquashCherrypickOperation : MergingSnapshotProducer<SquashCherrypickOperation>(tableName, ops) {
         private var cherrypickSnapshot: Snapshot? = null
-        private var sourceSchemaId: Int? = null
         private var requireFastForward = false // TODO
         private var validated: Int? = null
         private var cacheSnapshot: Snapshot? = null
@@ -276,7 +279,6 @@ internal class AlluvialSquashOperation(
             setFiles(cs)
             setSummary(cs)
             cherrypickSnapshot = cs
-            sourceSchemaId = cs.schemaId()
 
             return this
         }
@@ -303,9 +305,9 @@ internal class AlluvialSquashOperation(
             cacheSnapshot = if (cacheSnapshot == null) {
                 val snapshot = super.apply()
                 logger.info("Cherry-picked snapshot {} to {}", cs.snapshotId(), snapshot.snapshotId())
-                if (snapshot.schemaId() == sourceSchemaId)
+                if (snapshot.schemaId() == cs.schemaId())
                     snapshot else
-                    snapshot.copy { schemaId = sourceSchemaId }
+                    snapshot.copy { schemaId = cs.schemaId() }
             } else {
                 cacheSnapshot?.copy {
                     sequenceNumber = base.nextSequenceNumber()
@@ -324,10 +326,7 @@ internal class AlluvialSquashOperation(
             val posDel = cs.addedDeleteFiles(io)
                 .filter { it.content() == POSITION_DELETES }
 
-            val filter = Expressions.`in`(
-                DELETE_FILE_PATH.name(),
-                *deadFiles.toTypedArray()
-            )
+            val filter = Expressions.`in`(DELETE_FILE_PATH.name(), deadFiles)
             val records = GenericReader(io, POS_DELETE_SCHEMA)
                 .openFile(posDel, filter)
 
@@ -353,12 +352,15 @@ internal class AlluvialSquashOperation(
         private fun setSummary(snapshot: Snapshot) {
             set(SOURCE_SNAPSHOT_ID_PROP, snapshot.snapshotId().toString())
 
+            if (SOURCE_TIMESTAMP_PROP in snapshot.summary()) {
+                set(SOURCE_TIMESTAMP_PROP, snapshot.summary()[SOURCE_TIMESTAMP_PROP])
+            }
+            if (BROKER_OFFSETS_PROP in snapshot.summary()) {
+                set(BROKER_OFFSETS_PROP, snapshot.summary()[BROKER_OFFSETS_PROP])
+            }
             if (SQUASH_SNAPSHOTS_ID_PROP in snapshot.summary()) {
                 set(SQUASH_SNAPSHOTS_ID_PROP, snapshot.summary()[SQUASH_SNAPSHOTS_ID_PROP])
             }
-
-            val sourceTimestampMillis = snapshot.sourceTimestampMillis()
-            set(SOURCE_TIMESTAMP_PROP, sourceTimestampMillis.toString())
 
             snapshot.extraMetadata().forEach(::set)
         }
