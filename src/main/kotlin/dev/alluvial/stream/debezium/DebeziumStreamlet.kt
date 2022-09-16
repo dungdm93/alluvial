@@ -20,6 +20,8 @@ import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import java.io.Closeable
 import java.time.Clock
+import java.time.Instant
+import java.time.LocalDate
 
 @Suppress("MemberVisibilityCanBePrivate")
 class DebeziumStreamlet(
@@ -36,10 +38,12 @@ class DebeziumStreamlet(
 
     private val offsets = mutableMapOf<Int, Long>()
     private var lastSourceTimestamp = Long.MIN_VALUE
+    private var pendingRecord: SinkRecord? = null
     private val clock = Clock.systemUTC()
     private val idleTimeoutMs = streamConfig.idleTimeout.toMillis()
     private val commitBatchSize = streamConfig.commitBatchSize
     private val commitTimespanMs = streamConfig.commitTimespan.toMillis()
+    private val rotateByDateInTz = streamConfig.rotateByDateInTz
     private val metrics = Metrics(registry)
 
     @Volatile
@@ -94,12 +98,24 @@ class DebeziumStreamlet(
     }
 
     private fun captureChanges(batchSize: Int) {
-        var record = inlet.read()
+        var record = pendingRecord?.also { pendingRecord = null } ?: inlet.read()
+        var consumingDate: LocalDate? = null
         var count = 0
         var keySchemaIsSet = false
         var valueSchemaIsSet = false
         try {
             while (record != null) {
+                val recordDate = Instant.ofEpochMilli(record.sourceTimestamp()!!)
+                    .atOffset(rotateByDateInTz)
+                    .toLocalDate()
+                when {
+                    consumingDate == null -> consumingDate = recordDate
+                    consumingDate != recordDate -> {
+                        pendingRecord = record
+                        break
+                    }
+                }
+
                 if (schemaHandler.shouldMigrate(record)) {
                     if (count > 0) commit()
                     count = 0 // reset counter
