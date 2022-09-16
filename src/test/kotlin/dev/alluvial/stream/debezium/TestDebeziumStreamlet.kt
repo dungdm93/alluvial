@@ -61,22 +61,26 @@ internal class TestDebeziumStreamlet {
     private lateinit var table: Table
 
     private fun record(
-        keySchema: Schema? = defaultKeySchema,
-        key: KafkaStruct? = defaultKey,
-        valueSchema: KafkaSchema? = null,
-        value: KafkaStruct? = null,
+        keySchema: Schema? = defaultKeySchema, key: KafkaStruct? = defaultKey,
+        valueSchema: KafkaSchema? = null, value: KafkaStruct? = null,
         offset: Long = 0
-    ) = SinkRecord(
-        topic,
-        1,
-        keySchema,
-        key,
-        valueSchema,
-        value,
-        offset,
-        System.currentTimeMillis(),
-        TimestampType.CREATE_TIME
-    )
+    ): SinkRecord {
+        val ts = System.currentTimeMillis()
+        if (value != null) {
+            val source = value.getStruct("source")
+            if (source == null) {
+                val s = KafkaStruct(sourceInfoSchema)
+                    .put("ts_ms", ts)
+                value.put("source", s)
+            }
+        }
+        return SinkRecord(
+            topic, 1,
+            keySchema, key,
+            valueSchema, value,
+            offset, System.currentTimeMillis(), TimestampType.CREATE_TIME
+        )
+    }
 
     @BeforeEach
     fun before() {
@@ -166,7 +170,7 @@ internal class TestDebeziumStreamlet {
         val inlet = mockInlet(createRecord, truncateRecord, null)
         val outlet = spyOutlet()
 
-        val shouldRunAnswer = listOf(true, true, false)
+        val shouldRunAnswer = listOf(true, true, true, false)
         val streamlet = spyStreamlet(inlet, outlet, streamConfig.copy(commitBatchSize = 1), shouldRunAnswer)
         streamlet.run()
 

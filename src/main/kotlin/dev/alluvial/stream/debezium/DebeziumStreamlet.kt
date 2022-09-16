@@ -7,6 +7,7 @@ import dev.alluvial.runtime.StreamConfig
 import dev.alluvial.sink.iceberg.IcebergTableOutlet
 import dev.alluvial.source.kafka.KafkaTopicInlet
 import dev.alluvial.source.kafka.sourceTimestamp
+import dev.alluvial.utils.SchemaChangedException
 import dev.alluvial.utils.TableTruncatedException
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.LongTaskTimer
@@ -100,11 +101,19 @@ class DebeziumStreamlet(
     private fun captureChanges(batchSize: Int) {
         var record = pendingRecord?.also { pendingRecord = null } ?: inlet.read()
         var consumingDate: LocalDate? = null
-        var count = 0
-        var keySchemaIsSet = false
-        var valueSchemaIsSet = false
+        var count = 0 // count consumed records ignore tombstone
+        var setSchema = false
         try {
             while (record != null) {
+                // Tombstone record is ignored
+                if (record.value() == null) {
+                    trackRecordInfo(record)
+                    if (count >= batchSize) break
+                    record = inlet.read()
+                    continue
+                }
+
+                // Checking snapshot should be cutoff by day
                 val recordDate = Instant.ofEpochMilli(record.sourceTimestamp()!!)
                     .atOffset(rotateByDateInTz)
                     .toLocalDate()
@@ -116,31 +125,21 @@ class DebeziumStreamlet(
                     }
                 }
 
+                // Checking for schema updated
                 if (schemaHandler.shouldMigrate(record)) {
-                    if (count > 0) commit()
-                    count = 0 // reset counter
-                    schemaHandler.migrateSchema(record)
-                    keySchemaIsSet = false
-                    valueSchemaIsSet = false
-                    metrics.incrementSchemaMigration()
+                    pendingRecord = record
+                    throw SchemaChangedException()
+                }
+                if (!setSchema) {
+                    if (record.key() != null) outlet.updateKeySchema(record.keySchema())
+                    outlet.updateValueSchema(record.valueSchema())
+                    setSchema = true
                 }
 
+                // Tracking info & write the record
                 trackRecordInfo(record)
-
-                if (!keySchemaIsSet && record.key() != null) {
-                    outlet.updateKeySchema(record.keySchema())
-                    keySchemaIsSet = true
-                }
-
-                // Tombstone event is ignored
-                if (record.value() != null) {
-                    if (!valueSchemaIsSet) {
-                        outlet.updateValueSchema(record.valueSchema())
-                        valueSchemaIsSet = true
-                    }
-                    outlet.write(record)
-                    count++
-                }
+                outlet.write(record)
+                count++
 
                 if (count >= batchSize) break
                 record = inlet.read()
@@ -151,6 +150,10 @@ class DebeziumStreamlet(
             if (count > 0) commit()
             val summary = buildSummary()
             outlet.truncate(summary)
+        } catch (ex: SchemaChangedException) {
+            if (count > 0) commit()
+            schemaHandler.migrateSchema(record!!)
+            metrics.incrementSchemaMigration()
         }
     }
 
