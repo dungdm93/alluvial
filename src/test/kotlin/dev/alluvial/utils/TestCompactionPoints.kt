@@ -3,8 +3,8 @@ package dev.alluvial.utils
 import dev.alluvial.runtime.CompactionRules
 import org.apache.iceberg.SOURCE_TIMESTAMP_PROP
 import org.apache.iceberg.Snapshot
-import org.junit.Assert
-import org.junit.Test
+import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.Test
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 import java.time.ZonedDateTime
@@ -16,19 +16,19 @@ internal class TestCompactionPoints {
         val now = ZonedDateTime.parse("2022-07-15T12:14:16.432Z")
         val points = CompactionPoints.from(now, rules)
 
-        Assert.assertEquals(
+        Assertions.assertEquals(
             ZonedDateTime.parse("2022-07-15T09:00:00Z").toInstant(),
             points.hourCompactionPoint
         )
-        Assert.assertEquals(
+        Assertions.assertEquals(
             ZonedDateTime.parse("2022-07-14T00:00:00Z").toInstant(),
             points.dayCompactionPoint
         )
-        Assert.assertEquals(
+        Assertions.assertEquals(
             ZonedDateTime.parse("2022-06-01T00:00:00Z").toInstant(),
             points.monthCompactionPoint
         )
-        Assert.assertEquals(
+        Assertions.assertEquals(
             ZonedDateTime.parse("2021-01-01T00:00:00Z").toInstant(),
             points.yearCompactionPoint
         )
@@ -44,19 +44,19 @@ internal class TestCompactionPoints {
         )
         val now = ZonedDateTime.parse("2021-12-25T19:20:45.078Z")
         val points = CompactionPoints.from(now, rules)
-        Assert.assertEquals(
+        Assertions.assertEquals(
             ZonedDateTime.parse("2021-12-25T16:00:00Z").toInstant(),
             points.hourCompactionPoint
         )
-        Assert.assertEquals(
+        Assertions.assertEquals(
             ZonedDateTime.parse("2021-12-25T00:00:00Z").toInstant(),
             points.dayCompactionPoint
         )
-        Assert.assertEquals(
+        Assertions.assertEquals(
             ZonedDateTime.parse("2021-12-01T00:00:00Z").toInstant(),
             points.monthCompactionPoint
         )
-        Assert.assertEquals(
+        Assertions.assertEquals(
             ZonedDateTime.parse("2021-01-01T00:00:00Z").toInstant(),
             points.yearCompactionPoint
         )
@@ -92,7 +92,7 @@ internal class TestCompactionPoints {
     private fun testKeyFor(points: CompactionPoints, input: String, key: String) {
         val ts = ZonedDateTime.parse(input).toInstant().toEpochMilli()
         val snapshot = snapshotOfTimestamp(ts)
-        Assert.assertEquals(key, points.keyOf(snapshot))
+        Assertions.assertEquals(key, points.keyOf(snapshot))
     }
 
     private fun snapshotOfTimestamp(timestampMillis: Long): Snapshot {
