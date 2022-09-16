@@ -245,7 +245,10 @@ class TableManager : Runnable {
         for (cg in cgs) {
             if (cg.size > 1) break
             val snapshot = table.snapshot(cg.highSnapshotId)
-            if (snapshot.sourceTimestampMillis() > taggingPoint) break
+            if (taggingPoint <= snapshot.sourceTimestampMillis()) break
+            // In the case of catch-up run, check source timestamp is not enough.
+            // This is the easiest way to check cg.key only contains day part.
+            if (cg.key.contains('T')) break
 
             if (cg.key in refs) continue
             logger.info("Creating tag {} from {}", cg.key, cg.highSnapshotId)
