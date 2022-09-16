@@ -26,6 +26,7 @@ import org.apache.iceberg.catalog.Catalog
 import org.apache.iceberg.catalog.Namespace
 import org.apache.iceberg.catalog.TableIdentifier
 import org.apache.iceberg.currentAncestors
+import org.apache.iceberg.sourceTimestampMillis
 import org.apache.iceberg.util.PropertyUtil
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
@@ -244,7 +245,10 @@ class TableManager : Runnable {
         for (cg in cgs) {
             if (cg.size > 1) break
             val snapshot = table.snapshot(cg.highSnapshotId)
-            if (snapshot.timestampMillis() > taggingPoint) break
+            if (taggingPoint <= snapshot.sourceTimestampMillis()) break
+            // In the case of catch-up run, check source timestamp is not enough.
+            // This is the easiest way to check cg.key only contains day part.
+            if (cg.key.contains('T')) break
 
             if (cg.key in refs) continue
             logger.info("Creating tag {} from {}", cg.key, cg.highSnapshotId)
