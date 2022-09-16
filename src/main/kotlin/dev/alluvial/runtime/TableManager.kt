@@ -26,6 +26,7 @@ import org.apache.iceberg.catalog.Catalog
 import org.apache.iceberg.catalog.Namespace
 import org.apache.iceberg.catalog.TableIdentifier
 import org.apache.iceberg.currentAncestors
+import org.apache.iceberg.sourceTimestampMillis
 import org.apache.iceberg.util.PropertyUtil
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
@@ -244,7 +245,7 @@ class TableManager : Runnable {
         for (cg in cgs) {
             if (cg.size > 1) break
             val snapshot = table.snapshot(cg.highSnapshotId)
-            if (snapshot.timestampMillis() > taggingPoint) break
+            if (snapshot.sourceTimestampMillis() > taggingPoint) break
 
             if (cg.key in refs) continue
             logger.info("Creating tag {} from {}", cg.key, cg.highSnapshotId)

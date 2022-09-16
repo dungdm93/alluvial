@@ -53,7 +53,7 @@ class CompactionPoints(
 
     fun keyOf(snapshot: Snapshot): String {
         val ts = Instant.ofEpochMilli(snapshot.sourceTimestampMillis())
-        val zdt = ZonedDateTimes.ofEpochTime(snapshot.sourceTimestampMillis(), TimePrecision.MILLIS, tz)
+        val zdt = ZonedDateTime.ofInstant(ts, tz)
 
         return when {
             hourCompactionPoint <= ts -> RAW_FORMATTER.format(zdt)
