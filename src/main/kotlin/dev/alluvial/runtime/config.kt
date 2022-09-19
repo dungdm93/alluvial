@@ -53,11 +53,13 @@ data class StreamConfig(
     @JsonDeserialize(using = DurationDeserializer::class)
     val idleTimeout: Duration = Duration.ofMinutes(15),
 
+    val commitBatchSize: Int = 1000,
+
     @JsonSerialize(using = DurationSerializer::class)
     @JsonDeserialize(using = DurationDeserializer::class)
     val commitTimespan: Duration = Duration.ofMinutes(10),
 
-    val commitBatchSize: Int = 1000,
+    val rotateByDateInTz: ZoneOffset = ZoneOffset.UTC,
 ) {
     init {
         require(kind.isNotEmpty()) { "stream.kind cannot be empty" }
