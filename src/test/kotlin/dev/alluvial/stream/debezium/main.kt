@@ -1,6 +1,5 @@
 package dev.alluvial.stream.debezium
 
-import dev.alluvial.runtime.CompactionRules
 import dev.alluvial.runtime.Config
 import dev.alluvial.runtime.ManagerConfig
 import dev.alluvial.runtime.MetricsConfig
