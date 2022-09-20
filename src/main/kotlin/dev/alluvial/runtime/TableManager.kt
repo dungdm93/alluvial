@@ -146,12 +146,11 @@ class TableManager : Runnable {
     private fun refreshMonitors() {
         val tableIds = catalog.listTables(namespace)
 
-        tableIds.forEach { id ->
-            val table = catalog.loadTable(id)
-
-            tableMetrics.computeIfAbsent(id) {
-                logger.info("Create new IcebergTableMetrics for {}", it)
-                val metrics = IcebergTableMetrics(table)
+        tableIds.forEach {
+            tableMetrics.computeIfAbsent(it) { id ->
+                logger.info("Create new IcebergTableMetrics for {}", id)
+                val table = catalog.loadTable(id)
+                val metrics = IcebergTableMetrics(table, id)
                 metrics.bindTo(registry)
                 metrics
             }
