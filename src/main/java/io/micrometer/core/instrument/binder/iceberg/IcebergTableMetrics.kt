@@ -12,6 +12,7 @@ import org.apache.iceberg.HasTableOperations
 import org.apache.iceberg.Snapshot
 import org.apache.iceberg.SnapshotSummary.*
 import org.apache.iceberg.Table
+import org.apache.iceberg.catalog.TableIdentifier
 import org.apache.iceberg.currentAncestors
 import java.time.Duration
 import java.util.concurrent.Executors
@@ -20,11 +21,12 @@ import java.util.function.ToDoubleFunction
 
 class IcebergTableMetrics(
     private val table: Table,
+    tableId: TableIdentifier,
     tags: Iterable<Tag> = emptyList(),
     private val refreshInterval: Duration = Duration.ofMinutes(1),
 ) : MeterBinder, AutoCloseable {
     private val ops = (table as HasTableOperations).operations()
-    private val tags = Tags.concat(tags, "table", table.name())
+    private val tags = Tags.concat(tags, "table", tableId.toString())
     private val meters = mutableListOf<Meter>()
     private lateinit var registry: MeterRegistry
 

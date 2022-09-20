@@ -151,7 +151,7 @@ class TableManager : Runnable {
 
             tableMetrics.computeIfAbsent(id) {
                 logger.info("Create new IcebergTableMetrics for {}", it)
-                val metrics = IcebergTableMetrics(table)
+                val metrics = IcebergTableMetrics(table, id)
                 metrics.bindTo(registry)
                 metrics
             }
