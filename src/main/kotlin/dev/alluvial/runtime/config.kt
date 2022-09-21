@@ -88,16 +88,16 @@ data class ManagerConfig(
     @Suppress("ArrayInDataClass")
     val namespace: Array<String>,
 
-    val rules: CompactionRules = CompactionRules(),
-
     @JsonSerialize(using = DurationSerializer::class)
     @JsonDeserialize(using = DurationDeserializer::class)
     val examineInterval: Duration = Duration.ofMinutes(30),
 
-    val expireOrphanSnapshots: Boolean = true
+    val compactSnapshots: CompactionConfig = CompactionConfig(),
+
+    val expireOrphanSnapshots: ExpirationConfig = ExpirationConfig(),
 )
 
-data class CompactionRules(
+data class CompactionConfig(
     val tz: ZoneOffset = ZoneOffset.UTC,
 
     /**
@@ -125,6 +125,14 @@ data class CompactionRules(
     val retainMonthCompact: Long = 12,
 
     // val keepYearCompact: Int,
+)
+
+data class ExpirationConfig(
+    val enabled: Boolean = true,
+
+    @JsonSerialize(using = DurationSerializer::class)
+    @JsonDeserialize(using = DurationDeserializer::class)
+    val age: Duration = Duration.ofDays(1),
 )
 
 data class MetricsConfig(

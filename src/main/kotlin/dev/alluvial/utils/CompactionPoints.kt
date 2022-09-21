@@ -1,6 +1,6 @@
 package dev.alluvial.utils
 
-import dev.alluvial.runtime.CompactionRules
+import dev.alluvial.runtime.CompactionConfig
 import org.apache.iceberg.Snapshot
 import org.apache.iceberg.sourceTimestampMillis
 import java.time.Instant
@@ -24,7 +24,7 @@ class CompactionPoints(
         private val MONTH_COMPACT_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM")
         private val YEAR_COMPACT_FORMATTER = DateTimeFormatter.ofPattern("yyyy")
 
-        fun from(now: ZonedDateTime, rules: CompactionRules): CompactionPoints {
+        fun from(now: ZonedDateTime, rules: CompactionConfig): CompactionPoints {
             val midnight = now.with(LocalTime.MIDNIGHT)
 
             val hourCompactionPoint = now.minusHours(rules.retainRaw)

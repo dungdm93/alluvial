@@ -1,6 +1,6 @@
 package dev.alluvial.utils
 
-import dev.alluvial.runtime.CompactionRules
+import dev.alluvial.runtime.CompactionConfig
 import org.apache.iceberg.SOURCE_TIMESTAMP_PROP
 import org.apache.iceberg.Snapshot
 import org.junit.jupiter.api.Assertions
@@ -12,7 +12,7 @@ import java.time.ZonedDateTime
 internal class TestCompactionPoints {
     @Test
     fun defaultCompactionRules() {
-        val rules = CompactionRules()
+        val rules = CompactionConfig()
         val now = ZonedDateTime.parse("2022-07-15T12:14:16.432Z")
         val points = CompactionPoints.from(now, rules)
 
@@ -36,7 +36,7 @@ internal class TestCompactionPoints {
 
     @Test
     fun compactionPointsInSameTimeUnit() {
-        val rules = CompactionRules(
+        val rules = CompactionConfig(
             retainRaw = 3,
             retainHourCompact = 12,
             retainDayCompact = 15,
@@ -64,7 +64,7 @@ internal class TestCompactionPoints {
 
     @Test
     fun getKeyOfSnapshot() {
-        val rules = CompactionRules()
+        val rules = CompactionConfig()
         val now = ZonedDateTime.parse("2022-07-15T12:14:16.432Z")
         val points = CompactionPoints.from(now, rules)
 

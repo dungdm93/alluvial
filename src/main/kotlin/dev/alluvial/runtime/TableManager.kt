@@ -73,7 +73,8 @@ class TableManager : Runnable {
     private val compactMetrics: ConcurrentMap<TableIdentifier, CompactSnapshots.Metrics> = ConcurrentHashMap()
     private lateinit var metricsService: MetricsService
 
-    private lateinit var rules: CompactionRules
+    private lateinit var compactionConfig: CompactionConfig
+    private lateinit var expirationConfig: ExpirationConfig
     private lateinit var catalog: Catalog
     private lateinit var namespace: Namespace
     private lateinit var tagRunner: LanePoolRunner<TableIdentifier, TableIdentifier, Unit>
@@ -81,7 +82,6 @@ class TableManager : Runnable {
     private lateinit var compactRunner: LanePoolRunner<TableIdentifier, CompactionGroup, Unit>
     private lateinit var compactionGroups: SetMultimap<TableIdentifier, CompactionGroup>
     private lateinit var examineInterval: Duration
-    private var expireOrphanSnapshots: Boolean = true
 
     private val terminatingHook = thread(start = false, name = "terminator") {
         logger.warn("Shutdown Hook: shutdown the ExecutorService")
@@ -100,15 +100,15 @@ class TableManager : Runnable {
         catalog = loadCatalog(config.sink.catalog)
         namespace = Namespace.of(*config.manager.namespace)
         examineInterval = config.manager.examineInterval
-        rules = config.manager.rules
 
         tagRunner = LanePoolRunner(executor, this::executeTagging)
         tagRunner.addListener(newMdcListener("tagging"))
 
-        expireOrphanSnapshots = config.manager.expireOrphanSnapshots
+        expirationConfig = config.manager.expireOrphanSnapshots
         expireRunner = LanePoolRunner(executor, this::executeExpiration)
         expireRunner.addListener(newMdcListener("expiration"))
 
+        compactionConfig = config.manager.compactSnapshots
         compactionGroups = Multimaps.newSetMultimap(Maps.newConcurrentMap(), Sets::newHashSet)
         compactRunner = LanePoolRunner(executor, this::executeCompaction)
         compactRunner.addListener(object : Callback<CompactionGroup, Unit> {
@@ -160,8 +160,8 @@ class TableManager : Runnable {
     private fun examineTables() {
         logger.info("Start examine tables")
         val tableIds = catalog.listTables(namespace)
-        val now = ZonedDateTime.now(rules.tz)
-        val points = CompactionPoints.from(now, rules)
+        val now = ZonedDateTime.now(compactionConfig.tz)
+        val points = CompactionPoints.from(now, compactionConfig)
 
         tableIds.forEach { id ->
             logger.info("Examine table {}", id)
@@ -173,7 +173,7 @@ class TableManager : Runnable {
                 tagRunner.enqueue(id, id)
             }
 
-            if (expireOrphanSnapshots && expireRunner.isEmpty(id)) {
+            if (expirationConfig.enabled && expireRunner.isEmpty(id)) {
                 logger.info("Enqueue expireSnapshots for {}", id)
                 expireRunner.enqueue(id, id)
             }
@@ -208,14 +208,22 @@ class TableManager : Runnable {
         logger.info("Run expiration on {}", tableId)
         val table = catalog.loadTable(tableId)
         val meta = (table as HasTableOperations).operations().current()
+        val expireTime = System.currentTimeMillis() - expirationConfig.age.toMillis()
         val orphanSnapshots = table.snapshots()
             .mapTo(mutableSetOf(), Snapshot::snapshotId)
 
         // Keep all snapshots that referenced by a branch/tag
         meta.refs().forEach { (_, ref) ->
-            table.ancestorsOf(ref.snapshotId()).forEach {
-                orphanSnapshots.remove(it.snapshotId())
-            }
+            table.ancestorsOf(ref.snapshotId())
+                .forEach {
+                    orphanSnapshots.remove(it.snapshotId())
+                }
+        }
+
+        // Keep all recent created snapshots
+        orphanSnapshots.removeIf {
+            val snapshot = table.snapshot(it)
+            snapshot.timestampMillis() < expireTime
         }
 
         if (orphanSnapshots.isEmpty()) return
@@ -229,8 +237,8 @@ class TableManager : Runnable {
 
     private fun executeTagging(tableId: TableIdentifier) {
         logger.info("Run tagging on {}", tableId)
-        val now = ZonedDateTime.now(rules.tz)
-        val points = CompactionPoints.from(now, rules)
+        val now = ZonedDateTime.now(compactionConfig.tz)
+        val points = CompactionPoints.from(now, compactionConfig)
         val taggingPoint = points.dayCompactionPoint.toEpochMilli()
 
         val table = catalog.loadTable(tableId)
