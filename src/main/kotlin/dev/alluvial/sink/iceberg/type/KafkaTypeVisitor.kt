@@ -5,7 +5,7 @@ import org.apache.kafka.connect.data.Schema
 import org.apache.kafka.connect.data.Schema.Type
 
 abstract class KafkaTypeVisitor<T> {
-    fun visit(schema: Schema): T {
+    open fun visit(schema: Schema): T {
         return when (schema.type()) {
             Type.STRUCT -> {
                 val fields = schema.fields()
