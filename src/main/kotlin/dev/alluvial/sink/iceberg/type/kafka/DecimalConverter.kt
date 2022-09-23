@@ -66,9 +66,8 @@ internal object DecimalConverter : LogicalTypeConverter<BigDecimal, BigDecimal> 
     }
 
     override fun avroWriter(sSchema: KafkaSchema, schema: AvroSchema): AvroValueWriter<BigDecimal> {
-        val precision = sSchema.parameters().getOrDefault("connect.decimal.precision", "38").toInt()
-        val scale = sSchema.parameters()[Decimal.SCALE_FIELD]!!.toInt()
-        return AvroValueWriters.decimal(precision, scale)
+        val decimal = schema.logicalType as LogicalTypes.Decimal
+        return AvroValueWriters.decimal(decimal.precision, decimal.scale)
     }
 
     override fun parquetReader(

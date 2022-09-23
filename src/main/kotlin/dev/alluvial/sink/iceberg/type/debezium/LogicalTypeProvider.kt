@@ -15,6 +15,7 @@ class LogicalTypeProvider : LogicalTypeProvider {
         NanoTimestampConverter.name to NanoTimestampConverter,
         ZonedTimestampConverter.name to ZonedTimestampConverter,
         YearConverter.name to YearConverter,
+        VariableScaleDecimalConverter.name to VariableScaleDecimalConverter,
         EnumConverter.name to EnumConverter,
         // EnumSetConverter.name to EnumSetConverter,
         // GeometryConverter.name to GeometryConverter,

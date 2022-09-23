@@ -2,6 +2,7 @@ package dev.alluvial.sink.iceberg.type
 
 import dev.alluvial.sink.iceberg.type.logical.logicalTypeConverter
 import org.apache.iceberg.types.Types.*
+import org.apache.kafka.connect.data.Schema
 
 /**
  * @see org.apache.iceberg.flink.FlinkTypeToType
@@ -13,6 +14,14 @@ class KafkaTypeToType : KafkaTypeVisitor<IcebergType>() {
 
     private fun getNextId(): Int {
         return nextId++
+    }
+
+    override fun visit(schema: Schema): IcebergType {
+        val converter = schema.logicalTypeConverter()
+        if (converter != null) {
+            return converter.toIcebergType(this::getNextId, schema)
+        }
+        return super.visit(schema)
     }
 
     override fun struct(schema: KafkaSchema, fieldResults: List<IcebergType>): IcebergType {

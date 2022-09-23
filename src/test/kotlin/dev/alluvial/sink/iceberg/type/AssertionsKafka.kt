@@ -1,10 +1,13 @@
 package dev.alluvial.sink.iceberg.type
 
+import dev.alluvial.sink.iceberg.type.debezium.VariableScaleDecimalConverter
 import dev.alluvial.source.kafka.fieldSchema
 import dev.alluvial.utils.LocalDateTimes
 import dev.alluvial.utils.LocalTimes
 import dev.alluvial.utils.OffsetDateTimes
 import dev.alluvial.utils.TimePrecision.*
+import io.debezium.data.VariableScaleDecimal
+import org.apache.kafka.connect.data.Decimal
 import org.apache.iceberg.types.Type.TypeID
 import org.apache.iceberg.types.Types
 import strikt.api.expectThat
@@ -12,6 +15,7 @@ import strikt.assertions.isEqualTo
 import strikt.assertions.isNotNull
 import strikt.assertions.isTrue
 import java.math.BigDecimal
+import java.math.BigInteger
 import java.nio.ByteBuffer
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -221,7 +225,16 @@ object AssertionsKafka {
                 val a = toByteBuffer(actual)
                 expectThat(e).isEqualTo(a)
             }
-            TypeID.DECIMAL -> expectThat(expected as BigDecimal).isEqualTo(actual as BigDecimal)
+            TypeID.DECIMAL -> {
+                when(sSchema.name()) {
+                    Decimal.LOGICAL_NAME ->
+                        expectThat(expected as BigDecimal).isEqualTo(actual as BigDecimal)
+                    VariableScaleDecimal.LOGICAL_NAME -> {
+                        val actualDecimal = VariableScaleDecimalConverter.toIcebergValue(actual as KafkaStruct)
+                        expectThat(expected).isEqualTo(actualDecimal)
+                    }
+                }
+            }
             TypeID.STRUCT -> assertEquals(
                 iType.asStructType(),
                 sSchema,

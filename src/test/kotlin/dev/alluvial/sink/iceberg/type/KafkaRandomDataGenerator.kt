@@ -42,7 +42,7 @@ internal object KafkaRandomDataGenerator {
         return String(buffer)
     }
 
-    private fun randomUnscaled(precision: Int, random: Random): BigInteger? {
+    private fun randomUnscaled(precision: Int, random: Random): BigInteger {
         val length = random.nextInt(precision)
         if (length == 0) return BigInteger.ZERO
         val sb = StringBuilder()
@@ -272,6 +272,22 @@ internal object KafkaRandomDataGenerator {
             return BigDecimal(unscaled, scale)
         }
 
+        private val iTypeOfVariableScaleDecimal = Types.DecimalType.of(38, 18)
+        private fun randomVariableScaleDecimal(schema: KafkaSchema, random: Random): KafkaStruct {
+            val scale = random.nextInt(iTypeOfVariableScaleDecimal.scale() - 1) + 1
+            val precision = random.nextInt(
+                iTypeOfVariableScaleDecimal.precision() - iTypeOfVariableScaleDecimal.scale() +
+                    scale - 1
+            ) + 1
+
+            val unscaled = randomUnscaled(precision, random)
+
+            val struct = KafkaStruct(schema)
+            struct.put(io.debezium.data.VariableScaleDecimal.SCALE_FIELD, scale)
+            struct.put(io.debezium.data.VariableScaleDecimal.VALUE_FIELD, unscaled.toByteArray())
+            return struct
+        }
+
         @Suppress("WHEN_ENUM_CAN_BE_NULL_IN_JAVA")
         fun generate(schema: KafkaSchema): Any {
             val choice = random.nextInt(20)
@@ -288,6 +304,7 @@ internal object KafkaRandomDataGenerator {
                     val offsetTime = OffsetTimes.ofUtcMidnightTime(time, precision)
                     return io.debezium.time.ZonedTime.toIsoString(offsetTime, null)
                 }
+
                 io.debezium.time.Timestamp.SCHEMA_NAME -> randomTimestampAsLong(MILLIS)
                 io.debezium.time.MicroTimestamp.SCHEMA_NAME -> randomTimestampAsLong(MICROS)
                 io.debezium.time.NanoTimestamp.SCHEMA_NAME -> randomTimestampAsLong(NANOS)
@@ -298,8 +315,10 @@ internal object KafkaRandomDataGenerator {
                     val offsetDateTime = OffsetDateTimes.ofEpochTime(time, precision, zone)
                     return io.debezium.time.ZonedTimestamp.toIsoString(offsetDateTime, null)
                 }
+
                 io.debezium.time.Year.SCHEMA_NAME -> 1970 + random.nextInt(A_HUNDRED_YEAR)
                 io.debezium.data.EnumSet.LOGICAL_NAME -> ENUM_VALUES.randomSublist(random).joinToString(",")
+                io.debezium.data.VariableScaleDecimal.LOGICAL_NAME -> randomVariableScaleDecimal(schema, random)
 
                 // Spatial types
                 io.debezium.data.geometry.Geometry.LOGICAL_NAME -> struct(schema)
@@ -318,24 +337,28 @@ internal object KafkaRandomDataGenerator {
                         3 -> 0
                         else -> random.nextByte().let { if (negate(choice)) (-it).toByte() else it }
                     }
+
                     KafkaType.INT16 -> when (choice) {
                         1 -> Short.MIN_VALUE
                         2 -> Short.MAX_VALUE
                         3 -> 0
                         else -> random.nextShort().let { if (negate(choice)) (-it).toShort() else it }
                     }
+
                     KafkaType.INT32 -> when (choice) {
                         1 -> Int.MIN_VALUE
                         2 -> Int.MAX_VALUE
                         3 -> 0
                         else -> random.nextInt().let { if (negate(choice)) -it else it }
                     }
+
                     KafkaType.INT64 -> when (choice) {
                         1 -> Long.MIN_VALUE
                         2 -> Long.MAX_VALUE
                         3 -> 0
                         else -> random.nextLong().let { if (negate(choice)) -it else it }
                     }
+
                     KafkaType.FLOAT32 -> when (choice) {
                         1 -> Float.MIN_VALUE
                         2 -> -Float.MIN_VALUE
@@ -347,6 +370,7 @@ internal object KafkaRandomDataGenerator {
                         8 -> Float.NaN
                         else -> random.nextFloat().let { if (negate(choice)) -it else it }
                     }
+
                     KafkaType.FLOAT64 -> when (choice) {
                         1 -> Double.MIN_VALUE
                         2 -> -Double.MIN_VALUE
@@ -358,12 +382,14 @@ internal object KafkaRandomDataGenerator {
                         8 -> Double.NaN
                         else -> random.nextDouble().let { if (negate(choice)) -it else it }
                     }
+
                     KafkaType.BOOLEAN -> choice < 10
                     KafkaType.STRING -> randomString(random)
                     KafkaType.BYTES -> {
                         val size = random.nextInt(50)
                         return ByteArray(size).also { random.nextBytes(it) }
                     }
+
                     KafkaType.ARRAY -> list(schema)
                     KafkaType.MAP -> map(schema)
                     KafkaType.STRUCT -> struct(schema)
