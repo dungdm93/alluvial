@@ -18,6 +18,7 @@ data class Config(
 data class SourceConfig(
     val kind: String,
     val topicPrefix: String,
+    val topicsExcluded: List<String> = emptyList(),
     val config: Map<String, String>,
     val namingAdjusters: List<Map<String, Any>> = emptyList(),
 ) {

@@ -1,6 +1,9 @@
 source:
   kind: kafka
   topicPrefix: debezium.mysql.sakila
+  topicsExcluded:
+  - debezium.mysql.sakila.sakila.__debezium_signals
+  - debezium.mysql.sakila.sakila.__debezium_heartbeat
   config:
     bootstrap.servers: kafka:9092
     group.id: alluvial
