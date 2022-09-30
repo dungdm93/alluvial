@@ -29,6 +29,7 @@ class KafkaSource(sourceConfig: SourceConfig, private val registry: MeterRegistr
 
     private val config = sourceConfig.config + DEFAULT_CONFIG
     private val topicPrefix = sourceConfig.topicPrefix.trimEnd('.') + "."
+    private val topicsExcluded = sourceConfig.topicsExcluded
     private val pollTimeout = sourceConfig.pollTimeout
     private val adminClient = AdminClient.create(config)
     private val converter = KafkaConverter(config)
@@ -38,7 +39,7 @@ class KafkaSource(sourceConfig: SourceConfig, private val registry: MeterRegistr
     fun availableTopics(): List<String> {
         val topics = adminClient.listTopics().names().get()
         return topics.filter {
-            if (!it.startsWith(topicPrefix)) return@filter false
+            if (!it.startsWith(topicPrefix) || topicsExcluded.contains(it)) return@filter false
             val str = it.substring(topicPrefix.length)
             str.contains('.')
         }
