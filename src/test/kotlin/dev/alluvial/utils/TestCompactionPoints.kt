@@ -1,12 +1,12 @@
 package dev.alluvial.utils
 
 import dev.alluvial.runtime.CompactionConfig
+import io.mockk.every
+import io.mockk.mockk
 import org.apache.iceberg.SOURCE_TIMESTAMP_PROP
 import org.apache.iceberg.Snapshot
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
-import org.mockito.kotlin.doReturn
-import org.mockito.kotlin.mock
 import java.time.ZonedDateTime
 
 internal class TestCompactionPoints {
@@ -96,9 +96,9 @@ internal class TestCompactionPoints {
     }
 
     private fun snapshotOfTimestamp(timestampMillis: Long): Snapshot {
-        return mock {
-            on { timestampMillis() } doReturn timestampMillis
-            on { summary() } doReturn mapOf(SOURCE_TIMESTAMP_PROP to timestampMillis.toString())
+        return mockk {
+            every { timestampMillis() } returns timestampMillis
+            every { summary() } returns mapOf(SOURCE_TIMESTAMP_PROP to timestampMillis.toString())
         }
     }
 }

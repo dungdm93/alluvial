@@ -1,22 +1,22 @@
 package dev.alluvial.utils
 
+import io.mockk.every
+import io.mockk.mockk
 import org.apache.iceberg.Snapshot
 import org.apache.iceberg.catalog.TableIdentifier
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.mockito.kotlin.doReturn
-import org.mockito.kotlin.mock
 
 internal class TestCompactionGroup {
     private val tableId = TableIdentifier.of("foo", "bar")
     lateinit var snapshots: List<Snapshot>
 
     private fun mockSnapshot(id: Long, parentId: Long?, seqNum: Long): Snapshot {
-        return mock {
-            on { snapshotId() } doReturn id
-            on { parentId() } doReturn parentId
-            on { sequenceNumber() } doReturn seqNum
+        return mockk {
+            every { snapshotId() } returns id
+            every { parentId() } returns parentId
+            every { sequenceNumber() } returns seqNum
         }
     }
 
