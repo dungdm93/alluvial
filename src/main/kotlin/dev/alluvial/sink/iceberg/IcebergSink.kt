@@ -1,5 +1,8 @@
 package dev.alluvial.sink.iceberg
 
+import dev.alluvial.dedupe.KeyCache
+import dev.alluvial.dedupe.backend.rocksdb.RocksDbBackend
+import dev.alluvial.dedupe.backend.rocksdb.RocksDbKeyCache
 import dev.alluvial.runtime.SinkConfig
 import io.micrometer.core.instrument.MeterRegistry
 import org.apache.hadoop.conf.Configuration
@@ -17,6 +20,7 @@ import org.apache.iceberg.catalog.SupportsNamespaces
 import org.apache.iceberg.catalog.TableIdentifier
 import org.apache.iceberg.exceptions.NoSuchTableException
 import org.apache.iceberg.util.PropertyUtil
+import org.apache.kafka.connect.sink.SinkRecord
 import org.slf4j.LoggerFactory
 
 class IcebergSink(sinkConfig: SinkConfig, private val registry: MeterRegistry) {
@@ -26,6 +30,8 @@ class IcebergSink(sinkConfig: SinkConfig, private val registry: MeterRegistry) {
 
     private val catalog: Catalog
     private val supportsNamespaces: SupportsNamespaces?
+    private var dedupeBackend: RocksDbBackend? = null
+    private val keyCaches = mutableMapOf<TableIdentifier, KeyCache<SinkRecord, ByteArray, ByteArray>>()
 
     init {
         val properties = sinkConfig.catalog
@@ -43,14 +49,24 @@ class IcebergSink(sinkConfig: SinkConfig, private val registry: MeterRegistry) {
         this.catalog = if (cacheEnabled)
             CachingCatalog.wrap(catalog, cacheExpirationIntervalMs) else
             catalog
+
+        dedupeBackend = sinkConfig.dedupe?.let(RocksDbBackend::getOrCreate)
     }
 
     fun getOutlet(name: String, tableId: TableIdentifier): IcebergTableOutlet? {
         return try {
             val table = catalog.loadTable(tableId)
-
+            val cache = when (dedupeBackend) {
+                null -> null
+                else -> {
+                    val identifiers = table.schema().identifierFieldNames().toList()
+                    keyCaches.computeIfAbsent(tableId) {
+                        RocksDbKeyCache(it.name(), dedupeBackend!!, identifiers)
+                    }
+                }
+            }
             logger.info("Creating new outlet {}", name)
-            IcebergTableOutlet(name, table, registry)
+            IcebergTableOutlet(name, table, cache, registry)
         } catch (e: NoSuchTableException) {
             null
         }

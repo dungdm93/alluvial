@@ -59,6 +59,10 @@ stream:
   commitTimespan: 10m
   rotateByDateInTz: "+07"
 
+  dedupe:
+    kind: rocksdb
+    path: /tmp/dedupe
+
 manager:
   namespace: [ dvdrental ]
   compactSnapshots:

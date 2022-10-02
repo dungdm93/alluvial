@@ -37,6 +37,7 @@ data class SinkConfig(
     val kind: String,
     val catalog: Map<String, String>,
     val tableCreation: TableCreationConfig,
+    val dedupe: DeduplicationConfig? = null,
 ) {
     init {
         require(kind.isNotEmpty()) { "sink.kind cannot be empty" }
@@ -148,5 +149,16 @@ data class MetricsExporterConfig(
 ) {
     init {
         require(kind.isNotEmpty()) { "metrics.exporters.kind cannot be empty" }
+    }
+}
+
+data class DeduplicationConfig(
+    val kind: String,
+    val path: String,
+    val properties: Map<String, String> = emptyMap(),
+) {
+    init {
+        require(kind.isNotEmpty()) { "sink.dedupe.kind cannot be empty" }
+        require(path.isNotEmpty()) { "sink.dedupe.path cannot be empty" }
     }
 }

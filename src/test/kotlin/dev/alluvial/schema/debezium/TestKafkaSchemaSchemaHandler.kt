@@ -54,7 +54,7 @@ internal class TestKafkaSchemaSchemaHandler {
         }
     }
 
-    private fun createOutlet() = IcebergTableOutlet(table.name(), table, SimpleMeterRegistry())
+    private fun createOutlet() = IcebergTableOutlet(table.name(), table, null, SimpleMeterRegistry())
 
     @BeforeEach
     fun before() {
