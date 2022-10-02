@@ -1,5 +1,8 @@
 package dev.alluvial.sink.iceberg.io
 
+import dev.alluvial.dedupe.backend.rocksdb.RocksDbBackend
+import dev.alluvial.dedupe.backend.rocksdb.RocksDbKeyCache
+import dev.alluvial.runtime.DeduplicationConfig
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
 import dev.alluvial.source.kafka.structSchema
@@ -12,9 +15,7 @@ import org.apache.iceberg.TableTestBase
 import org.apache.iceberg.data.GenericRecord
 import org.apache.iceberg.data.IcebergGenerics
 import org.apache.iceberg.data.Record
-import org.apache.iceberg.io.OutputFileFactory
-import org.apache.iceberg.io.TaskWriter
-import org.apache.iceberg.io.WriteResult
+import org.apache.iceberg.io.*
 import org.apache.iceberg.util.StructLikeSet
 import org.apache.kafka.connect.sink.SinkRecord
 import org.junit.Assert
@@ -32,14 +33,21 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
 
     private val format = FileFormat.AVRO
     private val offset = AtomicLong()
+    private lateinit var keySchema: KafkaSchema
     private lateinit var kafkaSchema: KafkaSchema
     private lateinit var envelopeSchema: KafkaSchema
+    private lateinit var rockDBPath: File
 
     @Before
     override fun setupTable() {
         this.tableDir = temp.newFolder()
         Assert.assertTrue(tableDir.delete()) // created by table create
         this.metadataDir = File(tableDir, "metadata")
+    }
+
+    @Before
+    fun setup() {
+        rockDBPath = temp.newFolder()
     }
 
     private fun fieldId(name: String): Int {
@@ -60,6 +68,9 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
             .defaultFormat(format)
             .commit()
 
+        keySchema = structSchema {
+            field("id", KafkaSchema.INT32_SCHEMA)
+        }
         kafkaSchema = structSchema {
             field("id", KafkaSchema.INT32_SCHEMA)
             field("data", KafkaSchema.STRING_SCHEMA)
@@ -149,6 +160,8 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
     }
 
     private fun createInsert(id: Int, data: String): SinkRecord {
+        val key = KafkaStruct(keySchema)
+            .put("id", id)
         val record = KafkaStruct(kafkaSchema)
             .put("id", id)
             .put("data", data)
@@ -159,13 +172,15 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
 
         return SinkRecord(
             "test", 1,
-            kafkaSchema, record,  // key
+            keySchema, key,  // key
             envelopeSchema, envelope, // value
             offset.getAndIncrement()
         )
     }
 
     private fun createUpdate(id: Int, before: String, after: String): SinkRecord {
+        val key = KafkaStruct(keySchema)
+            .put("id", id)
         val beforeRecord = KafkaStruct(kafkaSchema)
             .put("id", id)
             .put("data", before)
@@ -180,13 +195,34 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
 
         return SinkRecord(
             "test", 1,
-            kafkaSchema, beforeRecord,  // key
+            keySchema, key,  // key
+            envelopeSchema, envelope, // value
+            offset.getAndIncrement()
+        )
+    }
+
+    private fun createRead(id: Int, after: String): SinkRecord {
+        val key = KafkaStruct(keySchema)
+            .put("id", id)
+        val afterRecord = KafkaStruct(kafkaSchema)
+            .put("id", id)
+            .put("data", after)
+
+        val envelope = KafkaStruct(envelopeSchema)
+            .put("op", "r")
+            .put("after", afterRecord)
+
+        return SinkRecord(
+            "test", 1,
+            keySchema, key,  // key
             envelopeSchema, envelope, // value
             offset.getAndIncrement()
         )
     }
 
     private fun createDelete(id: Int, data: String): SinkRecord {
+        val key = KafkaStruct(keySchema)
+            .put("id", id)
         val record = KafkaStruct(kafkaSchema)
             .put("id", id)
             .put("data", data)
@@ -197,7 +233,7 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
 
         return SinkRecord(
             "test", 1,
-            kafkaSchema, record,  // key
+            keySchema, key,  // key
             envelopeSchema, envelope, // value
             offset.getAndIncrement()
         )
@@ -210,7 +246,7 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
         }
     }
 
-    private fun createTaskWriter(vararg equalityFieldIds: Int): TaskWriter<SinkRecord> {
+    private fun createTaskWriter(vararg equalityFieldIds: Int, keyCache: RocksDbKeyCache? = null): TaskWriter<SinkRecord> {
         val schema = table.schema()
         val equalityFieldNames = equalityFieldIds.map { schema.findField(it).name() }
         val fileWriterFactory = KafkaFileWriterFactory.buildFor(table) {
@@ -237,6 +273,7 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
             kafkaSchema,
             table.schema(),
             equalityFieldIds.toSet(),
+            keyCache,
             SimpleMeterRegistry(),
             Tags.of("outlet", table.name())
         )
@@ -252,14 +289,18 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
         return actualRowSet(null, *columns)
     }
 
-    private fun actualRowSet(snapshotId: Long?, vararg columns: String): StructLikeSet {
+    private fun getRecordReader(snapshotId: Long?, vararg columns: String): CloseableIterable<Record> {
         table.refresh()
-        val set = StructLikeSet.create(table.schema().asStruct())
-        val reader = IcebergGenerics
+        return IcebergGenerics
             .read(table)
             .useSnapshot(snapshotId ?: table.currentSnapshot().snapshotId())
             .select(*columns)
             .build()
+    }
+
+    private fun actualRowSet(snapshotId: Long?, vararg columns: String): StructLikeSet {
+        val set = StructLikeSet.create(table.schema().asStruct())
+        val reader = getRecordReader(snapshotId, *columns)
         reader.use {
             it.forEach(set::add)
         }
@@ -274,5 +315,67 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
         rowDelta.validateDeletedFiles()
             .validateDataFilesExist(result.referencedDataFiles().toList())
             .commit()
+    }
+
+    private fun getTableCount(): Int {
+        getRecordReader(null, "*").use {
+            return it.count()
+        }
+    }
+
+    private fun writeAndCommitCache(keyCache: RocksDbKeyCache, records: List<SinkRecord>) {
+        val writer = createTaskWriter(fieldId("id"), keyCache = keyCache)
+        records.forEach(writer::write)
+        commitTransaction(writer.complete())
+        keyCache.commit()
+    }
+
+    @Test
+    fun testDeduplicateCreateEvents() {
+        initTable(false)
+        val tableName = table.name()
+        val config = DeduplicationConfig(kind = "rocksdb", path = rockDBPath.path)
+        val backend = RocksDbBackend.getOrCreate(config)
+        val cache = RocksDbKeyCache(tableName, backend, listOf("id"))
+
+        // "read" event => upsert record & put to cache
+        val readFirst = createRead(1, "first")
+        val firstKeyBytes = cache.serializeKey(readFirst)
+        writeAndCommitCache(cache, listOf(readFirst))
+        Assert.assertTrue(backend.hasKey(tableName, firstKeyBytes))
+
+        // Same "read" event => upsert record & put to cache (again)
+        writeAndCommitCache(cache, listOf(readFirst))
+        Assert.assertEquals(1, getTableCount())
+
+        // "create" event of the same record => ignore
+        val createFirst = createInsert(1, "firstNew")
+        writeAndCommitCache(cache, listOf(createFirst))
+        Assert.assertEquals(1, getTableCount())
+
+        // "delete" event => delete record & remove from cache
+        val deleteFirst = createDelete(1, "first")
+        writeAndCommitCache(cache, listOf(deleteFirst))
+        Assert.assertFalse(backend.hasKey(tableName, firstKeyBytes))
+        Assert.assertEquals(0, getTableCount())
+
+        // "create" event => re-create record & put to cache
+        writeAndCommitCache(cache, listOf(createFirst))
+        Assert.assertTrue(backend.hasKey(tableName, firstKeyBytes))
+        Assert.assertEquals(1, getTableCount())
+
+        // "create" event of another record => create & put to cache
+        val createSecond = createInsert(2, "second")
+        val secondKeyBytes = cache.serializeKey(createSecond)
+        writeAndCommitCache(cache, listOf(createSecond))
+        Assert.assertTrue(backend.hasKey(tableName, secondKeyBytes))
+        Assert.assertEquals(2, getTableCount())
+
+        val expected = expectedRowSet(
+            createRecord(1, "first"),
+            createRecord(2, "second"),
+        )
+        val actual = actualRowSet("*")
+        Assert.assertEquals("Should have expected records", expected, actual)
     }
 }

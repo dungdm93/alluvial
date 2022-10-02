@@ -43,6 +43,7 @@ val awsVersion = "2.17.209"
 val jacksonVersion = "2.13.3"
 val micrometerVersion = "1.9.0"
 val prometheusVersion = "0.15.0"
+val rocksdbVersion = "7.6.0"
 
 val junitVersion = "5.8.2"
 val striktVersion = "0.34.1"
@@ -145,6 +146,9 @@ dependencies {
     implementation("org.apache.avro:avro:1.10.2")
     implementation("org.apache.orc:orc-core:1.7.5")
     implementation("org.apache.parquet:parquet-avro:1.12.3")
+
+    // RocksDB
+    implementation("org.rocksdb:rocksdbjni:${rocksdbVersion}")
 
     // Test Frameworks
     testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")

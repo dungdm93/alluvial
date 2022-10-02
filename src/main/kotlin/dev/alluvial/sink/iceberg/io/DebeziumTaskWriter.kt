@@ -1,5 +1,6 @@
 package dev.alluvial.sink.iceberg.io
 
+import dev.alluvial.dedupe.KeyCache
 import dev.alluvial.sink.iceberg.type.IcebergSchema
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
@@ -29,6 +30,7 @@ class DebeziumTaskWriter(
     sSchema: KafkaSchema,
     iSchema: IcebergSchema,
     equalityFieldIds: Set<Int>,
+    private val keyCache: KeyCache<SinkRecord, *, *>? = null,
     registry: MeterRegistry,
     tags: Tags
 ) : TaskWriter<SinkRecord> {
@@ -67,16 +69,28 @@ class DebeziumTaskWriter(
             "r" -> {
                 delete(after) // ensure no duplicate data when re-snapshot
                 insert(after)
+                keyCache?.add(record)
             }
             // create events
-            "c" -> insert(after)
+            "c" -> {
+                if (keyCache == null) insert(after)
+                // Ignore "create" event if record exist already.
+                // TODO: this can cause problem if the "create" event has new updates in payload
+                else if (!keyCache.hasKey(record)) {
+                    insert(after)
+                    keyCache.add(record)
+                }
+            }
             // update events
             "u" -> {
                 delete(before)
                 insert(after)
             }
             // delete events
-            "d" -> delete(before)
+            "d" -> {
+                delete(before)
+                keyCache?.delete(record)
+            }
             // truncate events
             "t" -> throw TableTruncatedException()
             else -> {} // ignore
@@ -112,6 +126,7 @@ class DebeziumTaskWriter(
     }
 
     override fun abort() {
+        keyCache?.abort()
         close()
 
         // clean up files created by this writer

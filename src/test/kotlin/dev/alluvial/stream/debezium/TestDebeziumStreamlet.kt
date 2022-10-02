@@ -98,7 +98,7 @@ internal class TestDebeziumStreamlet {
     }
 
     private fun spyOutlet(): IcebergTableOutlet {
-        return spyk(IcebergTableOutlet(table.name(), table, registry))
+        return spyk(IcebergTableOutlet(table.name(), table, null, registry))
     }
 
     private fun spyStreamlet(
