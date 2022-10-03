@@ -9,6 +9,10 @@ import dev.alluvial.sink.iceberg.type.toIcebergSchema
 import dev.alluvial.source.kafka.KafkaTopicInlet
 import dev.alluvial.source.kafka.structSchema
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.spyk
+import io.mockk.verify
 import org.apache.iceberg.PartitionSpec
 import org.apache.iceberg.SnapshotSummary.TOTAL_RECORDS_PROP
 import org.apache.iceberg.Table
@@ -23,14 +27,6 @@ import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
-import org.mockito.kotlin.any
-import org.mockito.kotlin.doAnswer
-import org.mockito.kotlin.doReturn
-import org.mockito.kotlin.mock
-import org.mockito.kotlin.spy
-import org.mockito.kotlin.times
-import org.mockito.kotlin.verify
-import org.mockito.kotlin.whenever
 import java.io.File
 
 internal class TestDebeziumStreamlet {
@@ -96,13 +92,13 @@ internal class TestDebeziumStreamlet {
     }
 
     private fun mockInlet(record: SinkRecord?, vararg records: SinkRecord?): KafkaTopicInlet {
-        return mock {
-            on { read() }.doReturn(record, *records)
+        return mockk(relaxed = true) {
+            every { read() }.returnsMany(record, *records)
         }
     }
 
     private fun spyOutlet(): IcebergTableOutlet {
-        return spy(IcebergTableOutlet(table.name(), table, registry))
+        return spyk(IcebergTableOutlet(table.name(), table, registry))
     }
 
     private fun spyStreamlet(
@@ -112,11 +108,11 @@ internal class TestDebeziumStreamlet {
         shouldRuns: List<Boolean>,
     ): DebeziumStreamlet {
         val handler = KafkaSchemaSchemaHandler(outlet)
-        val iter = shouldRuns.iterator()
-        val streamlet = spy(DebeziumStreamlet("streamlet", inlet, outlet, handler, config, registry))
-        // Partial mock. Refer: https://groups.google.com/g/mockito/c/9WUvkhZUy90
-        doAnswer { iter.next() }.whenever(streamlet).shouldRun()
-        return streamlet
+        return spyk(DebeziumStreamlet("streamlet", inlet, outlet, handler, config, registry)) {
+            val streamlet = this
+            every { streamlet["ensureOffsets"]() } answers { }
+            every { shouldRun() } returnsMany shouldRuns
+        }
     }
 
     @Test
@@ -142,7 +138,7 @@ internal class TestDebeziumStreamlet {
         streamlet.run()
 
         // Only one valid record should be written
-        verify(outlet, times(1)).write(any())
+        verify(exactly = 1) { outlet.write(any()) }
 
         table.refresh()
         Assertions.assertEquals(table.currentSnapshot().summary()[TOTAL_RECORDS_PROP], "1")
@@ -175,8 +171,8 @@ internal class TestDebeziumStreamlet {
         streamlet.run()
 
         // Only "create" record should be written
-        verify(outlet, times(2)).write(any())
-        verify(outlet, times(1)).commit(any())
+        verify(exactly = 2) { outlet.write(any()) }
+        verify(exactly = 1) { outlet.commit(any()) }
 
         table.refresh()
         Assertions.assertEquals(table.currentSnapshot().summary()[TOTAL_RECORDS_PROP], "0")
@@ -201,8 +197,8 @@ internal class TestDebeziumStreamlet {
         streamlet.run()
 
         // Only "create" record should be written
-        verify(outlet, times(1)).write(any())
-        verify(outlet, times(0)).commit(any())
+        verify(exactly = 1) { outlet.write(any()) }
+        verify(exactly = 0) { outlet.commit(any()) }
 
         table.refresh()
         Assertions.assertEquals(table.currentSnapshot().summary()[TOTAL_RECORDS_PROP], "0")

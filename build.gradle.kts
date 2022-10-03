@@ -47,7 +47,7 @@ val prometheusVersion = "0.15.0"
 val junitVersion = "5.8.2"
 val striktVersion = "0.34.1"
 val assertjVersion = "3.23.1"
-val mockitoVersion = "4.6.1"
+val mockkVersion = "1.13.2"
 
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
@@ -153,8 +153,7 @@ dependencies {
     testImplementation("org.junit.vintage:junit-vintage-engine:$junitVersion")
     testImplementation("org.assertj:assertj-core:$assertjVersion")
     testImplementation("io.strikt:strikt-jvm:$striktVersion")
-    testImplementation("org.mockito:mockito-core:$mockitoVersion")
-    testImplementation("org.mockito.kotlin:mockito-kotlin:4.0.0")
+    testImplementation("io.mockk:mockk:$mockkVersion")
 
     // Test deps
     testImplementation("org.apache.iceberg:iceberg-api:$icebergVersion:tests")
