@@ -15,7 +15,7 @@ import java.io.File
 
 @Suppress("MemberVisibilityCanBePrivate")
 open class TestCompactSnapshotsBase {
-    private val schema = Schema(
+    protected val schema = Schema(
         Types.NestedField.required(1, "id", Types.IntegerType.get()),
         Types.NestedField.required(2, "data", Types.StringType.get())
     )
@@ -28,11 +28,11 @@ open class TestCompactSnapshotsBase {
 
     @TempDir
     protected lateinit var tableDir: File
-    protected lateinit var table: TestTables.TestTable
+    protected lateinit var table: Table
     protected lateinit var metrics: CompactSnapshots.Metrics
 
     @BeforeEach
-    fun setupTable() {
+    open fun setupTable() {
         tableDir.delete()
         table = TestTables.create(tableDir, "test", schema, spec, 2)
         table.updateSchema()
@@ -42,7 +42,7 @@ open class TestCompactSnapshotsBase {
     }
 
     @AfterEach
-    fun cleanupTables() {
+    open fun cleanupTables() {
         TestTables.clearTables()
     }
 

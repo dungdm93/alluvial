@@ -31,7 +31,6 @@ internal class AlluvialSquashOperation(
     private var highSchemaId: Int? = null
     private var cherrypickUpdates = emptyList<SnapshotProducer<*>>()
     private val cherrypickMap = mutableMapOf<Long, SnapshotProducer<*>>()
-    private var cacheSnapshot: Snapshot? = null
 
     private var validated = false
     private var validatePosDeletesFilesInRange = true
@@ -96,23 +95,11 @@ internal class AlluvialSquashOperation(
     }
 
     override fun apply(): Snapshot {
-        cacheSnapshot = if (cacheSnapshot == null) {
-            val snapshot = super.apply()
-            logger.info(
-                "Squashed snapshots {} to {}",
-                snapshot.summary()[SQUASH_SNAPSHOTS_ID_PROP], snapshot.snapshotId()
-            )
-            if (snapshot.schemaId() == highSchemaId)
-                snapshot else
-                snapshot.copy { schemaId = highSchemaId }
-        } else {
-            val base = refresh()
-            cacheSnapshot?.copy {
-                sequenceNumber = base.nextSequenceNumber()
-                timestampMillis = System.currentTimeMillis()
-            }
-        }
-        return cacheSnapshot!!
+        val snapshot = super.apply()
+        logger.info("Squashed snapshots {} to {}", snapshot.summary()[SQUASH_SNAPSHOTS_ID_PROP], snapshot.snapshotId())
+        return if (snapshot.schemaId() == highSchemaId)
+            snapshot else
+            snapshot.copy { schemaId = highSchemaId }
     }
 
     override fun commit() {
@@ -255,7 +242,6 @@ internal class AlluvialSquashOperation(
         private var cherrypickSnapshot: Snapshot? = null
         private var requireFastForward = false // TODO
         private var validated: Int? = null
-        private var cacheSnapshot: Snapshot? = null
 
         override fun self() = this
 
@@ -302,19 +288,11 @@ internal class AlluvialSquashOperation(
                 return cs
             }
 
-            cacheSnapshot = if (cacheSnapshot == null) {
-                val snapshot = super.apply()
-                logger.info("Cherry-picked snapshot {} to {}", cs.snapshotId(), snapshot.snapshotId())
-                if (snapshot.schemaId() == cs.schemaId())
-                    snapshot else
-                    snapshot.copy { schemaId = cs.schemaId() }
-            } else {
-                cacheSnapshot?.copy {
-                    sequenceNumber = base.nextSequenceNumber()
-                    timestampMillis = System.currentTimeMillis()
-                }
-            }
-            return cacheSnapshot!!
+            val snapshot = super.apply()
+            logger.info("Cherry-picked snapshot {} to {}", cs.snapshotId(), snapshot.snapshotId())
+            return if (snapshot.schemaId() == cs.schemaId())
+                snapshot else
+                snapshot.copy { schemaId = cs.schemaId() }
         }
 
         override fun validate(currentMetadata: TableMetadata) {

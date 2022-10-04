@@ -273,7 +273,7 @@ class CompactSnapshots(
      * @see org.apache.iceberg.RemoveSnapshots.internalApply
      */
     private fun apply() {
-        val txn = AlluvialTransaction.of(table)
+        val txn = newTransaction()
         val squash = txn.squash()
         squash.squash(lowSnapshot?.snapshotId(), highSnapshot.snapshotId())
             .validateDeleteFilesInRange(false) // already validated
@@ -287,6 +287,10 @@ class CompactSnapshots(
             squash.commit()
             txn.commitTransaction()
         }
+    }
+
+    private fun newTransaction(): AlluvialTransaction {
+        return AlluvialTransaction.of(table)
     }
 
     private fun newDataWriter(): PartitioningWriter<Record, DataWriteResult> {
