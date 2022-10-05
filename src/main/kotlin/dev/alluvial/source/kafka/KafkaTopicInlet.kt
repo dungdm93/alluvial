@@ -69,12 +69,12 @@ class KafkaTopicInlet(
     fun read(): SinkRecord? {
         val record = pollFromQueues()
         if (record == null) {
-            pullFromBrokers()
+            pollFromBrokers()
             return pollFromQueues()
         }
 
         val queue = partitionQueues[record.kafkaPartition()]!!
-        if (queue.isEmpty()) pullFromBrokers()
+        if (queue.isEmpty()) pollFromBrokers()
         return record
     }
 
@@ -87,7 +87,8 @@ class KafkaTopicInlet(
         return record
     }
 
-    private fun pullFromBrokers() {
+    private fun pollFromBrokers() {
+        logger.info("Polling data from Kafka brokers")
         // first time, poll from all partitions
         consumer.resume(partitions)
         val pausedPartitions = mutableSetOf<TopicPartition>()
@@ -96,10 +97,13 @@ class KafkaTopicInlet(
             consumer.pause(pausedPartitions)
 
             val consumerRecords = consumer.poll(pollTimeout)
-            logger.info(
-                "Polled {} records in {} partitions",
-                consumerRecords.count(), consumerRecords.partitions().size
-            )
+            if (logger.isInfoEnabled) {
+                logger.info(
+                    "Polled {} records in partitions {}",
+                    consumerRecords.count(),
+                    consumerRecords.partitions().map(TopicPartition::partition)
+                )
+            }
             if (consumerRecords.isEmpty) return // no more data
 
             consumerRecords.partitions().forEach { tp ->
