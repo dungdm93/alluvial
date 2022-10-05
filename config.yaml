@@ -1,9 +1,9 @@
 source:
   kind: kafka
   topicPrefix: debezium.mysql.sakila
-  topicsExcluded:
-  - debezium.mysql.sakila.sakila.__debezium_signals
-  - debezium.mysql.sakila.sakila.__debezium_heartbeat
+  # topicsExcluded:
+  #   - debezium.postgres.dvdrental.public.__debezium_signals
+  #   - debezium.postgres.dvdrental.public.__debezium_heartbeat
   config:
     bootstrap.servers: kafka:9092
     group.id: alluvial
@@ -42,65 +42,26 @@ sink:
       # engine.hive.enabled: true
     # baseLocation: s3a://alluvial/sakila/
     partitionSpec:
-      # Partitioned by column "actor_id" using "void" transformation
       actor:
         - column: actor_id
-          transform: void
-          name: actor_id_void
-      address:
-        - column: address_id
-          transform: bucket[10]
-          name: id_bucket_by_ten
-      category:
-        - column: name
-          transform: truncate[2]
-          name: truncated_name
-      city:
-        - column: country_id
-          transform: identity
-          name: just_country_id
+          transform: truncate[50]
+          name: actor_id_truncated
       film:
         - column: last_update
           transform: month
           name: lum
-      film_actor:
-        - column: last_update
-          transform: day
-      payment:
-        - column: last_update
-          transform: hour
-      rental:
-        - column: rental_date
-          transform: day
-      # Partitioned by multiple columns
-      customer:
-        - column: last_update
-          transform: year
-          name: p1
-        - column: first_name
-          transform: truncate[2]
-          name: p2
-        - column: last_name
-          transform: bucket[3]
-          name: p3
-      # Partitioned by multiple columns using the same transformation
-      staff:
-        - column: first_name
-          transform: truncate[2]
-        - column: last_name
-          transform: truncate[2]
-          name: last_name_trc2
 
 stream:
   kind: debezium
-  examineInterval: "3m"
-  idleTimeout: "15m"
+  examineInterval: 3m
+  idleTimeout: 15m
   commitBatchSize: 1000
-  commitTimespan: "10m"
+  commitTimespan: 10m
+  rotateByDateInTz: "+07"
 
 manager:
-  namespace: [dvdrental]
-  rules:
+  namespace: [ dvdrental ]
+  compactSnapshots:
     tz: "+07"
 
 metrics:
