@@ -3,11 +3,18 @@ package dev.alluvial.dedupe.backend.rocksdb
 import com.google.common.base.Preconditions
 import dev.alluvial.dedupe.DedupeBackend
 import dev.alluvial.runtime.DeduplicationConfig
-import org.rocksdb.*
+import org.rocksdb.RocksDB
+import org.rocksdb.Options
+import org.rocksdb.DBOptions
+import org.rocksdb.ColumnFamilyHandle
+import org.rocksdb.ColumnFamilyDescriptor
+import org.rocksdb.TtlDB
+import org.rocksdb.WriteBatch
+import org.rocksdb.WriteOptions
 import org.slf4j.LoggerFactory
 import org.rocksdb.ColumnFamilyOptions as CFOptions
 
-class RocksDbClient private constructor(val path: String, private val options: Options) :
+class RocksDbClient private constructor(val path: String, private val ttl: Int, private val options: Options) :
     DedupeBackend<ByteArray, ByteArray> {
     companion object {
         init {
@@ -27,7 +34,7 @@ class RocksDbClient private constructor(val path: String, private val options: O
             val options = buildOptions(config.properties)
 
             if (instance == null) {
-                instance = RocksDbClient(config.path, options)
+                instance = RocksDbClient(config.path, config.ttl, options)
             } else if (instance!!.path != config.path) {
                 throw IllegalArgumentException("RocksDB instance has been initialized with different path")
             }
@@ -56,7 +63,7 @@ class RocksDbClient private constructor(val path: String, private val options: O
         }
     }
 
-    private lateinit var db: RocksDB
+    private lateinit var db: TtlDB
     private val cfHandles = mutableMapOf<String, ColumnFamilyHandle>()
 
     init {
@@ -67,12 +74,13 @@ class RocksDbClient private constructor(val path: String, private val options: O
         val existingCfNames = RocksDB.listColumnFamilies(options, path)
 
         if (existingCfNames.isEmpty()) {
-            db = RocksDB.open(options, path)
+            db = TtlDB.open(options, path, ttl, false)
         } else {
             val descriptors = existingCfNames.map { ColumnFamilyDescriptor(it) }
             val handles = mutableListOf<ColumnFamilyHandle>()
+            val ttls = List(descriptors.size) { _ -> ttl}
 
-            db = RocksDB.open(DBOptions(options), path, descriptors, handles)
+            db = TtlDB.open(DBOptions(options), path, descriptors, handles, ttls, false)
             cfHandles.putAll(existingCfNames.zip(handles).map { (k, v) -> Pair(k.toTableName(), v) })
         }
     }
@@ -81,7 +89,7 @@ class RocksDbClient private constructor(val path: String, private val options: O
         logger.info("Create table '{}' if not exist", table)
         cfHandles.computeIfAbsent(table) { name ->
             val descriptor = ColumnFamilyDescriptor(name.toCfName())
-            db.createColumnFamily(descriptor)
+            db.createColumnFamilyWithTtl(descriptor, ttl)
         }
     }
 
