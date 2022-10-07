@@ -1,6 +1,6 @@
 package dev.alluvial.sink.iceberg.io
 
-import dev.alluvial.dedupe.KeyCache
+import dev.alluvial.dedupe.Deduper
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tags
@@ -17,7 +17,7 @@ import java.time.format.DateTimeFormatter
 
 class DebeziumTaskWriterFactory(
     private val table: Table,
-    private val keyCache: KeyCache<SinkRecord, *, *>? = null,
+    private val deduper: Deduper<SinkRecord>? = null,
     private val registry: MeterRegistry,
     private val tags: Tags
 ) {
@@ -84,7 +84,7 @@ class DebeziumTaskWriterFactory(
             dataKafkaSchema!!,
             table.schema(),
             table.schema().identifierFieldIds(),
-            keyCache,
+            deduper,
             registry,
             tags
         )

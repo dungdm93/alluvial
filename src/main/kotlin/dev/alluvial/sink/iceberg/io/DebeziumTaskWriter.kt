@@ -1,6 +1,6 @@
 package dev.alluvial.sink.iceberg.io
 
-import dev.alluvial.dedupe.KeyCache
+import dev.alluvial.dedupe.Deduper
 import dev.alluvial.sink.iceberg.type.IcebergSchema
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
@@ -30,7 +30,7 @@ class DebeziumTaskWriter(
     sSchema: KafkaSchema,
     iSchema: IcebergSchema,
     equalityFieldIds: Set<Int>,
-    private val keyCache: KeyCache<SinkRecord, *, *>? = null,
+    private val deduper: Deduper<SinkRecord>? = null,
     registry: MeterRegistry,
     tags: Tags
 ) : TaskWriter<SinkRecord> {
@@ -57,10 +57,10 @@ class DebeziumTaskWriter(
         val value = record.value() as? KafkaStruct ?: return // Tombstone events
         val before = value.getStruct("before")
         val after = value.getStruct("after")
-        if (record.key() != null) {
-            key = keyer(record)
+        key = if (record.key() != null) {
+            keyer(record)
         } else {
-            key = null
+            null
         }
 
         val operation = value.getString("op")
@@ -69,16 +69,17 @@ class DebeziumTaskWriter(
             "r" -> {
                 delete(after) // ensure no duplicate data when re-snapshot
                 insert(after)
-                keyCache?.add(record)
+                deduper?.add(record)
             }
             // create events
             "c" -> {
-                if (keyCache == null) insert(after)
-                // Ignore "create" event if record exist already.
-                // TODO: this can cause problem if the "create" event has new updates in payload
-                else if (!keyCache.hasKey(record)) {
+                if (deduper == null) insert(after)
+                else if (!deduper.contains(record)) {
                     insert(after)
-                    keyCache.add(record)
+                    deduper.add(record)
+                } else {
+                    // Ignore "create" event if record exist already.
+                    // TODO: this can cause problem if the "create" event has new updates in payload
                 }
             }
             // update events
@@ -89,7 +90,7 @@ class DebeziumTaskWriter(
             // delete events
             "d" -> {
                 delete(before)
-                keyCache?.delete(record)
+                deduper?.remove(record)
             }
             // truncate events
             "t" -> throw TableTruncatedException()
@@ -126,7 +127,7 @@ class DebeziumTaskWriter(
     }
 
     override fun abort() {
-        keyCache?.abort()
+        deduper?.abort()
         close()
 
         // clean up files created by this writer

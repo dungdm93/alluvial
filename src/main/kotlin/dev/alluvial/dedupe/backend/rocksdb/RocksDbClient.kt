@@ -1,29 +1,25 @@
 package dev.alluvial.dedupe.backend.rocksdb
 
 import com.google.common.base.Preconditions
-import dev.alluvial.api.KVBackend
+import dev.alluvial.dedupe.DedupeBackend
 import dev.alluvial.runtime.DeduplicationConfig
-import org.rocksdb.RocksDB
-import org.rocksdb.Options
-import org.rocksdb.DBOptions
-import org.rocksdb.ColumnFamilyHandle
-import org.rocksdb.ColumnFamilyDescriptor
-import org.rocksdb.WriteBatch
-import org.rocksdb.WriteOptions
+import org.rocksdb.*
+import org.slf4j.LoggerFactory
 import org.rocksdb.ColumnFamilyOptions as CFOptions
 
-class RocksDbBackend private constructor(val path: String, private val options: Options) :
-    KVBackend<ByteArray, ByteArray> {
+class RocksDbClient private constructor(val path: String, private val options: Options) :
+    DedupeBackend<ByteArray, ByteArray> {
     companion object {
         init {
             RocksDB.loadLibrary()
         }
 
+        private val logger = LoggerFactory.getLogger(RocksDbClient::class.java)
         private const val DATABASE_OPT_PREFIX = "db."
         private const val COLUMN_FAMILY_OPT_PREFIX = "cf."
-        private var instance: RocksDbBackend? = null
+        private var instance: RocksDbClient? = null
 
-        fun getOrCreate(config: DeduplicationConfig): RocksDbBackend {
+        fun getOrCreate(config: DeduplicationConfig): RocksDbClient {
             Preconditions.checkArgument(
                 config.path.isNotEmpty(),
                 "RocksDB path must not be empty"
@@ -31,7 +27,7 @@ class RocksDbBackend private constructor(val path: String, private val options: 
             val options = buildOptions(config.properties)
 
             if (instance == null) {
-                instance = RocksDbBackend(config.path, options)
+                instance = RocksDbClient(config.path, options)
             } else if (instance!!.path != config.path) {
                 throw IllegalArgumentException("RocksDB instance has been initialized with different path")
             }
@@ -66,6 +62,7 @@ class RocksDbBackend private constructor(val path: String, private val options: 
     init {
         initDB()
     }
+
     private fun initDB() {
         val existingCfNames = RocksDB.listColumnFamilies(options, path)
 
@@ -81,6 +78,7 @@ class RocksDbBackend private constructor(val path: String, private val options: 
     }
 
     override fun createTableIfNeeded(table: String) {
+        logger.info("Create table '{}' if not exist", table)
         cfHandles.computeIfAbsent(table) { name ->
             val descriptor = ColumnFamilyDescriptor(name.toCfName())
             db.createColumnFamily(descriptor)
@@ -92,6 +90,7 @@ class RocksDbBackend private constructor(val path: String, private val options: 
     }
 
     override fun dropTableIfExists(table: String) {
+        logger.info("Drop table '{}' if exists", table)
         cfHandles.remove(table)?.let(db::dropColumnFamily)
     }
 
@@ -143,5 +142,13 @@ class RocksDbBackend private constructor(val path: String, private val options: 
         WriteOptions().use {
             db.write(it, updates)
         }
+        logger.info("Put {} records into table '{}'", addedEntries.size, table)
+        logger.info("Delete {} records from table '{}'", deletedEntries.count(), table)
+    }
+
+    fun truncate(table: String) {
+        logger.info("Truncating table '{}'!", table)
+        dropTableIfExists(table)
+        createTableIfNeeded(table)
     }
 }

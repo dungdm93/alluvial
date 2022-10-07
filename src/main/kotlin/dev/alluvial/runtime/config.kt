@@ -37,7 +37,6 @@ data class SinkConfig(
     val kind: String,
     val catalog: Map<String, String>,
     val tableCreation: TableCreationConfig,
-    val dedupe: DeduplicationConfig? = null,
 ) {
     init {
         require(kind.isNotEmpty()) { "sink.kind cannot be empty" }
@@ -62,6 +61,8 @@ data class StreamConfig(
     val commitTimespan: Duration = Duration.ofMinutes(10),
 
     val rotateByDateInTz: ZoneOffset = ZoneOffset.UTC,
+
+    val dedupe: DeduplicationConfig? = null,
 ) {
     init {
         require(kind.isNotEmpty()) { "stream.kind cannot be empty" }

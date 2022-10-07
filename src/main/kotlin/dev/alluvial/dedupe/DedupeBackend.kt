@@ -1,8 +1,8 @@
-package dev.alluvial.api
+package dev.alluvial.dedupe
 
 import java.io.Closeable
 
-interface KVBackend<K, V> : Closeable {
+interface DedupeBackend<K, V> : Closeable {
     fun createTableIfNeeded(table: String)
     fun dropTableIfExists(table: String)
     fun listTables() : List<String>

@@ -1,7 +1,9 @@
 package dev.alluvial.sink.iceberg.io
 
-import dev.alluvial.dedupe.backend.rocksdb.RocksDbBackend
-import dev.alluvial.dedupe.backend.rocksdb.RocksDbKeyCache
+import dev.alluvial.dedupe.backend.rocksdb.BasicRecordSerializer
+import dev.alluvial.dedupe.backend.rocksdb.RocksDbClient
+import dev.alluvial.dedupe.backend.rocksdb.RocksDbDeduper
+import dev.alluvial.dedupe.backend.rocksdb.RocksDbDeduperProvider
 import dev.alluvial.runtime.DeduplicationConfig
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
@@ -12,6 +14,7 @@ import org.apache.iceberg.FileFormat
 import org.apache.iceberg.PartitionSpec
 import org.apache.iceberg.TableProperties
 import org.apache.iceberg.TableTestBase
+import org.apache.iceberg.catalog.TableIdentifier
 import org.apache.iceberg.data.GenericRecord
 import org.apache.iceberg.data.IcebergGenerics
 import org.apache.iceberg.data.Record
@@ -22,6 +25,7 @@ import org.junit.Assert
 import org.junit.Before
 import org.junit.Ignore
 import org.junit.Test
+import org.junit.jupiter.api.AfterAll
 import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 
@@ -47,7 +51,13 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
 
     @Before
     fun setup() {
-        rockDBPath = temp.newFolder()
+        rockDBPath = File("/tmp/alluvial/test/rocksdb")
+        rockDBPath.mkdirs()
+    }
+
+    @AfterAll
+    fun afterAll() {
+        rockDBPath.deleteRecursively()
     }
 
     private fun fieldId(name: String): Int {
@@ -246,7 +256,7 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
         }
     }
 
-    private fun createTaskWriter(vararg equalityFieldIds: Int, keyCache: RocksDbKeyCache? = null): TaskWriter<SinkRecord> {
+    private fun createTaskWriter(vararg equalityFieldIds: Int, deduper: RocksDbDeduper<SinkRecord>? = null): TaskWriter<SinkRecord> {
         val schema = table.schema()
         val equalityFieldNames = equalityFieldIds.map { schema.findField(it).name() }
         val fileWriterFactory = KafkaFileWriterFactory.buildFor(table) {
@@ -273,7 +283,7 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
             kafkaSchema,
             table.schema(),
             equalityFieldIds.toSet(),
-            keyCache,
+            deduper,
             SimpleMeterRegistry(),
             Tags.of("outlet", table.name())
         )
@@ -323,11 +333,11 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
         }
     }
 
-    private fun writeAndCommitCache(keyCache: RocksDbKeyCache, records: List<SinkRecord>) {
-        val writer = createTaskWriter(fieldId("id"), keyCache = keyCache)
+    private fun writeAndCommitCache(deduper: RocksDbDeduper<SinkRecord>, vararg records: SinkRecord) {
+        val writer = createTaskWriter(fieldId("id"), deduper = deduper)
         records.forEach(writer::write)
         commitTransaction(writer.complete())
-        keyCache.commit()
+        deduper.commit()
     }
 
     @Test
@@ -335,47 +345,51 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
         initTable(false)
         val tableName = table.name()
         val config = DeduplicationConfig(kind = "rocksdb", path = rockDBPath.path)
-        val backend = RocksDbBackend.getOrCreate(config)
-        val cache = RocksDbKeyCache(tableName, backend, listOf("id"))
+        val client = RocksDbClient.getOrCreate(config)
+        val deduperProvider = RocksDbDeduperProvider<SinkRecord>(client)
+        val serializer = BasicRecordSerializer(listOf("id"))
+        val deduper = deduperProvider.create(TableIdentifier.of(tableName), serializer)
 
         // "read" event => upsert record & put to cache
         val readFirst = createRead(1, "first")
-        val firstKeyBytes = cache.serializeKey(readFirst)
-        writeAndCommitCache(cache, listOf(readFirst))
-        Assert.assertTrue(backend.hasKey(tableName, firstKeyBytes))
+        val firstKeyBytes = serializer.serialize(readFirst)
+        writeAndCommitCache(deduper, readFirst)
+        Assert.assertTrue(client.hasKey(tableName, firstKeyBytes))
 
         // Same "read" event => upsert record & put to cache (again)
-        writeAndCommitCache(cache, listOf(readFirst))
+        writeAndCommitCache(deduper, readFirst)
         Assert.assertEquals(1, getTableCount())
 
         // "create" event of the same record => ignore
         val createFirst = createInsert(1, "firstNew")
-        writeAndCommitCache(cache, listOf(createFirst))
+        writeAndCommitCache(deduper, createFirst)
         Assert.assertEquals(1, getTableCount())
 
         // "delete" event => delete record & remove from cache
         val deleteFirst = createDelete(1, "first")
-        writeAndCommitCache(cache, listOf(deleteFirst))
-        Assert.assertFalse(backend.hasKey(tableName, firstKeyBytes))
+        writeAndCommitCache(deduper, deleteFirst)
+        Assert.assertFalse(client.hasKey(tableName, firstKeyBytes))
         Assert.assertEquals(0, getTableCount())
 
         // "create" event => re-create record & put to cache
-        writeAndCommitCache(cache, listOf(createFirst))
-        Assert.assertTrue(backend.hasKey(tableName, firstKeyBytes))
+        writeAndCommitCache(deduper, createFirst)
+        Assert.assertTrue(client.hasKey(tableName, firstKeyBytes))
         Assert.assertEquals(1, getTableCount())
 
         // "create" event of another record => create & put to cache
         val createSecond = createInsert(2, "second")
-        val secondKeyBytes = cache.serializeKey(createSecond)
-        writeAndCommitCache(cache, listOf(createSecond))
-        Assert.assertTrue(backend.hasKey(tableName, secondKeyBytes))
+        val secondKeyBytes = serializer.serialize(createSecond)
+        writeAndCommitCache(deduper, createSecond)
+        Assert.assertTrue(client.hasKey(tableName, secondKeyBytes))
         Assert.assertEquals(2, getTableCount())
 
         val expected = expectedRowSet(
-            createRecord(1, "first"),
+            createRecord(1, "firstNew"),
             createRecord(2, "second"),
         )
         val actual = actualRowSet("*")
         Assert.assertEquals("Should have expected records", expected, actual)
+
+        client.close()
     }
 }
