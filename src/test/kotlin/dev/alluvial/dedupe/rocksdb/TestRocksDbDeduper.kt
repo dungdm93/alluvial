@@ -30,7 +30,7 @@ class TestRocksDbDeduper {
         }
 
         private fun getBackend() {
-            config = DeduplicationConfig(kind = "rocksdb", path = tempDir.path)
+            config = DeduplicationConfig(kind = "rocksdb", ttl=300, path = tempDir.path)
             client = RocksDbClient.getOrCreate(config)
             deduperProvider = RocksDbDeduperProvider(client)
             deduper = deduperProvider.create(TableIdentifier.of(table), serializer)

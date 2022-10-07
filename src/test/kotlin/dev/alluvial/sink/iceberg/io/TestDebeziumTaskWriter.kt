@@ -341,12 +341,14 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
     fun testDeduplicateCreateEvents() {
         initTable(false)
         val tableName = table.name()
-        val config = DeduplicationConfig(kind = "rocksdb", path = rockDBPath.path)
+        val config = DeduplicationConfig(kind = "rocksdb", ttl=300, path = rockDBPath.path)
         val client = RocksDbClient.getOrCreate(config)
         val deduperProvider = RocksDbDeduperProvider<SinkRecord>(client)
 //        val serializer = BasicRecordSerializer(listOf("id"))
         val serializer = AvroSerializer(emptyMap())
         val deduper = deduperProvider.create(TableIdentifier.of(tableName), serializer)
+        deduper.clear()
+        deduper.commit()
 
         // "read" event => upsert record & put to cache
         val readFirst = createRead(1, "first")

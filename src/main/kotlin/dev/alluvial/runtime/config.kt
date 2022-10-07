@@ -156,10 +156,12 @@ data class MetricsExporterConfig(
 data class DeduplicationConfig(
     val kind: String,
     val path: String,
+    val ttl: Int,
     val properties: Map<String, String> = emptyMap(),
 ) {
     init {
         require(kind.isNotEmpty()) { "sink.dedupe.kind cannot be empty" }
         require(path.isNotEmpty()) { "sink.dedupe.path cannot be empty" }
+        require(ttl >= 300){ "Time-to-live must be larger than 5 minutes" }
     }
 }
