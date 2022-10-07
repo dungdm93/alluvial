@@ -1,7 +1,7 @@
 package dev.alluvial.sink.iceberg
 
 import dev.alluvial.api.Outlet
-import dev.alluvial.dedupe.KeyCache
+import dev.alluvial.dedupe.Deduper
 import dev.alluvial.sink.iceberg.io.DebeziumTaskWriterFactory
 import dev.alluvial.sink.iceberg.type.IcebergTable
 import dev.alluvial.sink.iceberg.type.KafkaSchema
@@ -29,7 +29,7 @@ import java.util.function.Supplier
 class IcebergTableOutlet(
     val name: String,
     val table: IcebergTable,
-    private val keyCache: KeyCache<SinkRecord, *, *>? = null,
+    private val deduper: Deduper<SinkRecord>? = null,
     registry: MeterRegistry,
 ) : Outlet {
     companion object {
@@ -38,7 +38,7 @@ class IcebergTableOutlet(
 
     private val metrics = Metrics(registry)
     private var writer: TaskWriter<SinkRecord>? = null
-    private val writerFactory = DebeziumTaskWriterFactory(table, keyCache, registry, Tags.of("outlet", name))
+    private val writerFactory = DebeziumTaskWriterFactory(table, deduper, registry, Tags.of("outlet", name))
 
     fun write(record: SinkRecord) {
         if (writer == null) {
@@ -65,7 +65,7 @@ class IcebergTableOutlet(
 
         summary.forEach(rowDelta::set)
         metrics.recordCommitMetadata(rowDelta::commit)
-        keyCache?.commit()
+        deduper?.commit()
         writer = null
     }
 
@@ -88,6 +88,7 @@ class IcebergTableOutlet(
         val overwrite = table.newOverwrite().overwriteByRowFilter(Expressions.alwaysTrue())
         summary.forEach(overwrite::set)
         overwrite.commit()
+        deduper?.clear()
     }
 
     /**

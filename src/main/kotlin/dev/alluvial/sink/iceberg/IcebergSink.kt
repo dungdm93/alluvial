@@ -1,8 +1,7 @@
 package dev.alluvial.sink.iceberg
 
-import dev.alluvial.dedupe.KeyCache
-import dev.alluvial.dedupe.backend.rocksdb.RocksDbBackend
-import dev.alluvial.dedupe.backend.rocksdb.RocksDbKeyCache
+import dev.alluvial.dedupe.backend.rocksdb.BasicRecordSerializer
+import dev.alluvial.dedupe.backend.rocksdb.RocksDbDeduperProvider
 import dev.alluvial.runtime.SinkConfig
 import io.micrometer.core.instrument.MeterRegistry
 import org.apache.hadoop.conf.Configuration
@@ -30,8 +29,6 @@ class IcebergSink(sinkConfig: SinkConfig, private val registry: MeterRegistry) {
 
     private val catalog: Catalog
     private val supportsNamespaces: SupportsNamespaces?
-    private var dedupeBackend: RocksDbBackend? = null
-    private val keyCaches = mutableMapOf<TableIdentifier, KeyCache<SinkRecord, ByteArray, ByteArray>>()
 
     init {
         val properties = sinkConfig.catalog
@@ -49,24 +46,23 @@ class IcebergSink(sinkConfig: SinkConfig, private val registry: MeterRegistry) {
         this.catalog = if (cacheEnabled)
             CachingCatalog.wrap(catalog, cacheExpirationIntervalMs) else
             catalog
-
-        dedupeBackend = sinkConfig.dedupe?.let(RocksDbBackend::getOrCreate)
     }
 
-    fun getOutlet(name: String, tableId: TableIdentifier): IcebergTableOutlet? {
+    fun getOutlet(name: String, tableId: TableIdentifier, deduperProvider: RocksDbDeduperProvider<SinkRecord>?): IcebergTableOutlet? {
         return try {
             val table = catalog.loadTable(tableId)
-            val cache = when (dedupeBackend) {
+
+            val deduper = when (deduperProvider) {
                 null -> null
                 else -> {
                     val identifiers = table.schema().identifierFieldNames().toList()
-                    keyCaches.computeIfAbsent(tableId) {
-                        RocksDbKeyCache(it.name(), dedupeBackend!!, identifiers)
-                    }
+                    val serializer = BasicRecordSerializer(identifiers)
+                    deduperProvider.create(tableId, serializer)
                 }
             }
+
             logger.info("Creating new outlet {}", name)
-            IcebergTableOutlet(name, table, cache, registry)
+            IcebergTableOutlet(name, table, deduper, registry)
         } catch (e: NoSuchTableException) {
             null
         }
