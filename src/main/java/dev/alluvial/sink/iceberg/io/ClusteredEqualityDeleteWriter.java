@@ -23,7 +23,6 @@ import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.StructLike;
 import org.apache.iceberg.io.DeleteWriteResult;
 import org.apache.iceberg.io.FileIO;
-import org.apache.iceberg.io.FileWriter;
 import org.apache.iceberg.io.FileWriterFactory;
 import org.apache.iceberg.io.OutputFileFactory;
 import org.apache.iceberg.io.RollingEqualityDeleteWriter;
@@ -36,7 +35,9 @@ import java.util.List;
  * An equality delete writer capable of writing to multiple specs and partitions that requires
  * the incoming delete records to be properly clustered by partition spec and by partition within each spec.
  */
-public class ClusteredEqualityDeleteWriter<T> extends ClusteredWriter<T, DeleteWriteResult> {
+public class ClusteredEqualityDeleteWriter<T>
+    extends ClusteredWriter<T, RollingEqualityDeleteWriter<T>, DeleteWriteResult>
+    implements TrackedPartitioningWriter<T, DeleteWriteResult> {
 
     private final FileWriterFactory<T> writerFactory;
     private final OutputFileFactory fileFactory;
@@ -54,7 +55,16 @@ public class ClusteredEqualityDeleteWriter<T> extends ClusteredWriter<T, DeleteW
     }
 
     @Override
-    protected FileWriter<T, DeleteWriteResult> newWriter(PartitionSpec spec, StructLike partition) {
+    public PathOffset trackedWrite(T row, PartitionSpec spec, StructLike partition) {
+        write(row, spec, partition);
+
+        var path = currentWriter.currentFilePath();
+        var offset = currentWriter.currentFileRows() - 1;
+        return PathOffset.of(path, offset);
+    }
+
+    @Override
+    protected RollingEqualityDeleteWriter<T> newWriter(PartitionSpec spec, StructLike partition) {
         return new RollingEqualityDeleteWriter<>(writerFactory, fileFactory, io, targetFileSizeInBytes, spec, partition);
     }
 

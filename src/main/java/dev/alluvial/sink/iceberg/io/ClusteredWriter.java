@@ -43,7 +43,7 @@ import java.util.Set;
  * the memory consumption. Prefer using this writer whenever the incoming records can be clustered
  * by spec/partition.
  */
-abstract class ClusteredWriter<T, R> implements PartitioningWriter<T, R> {
+abstract class ClusteredWriter<T, W extends FileWriter<T, R>, R> implements PartitioningWriter<T, R> {
 
     private static final String NOT_CLUSTERED_ROWS_ERROR_MSG_TEMPLATE =
         "Incoming records violate the writer assumption that records are clustered by spec and " +
@@ -56,11 +56,11 @@ abstract class ClusteredWriter<T, R> implements PartitioningWriter<T, R> {
     private Comparator<StructLike> partitionComparator = null;
     private Set<StructLike> completedPartitions = null;
     private StructLike currentPartition = null;
-    private FileWriter<T, R> currentWriter = null;
+    protected W currentWriter = null;
 
     private boolean closed = false;
 
-    protected abstract FileWriter<T, R> newWriter(PartitionSpec spec, StructLike partition);
+    protected abstract W newWriter(PartitionSpec spec, StructLike partition);
 
     protected abstract void addResult(R result);
 

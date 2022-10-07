@@ -40,12 +40,12 @@ import java.util.Map;
  * this writer may potentially consume substantially more memory compared to {@link ClusteredWriter}.
  * Use this writer only when clustering by spec/partition is not possible (e.g. streaming).
  */
-abstract class FanoutWriter<T, R> implements PartitioningWriter<T, R> {
+abstract class FanoutWriter<T, W extends FileWriter<T, R>, R> implements PartitioningWriter<T, R> {
 
-    private final Map<Integer, StructLikeMap<FileWriter<T, R>>> writers = Maps.newHashMap();
+    private final Map<Integer, StructLikeMap<W>> writers = Maps.newHashMap();
     private boolean closed = false;
 
-    protected abstract FileWriter<T, R> newWriter(PartitionSpec spec, StructLike partition);
+    protected abstract W newWriter(PartitionSpec spec, StructLike partition);
 
     protected abstract void addResult(R result);
 
@@ -53,14 +53,14 @@ abstract class FanoutWriter<T, R> implements PartitioningWriter<T, R> {
 
     @Override
     public void write(T row, PartitionSpec spec, StructLike partition) {
-        FileWriter<T, R> writer = writer(spec, partition);
+        W writer = writer(spec, partition);
         writer.write(row);
     }
 
-    private FileWriter<T, R> writer(PartitionSpec spec, StructLike partition) {
-        Map<StructLike, FileWriter<T, R>> specWriters =
+    protected W writer(PartitionSpec spec, StructLike partition) {
+        Map<StructLike, W> specWriters =
             writers.computeIfAbsent(spec.specId(), id -> StructLikeMap.create(spec.partitionType()));
-        FileWriter<T, R> writer = specWriters.get(partition);
+        W writer = specWriters.get(partition);
 
         if (writer == null) {
             // copy the partition key as the key object may be reused
@@ -81,8 +81,8 @@ abstract class FanoutWriter<T, R> implements PartitioningWriter<T, R> {
     }
 
     private void closeWriters() throws IOException {
-        for (Map<StructLike, FileWriter<T, R>> specWriters : writers.values()) {
-            for (FileWriter<T, R> writer : specWriters.values()) {
+        for (Map<StructLike, W> specWriters : writers.values()) {
+            for (W writer : specWriters.values()) {
                 writer.close();
                 addResult(writer.result());
             }

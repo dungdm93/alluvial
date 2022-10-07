@@ -23,7 +23,6 @@ import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.StructLike;
 import org.apache.iceberg.io.DataWriteResult;
 import org.apache.iceberg.io.FileIO;
-import org.apache.iceberg.io.FileWriter;
 import org.apache.iceberg.io.FileWriterFactory;
 import org.apache.iceberg.io.OutputFileFactory;
 import org.apache.iceberg.io.RollingDataWriter;
@@ -35,7 +34,9 @@ import java.util.List;
  * A data writer capable of writing to multiple specs and partitions that keeps data writers for each
  * seen spec/partition pair open until this writer is closed.
  */
-public class FanoutDataWriter<T> extends FanoutWriter<T, DataWriteResult> {
+public class FanoutDataWriter<T>
+    extends FanoutWriter<T, RollingDataWriter<T>, DataWriteResult>
+    implements TrackedPartitioningWriter<T, DataWriteResult> {
 
     private final FileWriterFactory<T> writerFactory;
     private final OutputFileFactory fileFactory;
@@ -53,7 +54,18 @@ public class FanoutDataWriter<T> extends FanoutWriter<T, DataWriteResult> {
     }
 
     @Override
-    protected FileWriter<T, DataWriteResult> newWriter(PartitionSpec spec, StructLike partition) {
+    public PathOffset trackedWrite(T row, PartitionSpec spec, StructLike partition) {
+        write(row, spec, partition);
+
+        @SuppressWarnings("resource")
+        var writer = writer(spec, partition);
+        var path = writer.currentFilePath();
+        var offset = writer.currentFileRows() - 1;
+        return PathOffset.of(path, offset);
+    }
+
+    @Override
+    protected RollingDataWriter<T> newWriter(PartitionSpec spec, StructLike partition) {
         return new RollingDataWriter<>(writerFactory, fileFactory, io, targetFileSizeInBytes, spec, partition);
     }
 

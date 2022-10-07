@@ -24,7 +24,6 @@ import org.apache.iceberg.StructLike;
 import org.apache.iceberg.deletes.PositionDelete;
 import org.apache.iceberg.io.DeleteWriteResult;
 import org.apache.iceberg.io.FileIO;
-import org.apache.iceberg.io.FileWriter;
 import org.apache.iceberg.io.FileWriterFactory;
 import org.apache.iceberg.io.OutputFileFactory;
 import org.apache.iceberg.io.RollingPositionDeleteWriter;
@@ -37,7 +36,8 @@ import java.util.List;
  * A position delete writer capable of writing to multiple specs and partitions that keeps
  * delete writers for each seen spec/partition pair open until this writer is closed.
  */
-public class FanoutPositionDeleteWriter<T> extends FanoutWriter<PositionDelete<T>, DeleteWriteResult> {
+public class FanoutPositionDeleteWriter<T>
+    extends FanoutWriter<PositionDelete<T>, RollingPositionDeleteWriter<T>, DeleteWriteResult> {
 
     private final FileWriterFactory<T> writerFactory;
     private final OutputFileFactory fileFactory;
@@ -57,7 +57,7 @@ public class FanoutPositionDeleteWriter<T> extends FanoutWriter<PositionDelete<T
     }
 
     @Override
-    protected FileWriter<PositionDelete<T>, DeleteWriteResult> newWriter(PartitionSpec spec, StructLike partition) {
+    protected RollingPositionDeleteWriter<T> newWriter(PartitionSpec spec, StructLike partition) {
         return new RollingPositionDeleteWriter<>(writerFactory, fileFactory, io, targetFileSizeInBytes, spec, partition);
     }
 

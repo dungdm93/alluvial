@@ -32,7 +32,9 @@ class DebeziumTaskWriter(
     registry: MeterRegistry,
     tags: Tags
 ) : TaskWriter<SinkRecord> {
-    private val insertWriter by lazy(partitioningWriterFactory::newDataWriter)
+    private val insertWriter by lazy {
+        partitioningWriterFactory.newDataWriter() as TrackedPartitioningWriter
+    }
     private val equalityDeleteWriter by lazy(partitioningWriterFactory::newEqualityDeleteWriter)
     private val positionDeleteWriter by lazy(partitioningWriterFactory::newPositionDeleteWriter)
     private val positionDelete: PositionDelete<KafkaStruct> = PositionDelete.create()
@@ -96,7 +98,7 @@ class DebeziumTaskWriter(
         val copiedKey = key.copy()!!
 
         internalPosDelete(copiedKey, partition)
-        val pathOffset = insertWriter.write(row, spec, partition)
+        val pathOffset = insertWriter.trackedWrite(row, spec, partition)
         insertedRowMap[copiedKey] = pathOffset
     }
 

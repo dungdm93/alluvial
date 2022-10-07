@@ -24,7 +24,6 @@ import org.apache.iceberg.StructLike;
 import org.apache.iceberg.deletes.PositionDelete;
 import org.apache.iceberg.io.DeleteWriteResult;
 import org.apache.iceberg.io.FileIO;
-import org.apache.iceberg.io.FileWriter;
 import org.apache.iceberg.io.FileWriterFactory;
 import org.apache.iceberg.io.OutputFileFactory;
 import org.apache.iceberg.io.RollingPositionDeleteWriter;
@@ -37,7 +36,8 @@ import java.util.List;
  * A position delete writer capable of writing to multiple specs and partitions that requires
  * the incoming delete records to be properly clustered by partition spec and by partition within each spec.
  */
-public class ClusteredPositionDeleteWriter<T> extends ClusteredWriter<PositionDelete<T>, DeleteWriteResult> {
+public class ClusteredPositionDeleteWriter<T>
+    extends ClusteredWriter<PositionDelete<T>, RollingPositionDeleteWriter<T>, DeleteWriteResult> {
 
     private final FileWriterFactory<T> writerFactory;
     private final OutputFileFactory fileFactory;
@@ -57,7 +57,7 @@ public class ClusteredPositionDeleteWriter<T> extends ClusteredWriter<PositionDe
     }
 
     @Override
-    protected FileWriter<PositionDelete<T>, DeleteWriteResult> newWriter(PartitionSpec spec, StructLike partition) {
+    protected RollingPositionDeleteWriter<T> newWriter(PartitionSpec spec, StructLike partition) {
         return new RollingPositionDeleteWriter<>(writerFactory, fileFactory, io, targetFileSizeInBytes, spec, partition);
     }
 
