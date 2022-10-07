@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package dev.alluvial.sink.iceberg.io;
 
 import org.apache.iceberg.PartitionSpec;
@@ -25,7 +24,6 @@ import org.apache.iceberg.encryption.EncryptedOutputFile;
 import org.apache.iceberg.io.FileWriter;
 import org.apache.iceberg.io.HelpersKt;
 import org.apache.iceberg.io.OutputFileFactory;
-import org.apache.iceberg.io.TrackedFileWriter;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.util.StructLikeMap;
@@ -44,26 +42,25 @@ import java.util.Map;
  */
 abstract class FanoutWriter<T, R> implements PartitioningWriter<T, R> {
 
-    private final Map<Integer, StructLikeMap<TrackedFileWriter<T, R>>> writers = Maps.newHashMap();
+    private final Map<Integer, StructLikeMap<FileWriter<T, R>>> writers = Maps.newHashMap();
     private boolean closed = false;
 
-    protected abstract TrackedFileWriter<T, R> newWriter(PartitionSpec spec, StructLike partition);
+    protected abstract FileWriter<T, R> newWriter(PartitionSpec spec, StructLike partition);
 
     protected abstract void addResult(R result);
 
     protected abstract R aggregatedResult();
 
     @Override
-    public PathOffset write(T row, PartitionSpec spec, StructLike partition) {
-        TrackedFileWriter<T, R> writer = writer(spec, partition);
-        return writer.trackedWrite(row);
+    public void write(T row, PartitionSpec spec, StructLike partition) {
+        FileWriter<T, R> writer = writer(spec, partition);
+        writer.write(row);
     }
 
-    private TrackedFileWriter<T, R> writer(PartitionSpec spec, StructLike partition) {
-        Map<StructLike, TrackedFileWriter<T, R>> specWriters = writers.computeIfAbsent(
-            spec.specId(),
-            id -> StructLikeMap.create(spec.partitionType()));
-        TrackedFileWriter<T, R> writer = specWriters.get(partition);
+    private FileWriter<T, R> writer(PartitionSpec spec, StructLike partition) {
+        Map<StructLike, FileWriter<T, R>> specWriters =
+            writers.computeIfAbsent(spec.specId(), id -> StructLikeMap.create(spec.partitionType()));
+        FileWriter<T, R> writer = specWriters.get(partition);
 
         if (writer == null) {
             // copy the partition key as the key object may be reused
@@ -84,7 +81,7 @@ abstract class FanoutWriter<T, R> implements PartitioningWriter<T, R> {
     }
 
     private void closeWriters() throws IOException {
-        for (Map<StructLike, TrackedFileWriter<T, R>> specWriters : writers.values()) {
+        for (Map<StructLike, FileWriter<T, R>> specWriters : writers.values()) {
             for (FileWriter<T, R> writer : specWriters.values()) {
                 writer.close();
                 addResult(writer.result());

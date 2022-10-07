@@ -16,15 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package dev.alluvial.sink.iceberg.io;
 
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.StructLike;
 import org.apache.iceberg.encryption.EncryptedOutputFile;
+import org.apache.iceberg.io.FileWriter;
 import org.apache.iceberg.io.HelpersKt;
 import org.apache.iceberg.io.OutputFileFactory;
-import org.apache.iceberg.io.TrackedFileWriter;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.Sets;
 import org.apache.iceberg.types.Comparators;
@@ -57,18 +56,18 @@ abstract class ClusteredWriter<T, R> implements PartitioningWriter<T, R> {
     private Comparator<StructLike> partitionComparator = null;
     private Set<StructLike> completedPartitions = null;
     private StructLike currentPartition = null;
-    private TrackedFileWriter<T, R> currentWriter = null;
+    private FileWriter<T, R> currentWriter = null;
 
     private boolean closed = false;
 
-    protected abstract TrackedFileWriter<T, R> newWriter(PartitionSpec spec, StructLike partition);
+    protected abstract FileWriter<T, R> newWriter(PartitionSpec spec, StructLike partition);
 
     protected abstract void addResult(R result);
 
     protected abstract R aggregatedResult();
 
     @Override
-    public PathOffset write(T row, PartitionSpec spec, StructLike partition) {
+    public void write(T row, PartitionSpec spec, StructLike partition) {
         if (!spec.equals(currentSpec)) {
             if (currentSpec != null) {
                 closeCurrentWriter();
@@ -104,7 +103,7 @@ abstract class ClusteredWriter<T, R> implements PartitioningWriter<T, R> {
             this.currentWriter = newWriter(currentSpec, currentPartition);
         }
 
-        return currentWriter.trackedWrite(row);
+        currentWriter.write(row);
     }
 
     @Override

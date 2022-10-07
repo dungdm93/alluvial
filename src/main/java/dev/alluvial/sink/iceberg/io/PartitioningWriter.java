@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package dev.alluvial.sink.iceberg.io;
 
 import org.apache.iceberg.DataFile;
@@ -48,7 +47,7 @@ public interface PartitioningWriter<T, R> extends Closeable {
      * @param spec      a partition spec
      * @param partition a partition or null if the spec is unpartitioned
      */
-    PathOffset write(T row, PartitionSpec spec, StructLike partition);
+    void write(T row, PartitionSpec spec, StructLike partition);
 
     /**
      * Returns a result that contains information about written {@link DataFile}s or {@link DeleteFile}s.

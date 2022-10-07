@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package dev.alluvial.sink.iceberg.io;
 
 import org.apache.iceberg.DataFile;
@@ -24,10 +23,10 @@ import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.StructLike;
 import org.apache.iceberg.io.DataWriteResult;
 import org.apache.iceberg.io.FileIO;
+import org.apache.iceberg.io.FileWriter;
 import org.apache.iceberg.io.FileWriterFactory;
 import org.apache.iceberg.io.OutputFileFactory;
 import org.apache.iceberg.io.RollingDataWriter;
-import org.apache.iceberg.io.TrackedFileWriter;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 
 import java.util.List;
@@ -54,9 +53,8 @@ public class FanoutDataWriter<T> extends FanoutWriter<T, DataWriteResult> {
     }
 
     @Override
-    protected TrackedFileWriter<T, DataWriteResult> newWriter(PartitionSpec spec, StructLike partition) {
-        var writer = new RollingDataWriter<>(writerFactory, fileFactory, io, targetFileSizeInBytes, spec, partition);
-        return TrackedFileWriter.wrap(writer);
+    protected FileWriter<T, DataWriteResult> newWriter(PartitionSpec spec, StructLike partition) {
+        return new RollingDataWriter<>(writerFactory, fileFactory, io, targetFileSizeInBytes, spec, partition);
     }
 
     @Override
