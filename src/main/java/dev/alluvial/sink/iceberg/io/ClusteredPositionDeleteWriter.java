@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package dev.alluvial.sink.iceberg.io;
 
 import org.apache.iceberg.DeleteFile;
@@ -28,7 +27,7 @@ import org.apache.iceberg.io.FileIO;
 import org.apache.iceberg.io.FileWriterFactory;
 import org.apache.iceberg.io.OutputFileFactory;
 import org.apache.iceberg.io.RollingPositionDeleteWriter;
-import org.apache.iceberg.io.TrackedFileWriter;
+import org.apache.iceberg.io.SortedPositionDeleteWriter;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.util.CharSequenceSet;
 
@@ -38,7 +37,8 @@ import java.util.List;
  * A position delete writer capable of writing to multiple specs and partitions that requires
  * the incoming delete records to be properly clustered by partition spec and by partition within each spec.
  */
-public class ClusteredPositionDeleteWriter<T> extends ClusteredWriter<PositionDelete<T>, DeleteWriteResult> {
+public class ClusteredPositionDeleteWriter<T>
+    extends ClusteredWriter<PositionDelete<T>, SortedPositionDeleteWriter<T>, DeleteWriteResult> {
 
     private final FileWriterFactory<T> writerFactory;
     private final OutputFileFactory fileFactory;
@@ -58,9 +58,9 @@ public class ClusteredPositionDeleteWriter<T> extends ClusteredWriter<PositionDe
     }
 
     @Override
-    protected TrackedFileWriter<PositionDelete<T>, DeleteWriteResult> newWriter(PartitionSpec spec, StructLike partition) {
+    protected SortedPositionDeleteWriter<T> newWriter(PartitionSpec spec, StructLike partition) {
         var writer = new RollingPositionDeleteWriter<>(writerFactory, fileFactory, io, targetFileSizeInBytes, spec, partition);
-        return TrackedFileWriter.wrap(writer);
+        return new SortedPositionDeleteWriter<>(writer);
     }
 
     @Override

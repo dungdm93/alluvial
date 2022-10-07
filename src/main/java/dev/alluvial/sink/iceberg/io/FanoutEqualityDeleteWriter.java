@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package dev.alluvial.sink.iceberg.io;
 
 import org.apache.iceberg.DeleteFile;
@@ -27,7 +26,6 @@ import org.apache.iceberg.io.FileIO;
 import org.apache.iceberg.io.FileWriterFactory;
 import org.apache.iceberg.io.OutputFileFactory;
 import org.apache.iceberg.io.RollingEqualityDeleteWriter;
-import org.apache.iceberg.io.TrackedFileWriter;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 
@@ -37,7 +35,9 @@ import java.util.List;
  * An equality delete writer capable of writing to multiple specs and partitions that keeps
  * delete writers for each seen spec/partition pair open until this writer is closed.
  */
-public class FanoutEqualityDeleteWriter<T> extends FanoutWriter<T, DeleteWriteResult> {
+public class FanoutEqualityDeleteWriter<T>
+    extends FanoutWriter<T, RollingEqualityDeleteWriter<T>, DeleteWriteResult>
+    implements TrackedPartitioningWriter<T, DeleteWriteResult> {
 
     private final FileWriterFactory<T> writerFactory;
     private final OutputFileFactory fileFactory;
@@ -55,9 +55,19 @@ public class FanoutEqualityDeleteWriter<T> extends FanoutWriter<T, DeleteWriteRe
     }
 
     @Override
-    protected TrackedFileWriter<T, DeleteWriteResult> newWriter(PartitionSpec spec, StructLike partition) {
-        var writer = new RollingEqualityDeleteWriter<>(writerFactory, fileFactory, io, targetFileSizeInBytes, spec, partition);
-        return TrackedFileWriter.wrap(writer);
+    public PathOffset trackedWrite(T row, PartitionSpec spec, StructLike partition) {
+        write(row, spec, partition);
+
+        @SuppressWarnings("resource")
+        var writer = writer(spec, partition);
+        var path = writer.currentFilePath();
+        var offset = writer.currentFileRows() - 1;
+        return PathOffset.of(path, offset);
+    }
+
+    @Override
+    protected RollingEqualityDeleteWriter<T> newWriter(PartitionSpec spec, StructLike partition) {
+        return new RollingEqualityDeleteWriter<>(writerFactory, fileFactory, io, targetFileSizeInBytes, spec, partition);
     }
 
     @Override

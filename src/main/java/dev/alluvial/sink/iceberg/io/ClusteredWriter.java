@@ -16,15 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package dev.alluvial.sink.iceberg.io;
 
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.StructLike;
 import org.apache.iceberg.encryption.EncryptedOutputFile;
+import org.apache.iceberg.io.FileWriter;
 import org.apache.iceberg.io.HelpersKt;
 import org.apache.iceberg.io.OutputFileFactory;
-import org.apache.iceberg.io.TrackedFileWriter;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.Sets;
 import org.apache.iceberg.types.Comparators;
@@ -44,7 +43,7 @@ import java.util.Set;
  * the memory consumption. Prefer using this writer whenever the incoming records can be clustered
  * by spec/partition.
  */
-abstract class ClusteredWriter<T, R> implements PartitioningWriter<T, R> {
+abstract class ClusteredWriter<T, W extends FileWriter<T, R>, R> implements PartitioningWriter<T, R> {
 
     private static final String NOT_CLUSTERED_ROWS_ERROR_MSG_TEMPLATE =
         "Incoming records violate the writer assumption that records are clustered by spec and " +
@@ -57,18 +56,18 @@ abstract class ClusteredWriter<T, R> implements PartitioningWriter<T, R> {
     private Comparator<StructLike> partitionComparator = null;
     private Set<StructLike> completedPartitions = null;
     private StructLike currentPartition = null;
-    private TrackedFileWriter<T, R> currentWriter = null;
+    protected W currentWriter = null;
 
     private boolean closed = false;
 
-    protected abstract TrackedFileWriter<T, R> newWriter(PartitionSpec spec, StructLike partition);
+    protected abstract W newWriter(PartitionSpec spec, StructLike partition);
 
     protected abstract void addResult(R result);
 
     protected abstract R aggregatedResult();
 
     @Override
-    public PathOffset write(T row, PartitionSpec spec, StructLike partition) {
+    public void write(T row, PartitionSpec spec, StructLike partition) {
         if (!spec.equals(currentSpec)) {
             if (currentSpec != null) {
                 closeCurrentWriter();
@@ -104,7 +103,7 @@ abstract class ClusteredWriter<T, R> implements PartitioningWriter<T, R> {
             this.currentWriter = newWriter(currentSpec, currentPartition);
         }
 
-        return currentWriter.trackedWrite(row);
+        currentWriter.write(row);
     }
 
     @Override
