@@ -70,7 +70,7 @@ dependencies {
     runtimeOnly("org.apache.kafka:connect-json:$kafkaVersion")
     runtimeOnly("io.confluent:kafka-connect-json-schema-converter:$confluentVersion")
     runtimeOnly("io.confluent:kafka-connect-protobuf-converter:$confluentVersion")
-    runtimeOnly("io.confluent:kafka-connect-avro-converter:$confluentVersion")
+    implementation("io.confluent:kafka-connect-avro-converter:$confluentVersion")
 
     // Iceberg
     implementation("org.apache.iceberg:iceberg-core:$icebergVersion")

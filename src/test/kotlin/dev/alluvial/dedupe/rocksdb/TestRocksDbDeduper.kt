@@ -1,10 +1,7 @@
 package dev.alluvial.dedupe.rocksdb
 
 import com.google.common.primitives.Longs
-import dev.alluvial.dedupe.backend.rocksdb.BasicRecordSerializer
-import dev.alluvial.dedupe.backend.rocksdb.RocksDbClient
-import dev.alluvial.dedupe.backend.rocksdb.RocksDbDeduper
-import dev.alluvial.dedupe.backend.rocksdb.RocksDbDeduperProvider
+import dev.alluvial.dedupe.backend.rocksdb.*
 import dev.alluvial.runtime.DeduplicationConfig
 import dev.alluvial.sink.iceberg.type.KafkaStruct
 import dev.alluvial.source.kafka.structSchema
@@ -12,7 +9,6 @@ import org.apache.iceberg.catalog.TableIdentifier
 import org.apache.kafka.connect.data.Schema
 import org.apache.kafka.connect.sink.SinkRecord
 import org.junit.jupiter.api.*
-import org.junit.jupiter.api.io.TempDir
 import java.io.File
 
 class TestRocksDbDeduper {
@@ -22,7 +18,8 @@ class TestRocksDbDeduper {
         private lateinit var client: RocksDbClient
         private lateinit var deduperProvider: RocksDbDeduperProvider<SinkRecord>
         private lateinit var deduper: RocksDbDeduper<SinkRecord>
-        private val serializer = BasicRecordSerializer(listOf("id"))
+//        private val serializer = BasicRecordSerializer(listOf("id"))
+        private val serializer = AvroSerializer(emptyMap())
         private const val table = "this is table!!"
 
         @JvmStatic
@@ -108,7 +105,7 @@ class TestRocksDbDeduper {
         Assertions.assertFalse(deduper.contains(record))
     }
 
-    fun verifyRecordsExist(vararg records: SinkRecord) {
+    private fun verifyRecordsExist(vararg records: SinkRecord) {
         records.forEach {
             Assertions.assertTrue(client.hasKey(table, serializer.serialize(it)))
         }

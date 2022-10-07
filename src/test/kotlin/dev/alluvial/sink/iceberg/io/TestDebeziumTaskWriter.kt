@@ -1,9 +1,6 @@
 package dev.alluvial.sink.iceberg.io
 
-import dev.alluvial.dedupe.backend.rocksdb.BasicRecordSerializer
-import dev.alluvial.dedupe.backend.rocksdb.RocksDbClient
-import dev.alluvial.dedupe.backend.rocksdb.RocksDbDeduper
-import dev.alluvial.dedupe.backend.rocksdb.RocksDbDeduperProvider
+import dev.alluvial.dedupe.backend.rocksdb.*
 import dev.alluvial.runtime.DeduplicationConfig
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
@@ -347,7 +344,8 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
         val config = DeduplicationConfig(kind = "rocksdb", path = rockDBPath.path)
         val client = RocksDbClient.getOrCreate(config)
         val deduperProvider = RocksDbDeduperProvider<SinkRecord>(client)
-        val serializer = BasicRecordSerializer(listOf("id"))
+//        val serializer = BasicRecordSerializer(listOf("id"))
+        val serializer = AvroSerializer(emptyMap())
         val deduper = deduperProvider.create(TableIdentifier.of(tableName), serializer)
 
         // "read" event => upsert record & put to cache
