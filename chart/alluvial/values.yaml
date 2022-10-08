@@ -15,6 +15,9 @@ serviceAccount:
   annotations: {}
 
 configs: {}
+logging:
+  ROOT: INFO
+  org.apache.hadoop: WARN
 
 commons:
   env: []
