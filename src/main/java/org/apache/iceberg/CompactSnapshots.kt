@@ -25,6 +25,7 @@ import org.apache.iceberg.io.DataWriteResult
 import org.apache.iceberg.io.DeleteWriteResult
 import org.apache.iceberg.io.OutputFileFactory
 import org.apache.iceberg.io.WriteResult
+import org.apache.iceberg.types.Comparators
 import org.apache.iceberg.types.TypeUtil
 import org.apache.iceberg.util.PropertyUtil
 import org.apache.iceberg.util.StructLikeMap
@@ -56,6 +57,7 @@ class CompactSnapshots(
         private val logger = LoggerFactory.getLogger(CompactSnapshots::class.java)
         private val PARTITION_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneOffset.UTC)
         private val TASK_FORMATTER = DateTimeFormatter.ofPattern("HHmmss").withZone(ZoneOffset.UTC)
+        private val contentFileComparator = Comparator.comparing(ContentFile<*>::path, Comparators.charSequences())
     }
 
     private val io = table.io()
@@ -182,6 +184,8 @@ class CompactSnapshots(
         partition: StructLike,
         files: List<FileScanTask>
     ) {
+        logger.info("rewrite DATA for partition={} with {} FileScanTasks", partition, files.size)
+        if (logger.isDebugEnabled) logging(files)
         val reader = GenericReader(io, schema)
         val iterable = reader.openTask(files)
 
@@ -252,6 +256,8 @@ class CompactSnapshots(
         partition: StructLike,
         files: List<DeleteFile>
     ) {
+        logger.info("rewrite EQUALITY_DELETES for partition={} with {} DeleteFiles", partition, files.size)
+        if (logger.isDebugEnabled) logging(files)
         // reuseContainers=false to give each record its own object
         // otherwise transform(Record::copy) is need because delete records will be held in a set
         val reader = GenericReader(io, deleteSchema, reuseContainers = false)
@@ -325,6 +331,26 @@ class CompactSnapshots(
             } catch (ioe: IOException) {
                 logger.error("Cannot properly close this resource", ioe)
             }
+        }
+    }
+
+    @JvmName("loggingFileScanTasks")
+    private fun logging(tasks: List<FileScanTask>) {
+        tasks.forEachIndexed { idx, task ->
+            logger.debug(
+                "#{} {}={} | filesCount={}, totalSizeBytes={}", idx, task.file().content(), task.file().path(),
+                task.filesCount(), task.sizeBytes()
+            )
+            task.deletes().sortedWith(contentFileComparator).forEach {
+                logger.debug("#{}  | {}={}", idx, it.content(), it.path())
+            }
+        }
+    }
+
+    @JvmName("loggingContentFiles")
+    private fun logging(files: List<ContentFile<*>>) {
+        files.sortedWith(contentFileComparator).forEach {
+            logger.debug("{}={}", it.content(), it.path())
         }
     }
 
