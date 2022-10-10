@@ -50,6 +50,7 @@ sink:
         - column: last_update
           transform: month
           name: lum
+<<<<<<< HEAD
 
 stream:
   kind: debezium
@@ -62,6 +63,46 @@ stream:
   dedupe:
     kind: rocksdb
     path: /tmp/dedupe
+
+      film_actor:
+        - column: last_update
+          transform: day
+      payment:
+        - column: last_update
+          transform: hour
+      rental:
+        - column: rental_date
+          transform: day
+      # Partitioned by multiple columns
+      customer:
+        - column: last_update
+          transform: year
+          name: p1
+        - column: first_name
+          transform: truncate[2]
+          name: p2
+        - column: last_name
+          transform: bucket[3]
+          name: p3
+      # Partitioned by multiple columns using the same transformation
+      staff:
+        - column: first_name
+          transform: truncate[2]
+        - column: last_name
+          transform: truncate[2]
+          name: last_name_trc2
+
+stream:
+  kind: debezium
+  examineInterval: "3m"
+  idleTimeout: "15m"
+  commitBatchSize: 1000
+  commitTimespan: "10m"
+
+  dedupe:
+    kind: rocksdb
+    path: /tmp/dedupe
+    ttl: 30
 
 manager:
   namespace: [ dvdrental ]
