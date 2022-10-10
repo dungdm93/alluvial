@@ -1,5 +1,6 @@
 {{- if .Values.tableManager.enabled }}
 {{- $tableManager := mergeOverwrite (deepCopy .Values.commons) .Values.tableManager -}}
+{{- $logback := dict "name" "ALLUVIAL_OPTS" "value" "-Dlogback.configurationFile=/etc/alluvial/logback.xml" -}}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -44,7 +45,7 @@ spec:
           command: [alluvial]
           args: [manage, /etc/alluvial/config.yaml]
           env:
-            {{- toYaml $tableManager.env | nindent 12 }}
+            {{- toYaml (append $tableManager.env $logback) | nindent 12 }}
           ports:
           - name: metrics
             protocol: TCP

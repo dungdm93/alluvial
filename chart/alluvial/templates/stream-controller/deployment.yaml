@@ -1,4 +1,5 @@
 {{- $streamController := mergeOverwrite (deepCopy .Values.commons) .Values.streamController -}}
+{{- $logback := dict "name" "ALLUVIAL_OPTS" "value" "-Dlogback.configurationFile=/etc/alluvial/logback.xml" -}}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -43,7 +44,7 @@ spec:
           command: [alluvial]
           args: [stream, /etc/alluvial/config.yaml]
           env:
-            {{- toYaml $streamController.env | nindent 12 }}
+            {{- toYaml (append $streamController.env $logback) | nindent 12 }}
           ports:
             - name: metrics
               protocol: TCP
