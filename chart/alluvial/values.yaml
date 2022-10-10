@@ -37,4 +37,5 @@ commons:
   nodeSelector: {}
 
 streamController: {}
-tableManager: {}
+tableManager:
+  enabled: true
