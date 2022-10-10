@@ -162,6 +162,5 @@ data class DeduplicationConfig(
     init {
         require(kind.isNotEmpty()) { "sink.dedupe.kind cannot be empty" }
         require(path.isNotEmpty()) { "sink.dedupe.path cannot be empty" }
-        require(ttl >= 300){ "Time-to-live must be larger than 5 minutes" }
     }
 }
