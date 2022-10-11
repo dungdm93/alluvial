@@ -33,7 +33,7 @@ public class ServiceClientMetricCollector implements ClientMetricCollector {
     public ServiceClientMetricCollector(String serviceId, MeterRegistry registry, Tags tags) {
         this.serviceId = serviceId;
         this.registry = registry;
-        this.tags = tags.and("service", serviceId);
+        this.tags = tags.and("aws.service", serviceId);
         this.prefix = String.format("aws.%s", serviceId.toLowerCase());
         this.operationMetrics = new ConcurrentHashMap<>();
     }
