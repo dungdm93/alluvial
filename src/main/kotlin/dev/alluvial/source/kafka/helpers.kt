@@ -13,21 +13,17 @@ inline fun structSchema(version: Int = 1, block: SchemaBuilder.() -> Unit): Kafk
     return SchemaBuilder.struct().also(block).version(version).build()
 }
 
-fun KafkaStruct.sourceTimestamp(): Long? {
-    val source = (this["source"] as KafkaStruct?) ?: return null
-    return source["ts_ms"] as Long?
+fun SinkRecord.source(): KafkaStruct? {
+    val value = (this.value() as KafkaStruct?) ?: return null
+    return value.getStruct("source")
 }
 
 fun SinkRecord.sourceTimestamp(): Long? {
-    val value = (this.value() as KafkaStruct?) ?: return null
-    return value.sourceTimestamp()
-}
-
-fun KafkaStruct.debeziumTimestamp(): Long? {
-    return this["ts_ms"] as Long?
+    val source = this.source() ?: return null
+    return source.getInt64("ts_ms")
 }
 
 fun SinkRecord.debeziumTimestamp(): Long? {
     val value = (this.value() as KafkaStruct?) ?: return null
-    return value.debeziumTimestamp()
+    return value.getInt64("ts_ms")
 }
