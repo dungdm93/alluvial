@@ -51,6 +51,10 @@ spec:
               containerPort: 9090
           volumeMounts:
             {{- include "alluvial.volumeMounts" . | nindent 12 }}
+            {{- if .Values.streamController.dedupe.enabled }}
+            - name: alluvial-dedupe
+              mountPath: {{ .Values.streamController.dedupe.path }}
+            {{- end  }}
           livenessProbe:
             httpGet:
               path: /-/healthy
@@ -67,6 +71,11 @@ spec:
         {{- toYaml $streamController.podSecurityContext | nindent 8 }}
       volumes:
         {{- include "alluvial.volumes" . | nindent 8 }}
+        {{- if .Values.streamController.dedupe.enabled }}
+        - name: alluvial-dedupe
+          persistentVolumeClaim:
+            claimName: {{ include "alluvial.fullname" . }}{{ .Values.separator }}dedupe-pvc
+        {{- end }}
       {{- with $streamController.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

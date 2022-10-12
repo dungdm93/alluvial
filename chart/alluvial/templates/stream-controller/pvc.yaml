@@ -1,0 +1,22 @@
+{{- $dedupe := .Values.streamController.dedupe }}
+{{- if $dedupe.enabled }}
+{{- $streamController := mergeOverwrite (deepCopy .Values.commons) .Values.streamController -}}
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: {{ include "alluvial.fullname" . }}{{ .Values.separator }}dedupe-pvc
+  labels:
+    {{- include "alluvial.streamController.labels" . | nindent 4 }}
+    {{- with $streamController.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  storageClassName: {{ $dedupe.storageClass }}
+  resources:
+    requests:
+      storage: {{ $dedupe.volumeSize }}
+  accessModes:
+    - {{ $dedupe.accessMode }}
+  volumeMode: Filesystem
+{{- end }}
