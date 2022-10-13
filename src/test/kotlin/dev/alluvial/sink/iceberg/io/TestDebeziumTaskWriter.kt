@@ -3,8 +3,11 @@ package dev.alluvial.sink.iceberg.io
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
 import dev.alluvial.source.kafka.structSchema
+import dev.alluvial.stream.debezium.RecordTracker
 import io.micrometer.core.instrument.Tags
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import io.mockk.every
+import io.mockk.mockk
 import org.apache.iceberg.FileFormat
 import org.apache.iceberg.PartitionSpec
 import org.apache.iceberg.TableProperties
@@ -32,6 +35,7 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
 
     private val format = FileFormat.AVRO
     private val offset = AtomicLong()
+    private lateinit var tracker: RecordTracker
     private lateinit var kafkaSchema: KafkaSchema
     private lateinit var envelopeSchema: KafkaSchema
 
@@ -40,6 +44,9 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
         this.tableDir = temp.newFolder()
         Assert.assertTrue(tableDir.delete()) // created by table create
         this.metadataDir = File(tableDir, "metadata")
+        tracker = mockk {
+            every { maybeDuplicate(any()) } returns false
+        }
     }
 
     private fun fieldId(name: String): Int {
@@ -237,6 +244,7 @@ internal class TestDebeziumTaskWriter : TableTestBase(TABLE_VERSION) {
             kafkaSchema,
             table.schema(),
             equalityFieldIds.toSet(),
+            tracker,
             SimpleMeterRegistry(),
             Tags.of("outlet", table.name())
         )

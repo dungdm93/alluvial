@@ -32,7 +32,7 @@ import java.io.File
 internal class TestDebeziumStreamlet {
     companion object {
         private const val topic = "topic"
-        private val streamConfig = StreamConfig("iceberg")
+        private val streamConfig = StreamConfig("iceberg", "mysql")
         private val registry = SimpleMeterRegistry()
         private val recordSchema = structSchema {
             field("id", Schema.INT32_SCHEMA)
@@ -55,6 +55,7 @@ internal class TestDebeziumStreamlet {
     @TempDir
     private lateinit var tmpDir: File
     private lateinit var table: Table
+    private lateinit var tracker: RecordTracker
 
     private fun record(
         keySchema: Schema? = defaultKeySchema, key: KafkaStruct? = defaultKey,
@@ -83,6 +84,9 @@ internal class TestDebeziumStreamlet {
         assert(tmpDir.deleteRecursively()) { "folder should be deleted" }
         val iSchema = defaultValueSchema.toIcebergSchema()
         table = TestTables.create(tmpDir, "table", iSchema, PartitionSpec.unpartitioned(), 2)
+        tracker = mockk(relaxed = true) {
+            every { maybeDuplicate(any()) } returns false
+        }
     }
 
     @AfterEach
@@ -98,7 +102,7 @@ internal class TestDebeziumStreamlet {
     }
 
     private fun spyOutlet(): IcebergTableOutlet {
-        return spyk(IcebergTableOutlet(table.name(), table, registry))
+        return spyk(IcebergTableOutlet(table.name(), table, tracker, registry))
     }
 
     private fun spyStreamlet(
@@ -108,7 +112,7 @@ internal class TestDebeziumStreamlet {
         shouldRuns: List<Boolean>,
     ): DebeziumStreamlet {
         val handler = KafkaSchemaSchemaHandler(outlet)
-        return spyk(DebeziumStreamlet("streamlet", inlet, outlet, handler, config, registry)) {
+        return spyk(DebeziumStreamlet("streamlet", inlet, outlet, tracker, handler, config, registry)) {
             val streamlet = this
             every { streamlet["ensureOffsets"]() } answers { }
             every { shouldRun() } returnsMany shouldRuns

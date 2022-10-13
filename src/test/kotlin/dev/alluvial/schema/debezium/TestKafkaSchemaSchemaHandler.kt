@@ -4,11 +4,16 @@ import dev.alluvial.sink.iceberg.IcebergTableOutlet
 import dev.alluvial.sink.iceberg.type.IcebergSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
 import dev.alluvial.sink.iceberg.type.toIcebergSchema
+import dev.alluvial.source.kafka.structSchema
+import dev.alluvial.stream.debezium.RecordTracker
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import io.mockk.every
+import io.mockk.mockk
 import org.apache.iceberg.PartitionSpec
 import org.apache.iceberg.Table
 import org.apache.iceberg.TestTables
-import org.apache.kafka.connect.data.SchemaBuilder.*
+import org.apache.kafka.connect.data.SchemaBuilder.INT32_SCHEMA
+import org.apache.kafka.connect.data.SchemaBuilder.OPTIONAL_INT32_SCHEMA
 import org.apache.kafka.connect.sink.SinkRecord
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions
@@ -16,7 +21,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
-import dev.alluvial.source.kafka.structSchema
 
 internal class TestKafkaSchemaSchemaHandler {
     companion object {
@@ -43,6 +47,7 @@ internal class TestKafkaSchemaSchemaHandler {
     @TempDir
     private lateinit var tmpDir: File
     private lateinit var table: Table
+    private lateinit var tracker: RecordTracker
     private val formatVersion: Int = 2
 
     private fun createTable(iSchema: IcebergSchema, schemaVersion: String? = null) {
@@ -52,9 +57,12 @@ internal class TestKafkaSchemaSchemaHandler {
             updater.set(SCHEMA_VERSION_PROP, it)
             updater.commit()
         }
+        tracker = mockk {
+            every { maybeDuplicate(any()) } returns false
+        }
     }
 
-    private fun createOutlet() = IcebergTableOutlet(table.name(), table, SimpleMeterRegistry())
+    private fun createOutlet() = IcebergTableOutlet(table.name(), table, tracker, SimpleMeterRegistry())
 
     @BeforeEach
     fun before() {
