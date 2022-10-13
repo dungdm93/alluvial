@@ -10,7 +10,6 @@ import org.apache.iceberg.SnapshotSummary.EXTRA_METADATA_PREFIX
 import org.apache.iceberg.io.CloseableIterable
 import org.apache.iceberg.io.DeleteSchemaUtil
 import org.apache.iceberg.types.Types
-import org.apache.iceberg.util.PropertyUtil
 import org.apache.iceberg.util.SnapshotUtil
 
 fun PartitionSpec.Builder.addSpec(field: Types.NestedField, transform: String): PartitionSpec.Builder {
@@ -90,8 +89,8 @@ val mapper: JsonMapper = JsonMapper.builder()
     .build()
 internal val offsetsTypeRef = object : TypeReference<Map<Int, Long>>() {}
 
-fun Snapshot.sourceTimestampMillis(): Long {
-    return PropertyUtil.propertyAsLong(summary(), SOURCE_TIMESTAMP_PROP, Long.MIN_VALUE)
+fun Snapshot.sourceTimestampMillis(): Long? {
+    return summary()[SOURCE_TIMESTAMP_PROP]?.toLong()
 }
 
 fun Snapshot.sourceWALPosition(): WALPosition? {

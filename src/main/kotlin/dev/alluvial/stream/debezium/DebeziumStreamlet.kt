@@ -95,7 +95,7 @@ class DebeziumStreamlet(
         if (status != SUSPENDED) return false
 
         val lag = inlet.currentLag()
-        val committedTime = tracker.committedSourceTimestamp()
+        val committedTime = tracker.committedSourceTimestamp() ?: Long.MIN_VALUE
         return lag <= 0 && committedTime < clock.millis() - idleTimeoutMs
     }
 
