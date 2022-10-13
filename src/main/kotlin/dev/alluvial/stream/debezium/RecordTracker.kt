@@ -1,6 +1,7 @@
 package dev.alluvial.stream.debezium
 
 import dev.alluvial.sink.iceberg.type.IcebergTable
+import dev.alluvial.source.kafka.op
 import dev.alluvial.source.kafka.source
 import org.apache.iceberg.BROKER_OFFSETS_PROP
 import org.apache.iceberg.SOURCE_TIMESTAMP_PROP
@@ -98,16 +99,16 @@ class RecordTracker private constructor(
         val sourceWALPosition = lastSourceWALPosition.fromSource(source)
         if (lastSourceWALPosition < sourceWALPosition)
             lastSourceWALPosition = sourceWALPosition
-        else ordered = false
+        else ordered = ordered && lastSourceWALPosition == sourceWALPosition && "r" == record.op()
 
         if (!ordered)
             logger.warn(
                 "Receive un-ordered message at partition {}, offset {}\n" +
-                    "\tsourceTimestamp={}, WALPosition={}\n" +
-                    "\tlastSourceTimestamp={}, lastWALPosition={}",
+                    "\tlastSourceTimestamp={}, lastWALPosition={}\n" +
+                    "\tsourceTimestamp={}, WALPosition={}",
                 record.kafkaPartition(), record.kafkaOffset(),
+                lastSourceTimestamp, lastSourceWALPosition,
                 sourceTimestamp, sourceWALPosition,
-                lastSourceTimestamp, lastSourceWALPosition
             )
     }
 

@@ -45,6 +45,7 @@ data class SinkConfig(
 
 data class StreamConfig(
     val kind: String,
+    val connector: String,
 
     @JsonSerialize(using = DurationSerializer::class)
     @JsonDeserialize(using = DurationDeserializer::class)
@@ -64,6 +65,7 @@ data class StreamConfig(
 ) {
     init {
         require(kind.isNotEmpty()) { "stream.kind cannot be empty" }
+        require(connector.isNotEmpty()) { "stream.connector cannot be empty" }
     }
 }
 

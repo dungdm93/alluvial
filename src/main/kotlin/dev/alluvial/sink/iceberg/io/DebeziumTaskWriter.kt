@@ -3,6 +3,7 @@ package dev.alluvial.sink.iceberg.io
 import dev.alluvial.sink.iceberg.type.IcebergSchema
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
+import dev.alluvial.stream.debezium.RecordTracker
 import dev.alluvial.utils.TableTruncatedException
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
@@ -29,6 +30,7 @@ class DebeziumTaskWriter(
     sSchema: KafkaSchema,
     iSchema: IcebergSchema,
     equalityFieldIds: Set<Int>,
+    private val tracker: RecordTracker,
     registry: MeterRegistry,
     tags: Tags
 ) : TaskWriter<SinkRecord> {
@@ -55,21 +57,14 @@ class DebeziumTaskWriter(
         val value = record.value() as? KafkaStruct ?: return // Tombstone events
         val before = value.getStruct("before")
         val after = value.getStruct("after")
-        if (record.key() != null) {
-            key = keyer(record)
-        } else {
-            key = null
-        }
+        key = if (record.key() != null) keyer(record) else null
 
         val operation = value.getString("op")
         when (operation) {
             // read (snapshot) events
-            "r" -> {
-                delete(after) // ensure no duplicate data when re-snapshot
-                insert(after)
-            }
+            "r" -> insert(after, true) // forceDelete to ensure no duplicate data when re-snapshot
             // create events
-            "c" -> insert(after)
+            "c" -> insert(after, tracker.maybeDuplicate(record))
             // update events
             "u" -> {
                 delete(before)
@@ -93,11 +88,15 @@ class DebeziumTaskWriter(
         return false
     }
 
-    private fun insert(row: KafkaStruct) {
+    private fun insert(row: KafkaStruct, forceDelete: Boolean = false) {
         val partition = partitioner(row)
         val copiedKey = key.copy()!!
 
-        internalPosDelete(copiedKey, partition)
+        if (forceDelete) {
+            delete(row)
+        } else {
+            internalPosDelete(copiedKey, partition)
+        }
         val pathOffset = insertWriter.trackedWrite(row, spec, partition)
         insertedRowMap[copiedKey] = pathOffset
     }

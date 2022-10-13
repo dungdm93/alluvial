@@ -53,6 +53,7 @@ sink:
 
 stream:
   kind: debezium
+  connector: mysql
   examineInterval: 3m
   idleTimeout: 15m
   commitBatchSize: 1000

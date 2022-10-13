@@ -61,11 +61,12 @@ class StreamController : Runnable {
             .bindJvmMetrics()
             .bindSystemMetrics()
             .bindAwsClientMetrics()
+        val connector = config.stream.connector
 
         source = KafkaSource(config.source, registry)
         sink = IcebergSink(config.sink, registry)
         val tableCreator = KafkaSchemaTableCreator(source, sink, config.sink.tableCreation)
-        streamletFactory = DebeziumStreamletFactory(source, sink, tableCreator, config.stream, registry)
+        streamletFactory = DebeziumStreamletFactory(connector, source, sink, tableCreator, config.stream, registry)
         examineInterval = config.stream.examineInterval
     }
 

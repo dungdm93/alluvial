@@ -5,6 +5,7 @@ import dev.alluvial.sink.iceberg.io.DebeziumTaskWriterFactory
 import dev.alluvial.sink.iceberg.type.IcebergTable
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.source.kafka.fieldSchema
+import dev.alluvial.stream.debezium.RecordTracker
 import io.micrometer.core.instrument.DistributionSummary
 import io.micrometer.core.instrument.LongTaskTimer
 import io.micrometer.core.instrument.MeterRegistry
@@ -13,11 +14,9 @@ import io.micrometer.core.instrument.Timer
 import org.apache.iceberg.AlluvialRowDelta
 import org.apache.iceberg.ContentFile
 import org.apache.iceberg.FileContent
-import org.apache.iceberg.brokerOffsets
 import org.apache.iceberg.expressions.Expressions
 import org.apache.iceberg.io.TaskWriter
 import org.apache.iceberg.io.WriteResult
-import org.apache.iceberg.sourceTimestampMillis
 import org.apache.kafka.connect.sink.SinkRecord
 import org.slf4j.LoggerFactory
 import java.io.Closeable
@@ -28,6 +27,7 @@ import java.util.function.Supplier
 class IcebergTableOutlet(
     val name: String,
     val table: IcebergTable,
+    val tracker: RecordTracker,
     registry: MeterRegistry,
 ) : Outlet {
     companion object {
@@ -36,7 +36,7 @@ class IcebergTableOutlet(
 
     private val metrics = Metrics(registry)
     private var writer: TaskWriter<SinkRecord>? = null
-    private val writerFactory = DebeziumTaskWriterFactory(table, registry, Tags.of("outlet", name))
+    private val writerFactory = DebeziumTaskWriterFactory(table, tracker, registry, Tags.of("outlet", name))
 
     fun write(record: SinkRecord) {
         if (writer == null) {
