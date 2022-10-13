@@ -63,6 +63,9 @@ class RocksDbDeduper<R>(
         client.writeBatch(table, addedBatch, deletedBatch)
         logger.info("Added {} records to cache", addedBatch.size)
         logger.info("Deleted {} records from cache", deletedEntries.size)
+
+        client.flush(table)
+        logger.info("Flushed memtable of table {}", table)
         // Clear record sets
         abort()
     }

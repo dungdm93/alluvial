@@ -3,14 +3,7 @@ package dev.alluvial.dedupe.backend.rocksdb
 import com.google.common.base.Preconditions
 import dev.alluvial.dedupe.DedupeBackend
 import dev.alluvial.runtime.DeduplicationConfig
-import org.rocksdb.RocksDB
-import org.rocksdb.Options
-import org.rocksdb.DBOptions
-import org.rocksdb.ColumnFamilyHandle
-import org.rocksdb.ColumnFamilyDescriptor
-import org.rocksdb.TtlDB
-import org.rocksdb.WriteBatch
-import org.rocksdb.WriteOptions
+import org.rocksdb.*
 import org.slf4j.LoggerFactory
 import org.rocksdb.ColumnFamilyOptions as CFOptions
 
@@ -78,7 +71,7 @@ class RocksDbClient private constructor(val path: String, private val ttl: Int, 
         } else {
             val descriptors = existingCfNames.map { ColumnFamilyDescriptor(it) }
             val handles = mutableListOf<ColumnFamilyHandle>()
-            val ttls = List(descriptors.size) { _ -> ttl}
+            val ttls = List(descriptors.size) { _ -> ttl }
 
             db = TtlDB.open(DBOptions(options), path, descriptors, handles, ttls, false)
             cfHandles.putAll(existingCfNames.zip(handles).map { (k, v) -> Pair(k.toTableName(), v) })
@@ -147,9 +140,11 @@ class RocksDbClient private constructor(val path: String, private val ttl: Int, 
         addedEntries.forEach { updates.put(handle, it.key, it.value) }
         deletedEntries.forEach { updates.delete(handle, it) }
         // TODO: configure writeOptions
-        WriteOptions().use {
-            db.write(it, updates)
-        }
+        WriteOptions()
+            .setSync(true)
+            .use {
+                db.write(it, updates)
+            }
         logger.info("Put {} records into table '{}'", addedEntries.size, table)
         logger.info("Delete {} records from table '{}'", deletedEntries.count(), table)
     }
@@ -158,5 +153,15 @@ class RocksDbClient private constructor(val path: String, private val ttl: Int, 
         logger.info("Truncating table '{}'!", table)
         dropTableIfExists(table)
         createTableIfNeeded(table)
+    }
+
+    fun flush(table: String) {
+        val handle = tableHandle(table)
+        FlushOptions()
+            .setWaitForFlush(true)
+            .setAllowWriteStall(true)
+            .use {
+                db.flush(it, handle)
+            }
     }
 }
