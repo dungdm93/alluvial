@@ -87,22 +87,6 @@ class IcebergTableOutlet(
         overwrite.commit()
     }
 
-    /**
-     * @return offsets of last snapshot or null
-     * if outlet doesn't have any snapshot.
-     */
-    fun committedBrokerOffsets(): Map<Int, Long> {
-        return table.currentSnapshot()?.brokerOffsets() ?: emptyMap()
-    }
-
-    /**
-     * @return timestamp in millisecond of last record committed or null
-     * if outlet doesn't have any snapshot.
-     */
-    fun committedSourceTimestamp(): Long {
-        return table.currentSnapshot()?.sourceTimestampMillis() ?: Long.MIN_VALUE
-    }
-
     override fun close() {
         writer?.abort()
     }
