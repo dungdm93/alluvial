@@ -4,6 +4,7 @@ import com.google.common.base.Preconditions
 import dev.alluvial.dedupe.Deduper
 import dev.alluvial.dedupe.RecordSerializer
 import org.apache.iceberg.relocated.com.google.common.primitives.Longs
+import org.apache.kafka.connect.sink.SinkRecord
 import org.slf4j.LoggerFactory
 
 class RocksDbDeduper<R>(
@@ -15,20 +16,22 @@ class RocksDbDeduper<R>(
         private val logger = LoggerFactory.getLogger(RocksDbDeduper::class.java)
     }
 
-    protected val addedEntries = mutableSetOf<R>()
-    protected val deletedEntries = mutableSetOf<R>()
+    protected val addedEntries = mutableSetOf<String>()
+    protected val deletedEntries = mutableSetOf<String>()
     private var toTruncate = false
 
     override fun add(record: R) {
         Preconditions.checkArgument(!toTruncate, "Cache clear operation must be committed in advance")
-        addedEntries.add(record)
-        deletedEntries.remove(record)
+        val key = serializer.serialize(record).decodeToString()
+        addedEntries.add(key)
+        deletedEntries.remove(key)
     }
 
     override fun remove(record: R) {
         Preconditions.checkArgument(!toTruncate, "Cache clear operation must be committed in advance")
-        deletedEntries.add(record)
-        addedEntries.remove(record)
+        val key = serializer.serialize(record).decodeToString()
+        deletedEntries.add(key)
+        addedEntries.remove(key)
     }
 
     override fun abort() {
@@ -37,8 +40,8 @@ class RocksDbDeduper<R>(
     }
 
     override fun contains(record: R): Boolean {
-        if (addedEntries.contains(record)) return true
         val key = serializer.serialize(record)
+        if (addedEntries.contains(key.decodeToString())) return true
         return client.hasKey(table, key)
     }
 
@@ -57,9 +60,9 @@ class RocksDbDeduper<R>(
         }
 
         val timestamp = Longs.toByteArray(System.currentTimeMillis())
-        val addedBatch = addedEntries.map(serializer::serialize)
+        val addedBatch = addedEntries.map(String::encodeToByteArray)
             .associateWithTo(mutableMapOf<ByteArray, ByteArray>()) { timestamp }
-        val deletedBatch = deletedEntries.map(serializer::serialize)
+        val deletedBatch = deletedEntries.map(String::encodeToByteArray)
         client.writeBatch(table, addedBatch, deletedBatch)
         logger.info("Added {} records to cache", addedBatch.size)
         logger.info("Deleted {} records from cache", deletedEntries.size)

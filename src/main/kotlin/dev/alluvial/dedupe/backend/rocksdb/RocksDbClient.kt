@@ -4,6 +4,7 @@ import com.google.common.base.Preconditions
 import dev.alluvial.dedupe.DedupeBackend
 import dev.alluvial.runtime.DeduplicationConfig
 import org.rocksdb.*
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.rocksdb.ColumnFamilyOptions as CFOptions
 
@@ -18,6 +19,7 @@ class RocksDbClient private constructor(val path: String, private val ttl: Int, 
         private const val DATABASE_OPT_PREFIX = "db."
         private const val COLUMN_FAMILY_OPT_PREFIX = "cf."
         private var instance: RocksDbClient? = null
+        private lateinit var rocksDbLogger: RocksDbLogger
 
         fun getOrCreate(config: DeduplicationConfig): RocksDbClient {
             Preconditions.checkArgument(
@@ -38,8 +40,12 @@ class RocksDbClient private constructor(val path: String, private val ttl: Int, 
             val dbProps = config.filterConfig(DATABASE_OPT_PREFIX).toProperties()
             val dbOptions = if (dbProps.isEmpty) DBOptions() else DBOptions.getDBOptionsFromProps(dbProps)
             // Hard-coded options
-            dbOptions.setCreateIfMissing(true)
-            dbOptions.setCreateMissingColumnFamilies(true)
+            rocksDbLogger = RocksDbLogger(logger, dbOptions)
+            rocksDbLogger.setInfoLogLevel(InfoLogLevel.ERROR_LEVEL)
+            dbOptions
+                .setCreateIfMissing(true)
+                .setCreateMissingColumnFamilies(true)
+                .setLogger(rocksDbLogger)
 
             val cfProps = config.filterConfig(COLUMN_FAMILY_OPT_PREFIX).toProperties()
             val cfOptions =
@@ -71,7 +77,7 @@ class RocksDbClient private constructor(val path: String, private val ttl: Int, 
         } else {
             val descriptors = existingCfNames.map { ColumnFamilyDescriptor(it) }
             val handles = mutableListOf<ColumnFamilyHandle>()
-            val ttls = List(descriptors.size) { _ -> ttl }
+            val ttls = List(descriptors.size) { ttl }
 
             db = TtlDB.open(DBOptions(options), path, descriptors, handles, ttls, false)
             cfHandles.putAll(existingCfNames.zip(handles).map { (k, v) -> Pair(k.toTableName(), v) })
@@ -105,6 +111,7 @@ class RocksDbClient private constructor(val path: String, private val ttl: Int, 
     override fun close() {
         db.closeE()
         options.close()
+        rocksDbLogger.close()
         instance = null
     }
 
@@ -163,5 +170,16 @@ class RocksDbClient private constructor(val path: String, private val ttl: Int, 
             .use {
                 db.flush(it, handle)
             }
+    }
+
+    class RocksDbLogger(private val logger: Logger, options: DBOptions) : org.rocksdb.Logger(options) {
+        override fun log(infoLogLevel: InfoLogLevel?, logMsg: String?) {
+            when (infoLogLevel) {
+                InfoLogLevel.DEBUG_LEVEL -> logger.debug(logMsg)
+                InfoLogLevel.INFO_LEVEL -> logger.info(logMsg)
+                InfoLogLevel.WARN_LEVEL -> logger.warn(logMsg)
+                else -> logger.error(logMsg)
+            }
+        }
     }
 }
