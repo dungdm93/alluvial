@@ -2,7 +2,6 @@ package dev.alluvial.sink.iceberg.io
 
 import io.mockk.every
 import io.mockk.mockk
-import org.apache.iceberg.PartitionSpec
 import org.apache.kafka.connect.sink.SinkRecord
 import org.junit.Assert
 import org.junit.Before
@@ -14,26 +13,21 @@ import org.junit.runners.Parameterized.Parameters
 @Suppress("SameParameterValue")
 @RunWith(Parameterized::class)
 internal class TestDebeziumTaskWriterCommons(
-    private val spec: PartitionSpec
+    private val parCol: String?
 ) : TestDebeziumTaskWriterBase() {
     companion object {
         @JvmStatic
-        @Parameters(name = "PartitionSpec={0}")
-        fun parameters(): Collection<PartitionSpec> {
-            val unpartitioned = PartitionSpec.unpartitioned()
-            val partitionByData = PartitionSpec.builderFor(SCHEMA)
-                .identity("data")
-                .build()
-
-            return listOf(unpartitioned, partitionByData)
+        @Parameters(name = "partition={0}")
+        fun parameters(): Collection<String?> {
+            return listOf(null, "data")
         }
     }
 
-    private val partitioned = spec.isPartitioned
+    private val partitioned = parCol != null
 
     @Before
     override fun setupTable() {
-        createTable(spec)
+        createTable(parCol)
         tracker = mockk {
             every { maybeDuplicate(any()) } returns false
             every { update(any()) } answers {}

@@ -9,21 +9,7 @@ import dev.alluvial.stream.debezium.WALPosition
 import org.apache.iceberg.SnapshotSummary.EXTRA_METADATA_PREFIX
 import org.apache.iceberg.io.CloseableIterable
 import org.apache.iceberg.io.DeleteSchemaUtil
-import org.apache.iceberg.types.Types
 import org.apache.iceberg.util.SnapshotUtil
-
-fun PartitionSpec.Builder.addSpec(field: Types.NestedField, transform: String): PartitionSpec.Builder {
-    return this.addSpec(field, transform, null)
-}
-
-fun PartitionSpec.Builder.addSpec(field: Types.NestedField, transform: String, name: String?): PartitionSpec.Builder {
-    val targetName = when {
-        !name.isNullOrEmpty() -> name
-        transform.contains('[') -> field.name() + "_" + transform.substring(0, transform.indexOf('['))
-        else -> field.name() + "_" + transform
-    }
-    return this.add(field.fieldId(), targetName.lowercase(), transform)
-}
 
 /////////////////// Table ///////////////////
 fun Table.currentSnapshotId(): Long? {

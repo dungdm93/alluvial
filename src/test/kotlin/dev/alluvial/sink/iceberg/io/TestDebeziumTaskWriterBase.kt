@@ -8,8 +8,10 @@ import io.micrometer.core.instrument.Tags
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.apache.iceberg.FileFormat
 import org.apache.iceberg.PartitionSpec
+import org.apache.iceberg.SortOrder
 import org.apache.iceberg.Table
 import org.apache.iceberg.TableTestBase
+import org.apache.iceberg.TestTables
 import org.apache.iceberg.data.GenericRecord
 import org.apache.iceberg.data.IcebergGenerics
 import org.apache.iceberg.data.Record
@@ -46,18 +48,21 @@ internal open class TestDebeziumTaskWriterBase : TableTestBase(2) {
         field("id", KafkaSchema.STRING_SCHEMA)
     }
 
-    protected fun createTable(spec: PartitionSpec) {
+    protected fun createTable(parCol: String?) {
         tableDir = temp.newFolder()
         Assert.assertTrue(tableDir.delete()) // created by table create
         metadataDir = File(tableDir, "metadata")
 
-        table = create(SCHEMA, spec)
-        table.updateSchema()
-            .setIdentifierFields("id")
-            .commit()
-        table.updateProperties()
-            .defaultFormat(FileFormat.AVRO)
-            .commit()
+        table = TestTables.create(
+            tableDir, "test",
+            SCHEMA, PartitionSpec.unpartitioned(), SortOrder.unsorted(), formatVersion
+        )
+        table.newTransaction().apply {
+            updateSchema().setIdentifierFields("id").commit()
+            if (parCol != null)
+                updateSpec().addField(parCol).commit()
+            updateProperties().defaultFormat(FileFormat.AVRO).commit()
+        }.commitTransaction()
     }
 
     protected fun createTaskWriter(sSchema: KafkaSchema): TaskWriter<SinkRecord> {
