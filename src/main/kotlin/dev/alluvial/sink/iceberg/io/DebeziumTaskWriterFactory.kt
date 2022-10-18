@@ -1,6 +1,7 @@
 package dev.alluvial.sink.iceberg.io
 
 import dev.alluvial.sink.iceberg.type.KafkaSchema
+import dev.alluvial.stream.debezium.RecordTracker
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tags
 import org.apache.iceberg.FileFormat
@@ -16,6 +17,7 @@ import java.time.format.DateTimeFormatter
 
 class DebeziumTaskWriterFactory(
     private val table: Table,
+    private val tracker: RecordTracker,
     private val registry: MeterRegistry,
     private val tags: Tags
 ) {
@@ -82,6 +84,7 @@ class DebeziumTaskWriterFactory(
             dataKafkaSchema!!,
             table.schema(),
             table.schema().identifierFieldIds(),
+            tracker,
             registry,
             tags
         )

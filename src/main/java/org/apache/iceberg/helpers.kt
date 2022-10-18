@@ -2,26 +2,14 @@ package org.apache.iceberg
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.json.JsonMapper
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
+import com.fasterxml.jackson.module.kotlin.KotlinModule
 import dev.alluvial.sink.iceberg.filter
+import dev.alluvial.stream.debezium.WALPosition
 import org.apache.iceberg.SnapshotSummary.EXTRA_METADATA_PREFIX
 import org.apache.iceberg.io.CloseableIterable
 import org.apache.iceberg.io.DeleteSchemaUtil
-import org.apache.iceberg.types.Types
-import org.apache.iceberg.util.PropertyUtil
 import org.apache.iceberg.util.SnapshotUtil
-
-fun PartitionSpec.Builder.addSpec(field: Types.NestedField, transform: String): PartitionSpec.Builder {
-    return this.addSpec(field, transform, null)
-}
-
-fun PartitionSpec.Builder.addSpec(field: Types.NestedField, transform: String, name: String?): PartitionSpec.Builder {
-    val targetName = when {
-        !name.isNullOrEmpty() -> name
-        transform.contains('[') -> field.name() + "_" + transform.substring(0, transform.indexOf('['))
-        else -> field.name() + "_" + transform
-    }
-    return this.add(field.fieldId(), targetName.lowercase(), transform)
-}
 
 /////////////////// Table ///////////////////
 fun Table.currentSnapshotId(): Long? {
@@ -77,14 +65,23 @@ fun TableMetadata.isFastForward(snapshot: Snapshot): Boolean {
 /////////////////// Snapshot ///////////////////
 const val NOOP = "" // Special DataOperations for zero aggregate changes
 const val SOURCE_TIMESTAMP_PROP = "source-ts"
+const val SOURCE_WAL_POSITION_PROP = "source-wal-position"
 const val BROKER_OFFSETS_PROP = "broker-offsets"
 const val SQUASH_SNAPSHOTS_ID_PROP = "squash-snapshots-id"
 val POS_DELETE_SCHEMA: Schema = DeleteSchemaUtil.pathPosSchema()
-val mapper = JsonMapper()
+val mapper: JsonMapper = JsonMapper.builder()
+    .addModule(KotlinModule.Builder().build())
+    .addModule(JavaTimeModule())
+    .build()
 internal val offsetsTypeRef = object : TypeReference<Map<Int, Long>>() {}
 
-fun Snapshot.sourceTimestampMillis(): Long {
-    return PropertyUtil.propertyAsLong(summary(), SOURCE_TIMESTAMP_PROP, Long.MIN_VALUE)
+fun Snapshot.sourceTimestampMillis(): Long? {
+    return summary()[SOURCE_TIMESTAMP_PROP]?.toLong()
+}
+
+fun Snapshot.sourceWALPosition(): WALPosition? {
+    val serialized = summary()[SOURCE_WAL_POSITION_PROP] ?: return null
+    return mapper.readValue(serialized, WALPosition::class.java)
 }
 
 fun Snapshot.brokerOffsets(): Map<Int, Long> {

@@ -29,6 +29,7 @@ class DebeziumStreamlet(
     override val name: String,
     val inlet: KafkaTopicInlet,
     val outlet: IcebergTableOutlet,
+    val tracker: RecordTracker,
     val schemaHandler: SchemaHandler,
     streamConfig: StreamConfig,
     registry: MeterRegistry,
@@ -37,8 +38,6 @@ class DebeziumStreamlet(
         private val logger = LoggerFactory.getLogger(DebeziumStreamlet::class.java)
     }
 
-    private val offsets = mutableMapOf<Int, Long>()
-    private var lastSourceTimestamp = Long.MIN_VALUE
     private var pendingRecord: SinkRecord? = null
     private val clock = Clock.systemUTC()
     private val idleTimeoutMs = streamConfig.idleTimeout.toMillis()
@@ -73,10 +72,12 @@ class DebeziumStreamlet(
     }
 
     private fun commit() {
+        val offsets = tracker.consumedBrokerOffsets()
+        val summary = tracker.buildSummary()
+
         logger.info("Committing changes {}", offsets)
         metrics.recordCommit {
             status = COMMITTING
-            val summary = buildSummary()
             outlet.commit(summary)
             inlet.commit(offsets)
             status = RUNNING
@@ -87,14 +88,14 @@ class DebeziumStreamlet(
         val lag = inlet.currentLag()
         if (lag <= 0) return false
         if (lag > commitBatchSize) return true
-        return lastSourceTimestamp < clock.millis() - commitTimespanMs
+        return tracker.lastSourceTimestamp() < clock.millis() - commitTimespanMs
     }
 
     fun canTerminate(): Boolean {
         if (status != SUSPENDED) return false
 
         val lag = inlet.currentLag()
-        val committedTime = outlet.committedSourceTimestamp()
+        val committedTime = tracker.committedSourceTimestamp() ?: Long.MIN_VALUE
         return lag <= 0 && committedTime < clock.millis() - idleTimeoutMs
     }
 
@@ -107,7 +108,7 @@ class DebeziumStreamlet(
             while (record != null) {
                 // Tombstone record is ignored
                 if (record.value() == null) {
-                    trackRecordInfo(record)
+                    tracker.update(record)
                     if (count >= batchSize) break
                     record = inlet.read()
                     continue
@@ -137,8 +138,8 @@ class DebeziumStreamlet(
                 }
 
                 // Tracking info & write the record
-                trackRecordInfo(record)
                 outlet.write(record)
+                tracker.update(record)
                 count++
 
                 if (count >= batchSize) break
@@ -148,7 +149,7 @@ class DebeziumStreamlet(
             if (count > 0) commit()
         } catch (ex: TableTruncatedException) {
             if (count > 0) commit()
-            val summary = buildSummary()
+            val summary = tracker.buildSummary()
             outlet.truncate(summary)
         } catch (ex: SchemaChangedException) {
             if (count > 0) commit()
@@ -158,12 +159,10 @@ class DebeziumStreamlet(
     }
 
     private fun ensureOffsets() {
-        val outletOffsets = outlet.committedBrokerOffsets()
-        offsets.putAll(outletOffsets)
-        lastSourceTimestamp = outlet.committedSourceTimestamp()
-
+        val outletOffsets = tracker.committedBrokerOffsets()
         val inletOffsets = inlet.committedOffsets()
-        val isUpToDate = offsets.all { (partition, offset) ->
+
+        val isUpToDate = outletOffsets.all { (partition, offset) ->
             inletOffsets[partition] == offset
         }
         if (isUpToDate) return
@@ -174,10 +173,10 @@ class DebeziumStreamlet(
                 Iceberg table offsets  : {}
                 Kafka committed offsets: {}
             """.trimIndent(),
-            offsets, inletOffsets
+            outletOffsets, inletOffsets
         )
         logger.warn("Seeking to offsets stored in Iceberg table")
-        inlet.seekOffsets(offsets)
+        inlet.seekOffsets(outletOffsets)
     }
 
     override fun close() {
@@ -185,28 +184,6 @@ class DebeziumStreamlet(
         inlet.close()
         outlet.close()
         metrics.close()
-    }
-
-    private fun trackRecordInfo(record: SinkRecord) {
-        offsets[record.kafkaPartition()] = record.kafkaOffset() + 1
-
-        val sourceTimestamp = record.sourceTimestamp() ?: return
-        if (lastSourceTimestamp <= sourceTimestamp)
-            lastSourceTimestamp = sourceTimestamp
-        else
-            logger.warn(
-                "Receive un-ordered message at partition {}, offset {}\n" +
-                    "\tsourceTimestamp={}, lastSourceTimestamp={}",
-                record.kafkaPartition(), record.kafkaOffset(),
-                sourceTimestamp, lastSourceTimestamp
-            )
-    }
-
-    private fun buildSummary(): Map<String, String> {
-        return mapOf(
-            SOURCE_TIMESTAMP_PROP to lastSourceTimestamp.toString(),
-            BROKER_OFFSETS_PROP to mapper.writeValueAsString(offsets)
-        )
     }
 
     private inline fun <R> withMDC(block: () -> R): R {

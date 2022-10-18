@@ -1,7 +1,6 @@
 package dev.alluvial.schema.debezium
 
 import dev.alluvial.api.TableCreator
-import dev.alluvial.runtime.PartitionSpecConfig
 import dev.alluvial.runtime.TableCreationConfig
 import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.sink.iceberg.type.IcebergSchema
@@ -9,11 +8,12 @@ import dev.alluvial.sink.iceberg.type.toIcebergSchema
 import dev.alluvial.source.kafka.KafkaSource
 import dev.alluvial.source.kafka.fieldSchema
 import org.apache.iceberg.PartitionSpec
+import org.apache.iceberg.SortOrder
 import org.apache.iceberg.Table
 import org.apache.iceberg.TableProperties
-import org.apache.iceberg.addSpec
 import org.apache.iceberg.catalog.TableIdentifier
-import org.apache.iceberg.relocated.com.google.common.base.Preconditions
+import org.apache.iceberg.expressions.Expressions
+import org.apache.iceberg.transforms.Transforms
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.KafkaConsumer
@@ -76,7 +76,7 @@ class KafkaSchemaTableCreator(
         val iSchema = icebergSchemaFrom(record)
         val schemaVersion = record.schemaVersion()
 
-        return sink.buildTable(tableId, iSchema) { builder ->
+        val table = sink.buildTable(tableId, iSchema) { builder ->
             logger.info("Creating table {}", tableId)
             logger.info("schema: version: {}\n{}", schemaVersion, iSchema)
 
@@ -95,13 +95,32 @@ class KafkaSchemaTableCreator(
                 logger.info("location: {}", location)
             }
 
-            val partitionConfigs = partitionSpec[tableId.name()]
-            if (!partitionConfigs.isNullOrEmpty()) {
-                val spec = buildPartitionSpec(iSchema, partitionConfigs)
-                builder.withPartitionSpec(spec)
-                logger.info("partitionSpec: {}", spec)
-            }
+            // TableMetadata MUST have SortOrder.unsorted() and PartitionSpec.unpartitioned()
+            // with correct ID for later used.
+            builder.withSortOrder(SortOrder.unsorted())
+            builder.withPartitionSpec(PartitionSpec.unpartitioned())
         }
+        val partitionConfigs = partitionSpec[tableId.name()]
+        if (!partitionConfigs.isNullOrEmpty()) {
+            val schema = table.schema()
+            val updateSpec = table.updateSpec()
+
+            partitionConfigs.forEach {
+                if ("identity".equals(it.transform, true)) {
+                    val ref = Expressions.ref<Any>(it.column)
+                    updateSpec.addField(it.name, ref)
+                } else {
+                    val field = schema.findField(it.column)
+                    val transform = Transforms.fromString(field.type(), it.transform)
+                    val term = Expressions.transform(field.name(), transform)
+                    updateSpec.addField(it.name, term)
+                }
+            }
+
+            updateSpec.commit()
+            logger.info("partitionSpec: {}", table.spec())
+        }
+        return table
     }
 
     private fun icebergSchemaFrom(record: SinkRecord): IcebergSchema {
@@ -115,16 +134,5 @@ class KafkaSchemaTableCreator(
 
         val keys = keySchema.fields().map { it.name() }
         return rowSchema.toIcebergSchema(keys)
-    }
-
-    private fun buildPartitionSpec(schema: IcebergSchema, partitionConfigs: List<PartitionSpecConfig>): PartitionSpec {
-        val builder = PartitionSpec.builderFor(schema)
-        partitionConfigs.forEach { config ->
-            val sourceName = config.column
-            val sourceField = schema.findField(sourceName)
-            Preconditions.checkNotNull(sourceField, "Cannot find source field: %s", sourceName)
-            builder.addSpec(sourceField, config.transform, config.name)
-        }
-        return builder.build()
     }
 }

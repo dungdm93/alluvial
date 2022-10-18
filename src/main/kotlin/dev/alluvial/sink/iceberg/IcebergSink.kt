@@ -1,6 +1,7 @@
 package dev.alluvial.sink.iceberg
 
 import dev.alluvial.runtime.SinkConfig
+import dev.alluvial.stream.debezium.RecordTracker
 import io.micrometer.core.instrument.MeterRegistry
 import org.apache.hadoop.conf.Configuration
 import org.apache.iceberg.CachingCatalog
@@ -45,12 +46,13 @@ class IcebergSink(sinkConfig: SinkConfig, private val registry: MeterRegistry) {
             catalog
     }
 
-    fun getOutlet(name: String, tableId: TableIdentifier): IcebergTableOutlet? {
+    fun getOutlet(name: String, connector: String, tableId: TableIdentifier): IcebergTableOutlet? {
         return try {
             val table = catalog.loadTable(tableId)
+            val tracker = RecordTracker.create(connector, table)
 
             logger.info("Creating new outlet {}", name)
-            IcebergTableOutlet(name, table, registry)
+            IcebergTableOutlet(name, table, tracker, registry)
         } catch (e: NoSuchTableException) {
             null
         }

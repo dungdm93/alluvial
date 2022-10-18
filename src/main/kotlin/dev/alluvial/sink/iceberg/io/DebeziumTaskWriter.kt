@@ -3,6 +3,7 @@ package dev.alluvial.sink.iceberg.io
 import dev.alluvial.sink.iceberg.type.IcebergSchema
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
+import dev.alluvial.stream.debezium.RecordTracker
 import dev.alluvial.utils.TableTruncatedException
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
@@ -10,12 +11,12 @@ import io.micrometer.core.instrument.Tags
 import org.apache.iceberg.ContentFile
 import org.apache.iceberg.PartitionKey
 import org.apache.iceberg.PartitionSpec
-import org.apache.iceberg.StructLike
 import org.apache.iceberg.deletes.PositionDelete
 import org.apache.iceberg.io.FileIO
 import org.apache.iceberg.io.TaskWriter
 import org.apache.iceberg.io.WriteResult
 import org.apache.iceberg.io.copy
+import org.apache.iceberg.util.Pair
 import org.apache.iceberg.util.StructLikeMap
 import org.apache.iceberg.util.Tasks
 import org.apache.kafka.connect.sink.SinkRecord
@@ -29,6 +30,7 @@ class DebeziumTaskWriter(
     sSchema: KafkaSchema,
     iSchema: IcebergSchema,
     equalityFieldIds: Set<Int>,
+    private val tracker: RecordTracker,
     registry: MeterRegistry,
     tags: Tags
 ) : TaskWriter<SinkRecord> {
@@ -37,39 +39,54 @@ class DebeziumTaskWriter(
     }
     private val equalityDeleteWriter by lazy(partitioningWriterFactory::newEqualityDeleteWriter)
     private val positionDeleteWriter by lazy(partitioningWriterFactory::newPositionDeleteWriter)
-    private val positionDelete: PositionDelete<KafkaStruct> = PositionDelete.create()
-    private val insertedRowMap: MutableMap<StructLike, PathOffset>
-    private val keyer: Keyer<SinkRecord>
-    private val metrics = Metrics(registry, tags)
 
-    private var key: StructLike? = null
+    /**
+     * A container for `PositionDelete`. FileWriters MUST use `StructCopy.copy(...)` if it holds this value in-memory
+     */
+    private val positionDelete: PositionDelete<KafkaStruct>
+
+    /**
+     * For read / create records, we don't have clue about previous value.
+     * So `useGlobalDelete` is a mechanism to prevent previous value is in different partition.
+     */
+    private val useGlobalDelete: Boolean
+
+    /**
+     * partition is immutable. It could be re-used by in-memory cache to reduce memory usage
+     */
+    private val cachedPartitions: MutableMap<Partition, Partition>
+
+    /**
+     * Track `PathOffset` and `Partition` for every inserted records
+     */
+    private val insertedRowMap: MutableMap<Key, Pair<PathOffset, Partition?>>
+
+    private val metrics = Metrics(registry, tags)
+    private val keyer: Keyer<SinkRecord>
+    private var key: Key? = null
 
     init {
         val equalityFieldNames = equalityFieldIds.map { iSchema.findField(it).name() }
         val iKeySchema = iSchema.select(equalityFieldNames)
         keyer = keyerFor(sSchema, iKeySchema)
         insertedRowMap = StructLikeMap.create(iKeySchema.asStruct())
+        cachedPartitions = StructLikeMap.create(spec.partitionType())
+        useGlobalDelete = spec.fields().any { it.sourceId() !in equalityFieldIds }
+        positionDelete = PositionDelete.create()
     }
 
     override fun write(record: SinkRecord) {
-        val value = record.value() as? KafkaStruct ?: return // Tombstone events
+        val value = record.value() as KafkaStruct? ?: return // Tombstone events
         val before = value.getStruct("before")
         val after = value.getStruct("after")
-        if (record.key() != null) {
-            key = keyer(record)
-        } else {
-            key = null
-        }
+        key = if (record.key() != null) keyer(record) else null
 
         val operation = value.getString("op")
         when (operation) {
             // read (snapshot) events
-            "r" -> {
-                delete(after) // ensure no duplicate data when re-snapshot
-                insert(after)
-            }
+            "r" -> insert(after, true) // forceDelete to ensure no duplicate data when re-snapshot
             // create events
-            "c" -> insert(after)
+            "c" -> insert(after, tracker.maybeDuplicate(record))
             // update events
             "u" -> {
                 delete(before)
@@ -84,31 +101,36 @@ class DebeziumTaskWriter(
         metrics.increaseRecordCount(operation)
     }
 
-    private fun internalPosDelete(key: StructLike, partition: StructLike?): Boolean {
+    private fun internalPosDelete(key: Key): Boolean {
         val previous = insertedRowMap.remove(key)
         if (previous != null) {
-            positionDeleteWriter.write(previous.setTo(positionDelete), spec, partition)
+            val prePathOffset = previous.first()
+            val prePartition = previous.second()
+            positionDeleteWriter.write(prePathOffset.setTo(positionDelete), spec, prePartition)
             return true
         }
         return false
     }
 
-    private fun insert(row: KafkaStruct) {
+    private fun insert(row: KafkaStruct, forceDelete: Boolean = false) {
         val partition = partitioner(row)
         val copiedKey = key.copy()!!
 
-        internalPosDelete(copiedKey, partition)
+        if (forceDelete) {
+            delete(row, useGlobalDelete)
+        } else {
+            internalPosDelete(copiedKey)
+        }
         val pathOffset = insertWriter.trackedWrite(row, spec, partition)
-        insertedRowMap[copiedKey] = pathOffset
+        insertedRowMap[copiedKey] = Pair.of(pathOffset, cachedPartition(partition))
     }
 
-    private fun delete(row: KafkaStruct) {
-        val partition = partitioner(row)
-        val copiedKey = key.copy()!!
+    private fun delete(row: KafkaStruct, globalDelete: Boolean = false) {
+        if (internalPosDelete(key!!)) return
 
-        if (!internalPosDelete(copiedKey, partition)) {
-            equalityDeleteWriter.write(row, spec, partition)
-        }
+        val spec = if (globalDelete) PartitionSpec.unpartitioned() else spec
+        val partition = if (globalDelete) null else partitioner(row)
+        equalityDeleteWriter.write(row, spec, partition)
     }
 
     override fun abort() {
@@ -151,6 +173,11 @@ class DebeziumTaskWriter(
             .build()
     }
 
+    private fun cachedPartition(partition: Partition?): Partition? {
+        if (partition == null) return null
+        return cachedPartitions.computeIfAbsent(partition) { partition.copy()!! }
+    }
+
     companion object {
         val unpartition: Partitioner<KafkaStruct> = { _ -> null }
 
@@ -163,7 +190,7 @@ class DebeziumTaskWriter(
                 private val wrapper: StructWrapper = StructWrapper(sSchema, iSchema)
                 private val partitionKey = PartitionKey(spec, iSchema)
 
-                override fun invoke(record: KafkaStruct): StructLike {
+                override fun invoke(record: KafkaStruct): Partition {
                     partitionKey.partition(wrapper.wrap(record))
                     return partitionKey
                 }
@@ -174,7 +201,7 @@ class DebeziumTaskWriter(
             return object : Keyer<SinkRecord> {
                 private val wrapper: StructWrapper = StructWrapper(sSchema, iSchema)
 
-                override fun invoke(record: SinkRecord): StructLike {
+                override fun invoke(record: SinkRecord): Key {
                     val key = record.key() as KafkaStruct
                     return wrapper.wrap(key)
                 }

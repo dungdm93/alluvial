@@ -52,7 +52,7 @@ class CompactionPoints(
     }
 
     fun keyOf(snapshot: Snapshot): String {
-        val ts = Instant.ofEpochMilli(snapshot.sourceTimestampMillis())
+        val ts = Instant.ofEpochMilli(snapshot.sourceTimestampMillis()!!)
         val zdt = ZonedDateTime.ofInstant(ts, tz)
 
         return when {

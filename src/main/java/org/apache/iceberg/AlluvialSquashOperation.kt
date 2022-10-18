@@ -193,6 +193,9 @@ internal class AlluvialSquashOperation(
         if (SOURCE_TIMESTAMP_PROP in highSnapshot.summary()) {
             set(SOURCE_TIMESTAMP_PROP, highSnapshot.summary()[SOURCE_TIMESTAMP_PROP])
         }
+        if (SOURCE_WAL_POSITION_PROP in highSnapshot.summary()) {
+            set(SOURCE_WAL_POSITION_PROP, highSnapshot.summary()[SOURCE_WAL_POSITION_PROP])
+        }
         if (BROKER_OFFSETS_PROP in highSnapshot.summary()) {
             set(BROKER_OFFSETS_PROP, highSnapshot.summary()[BROKER_OFFSETS_PROP])
         }
@@ -332,6 +335,9 @@ internal class AlluvialSquashOperation(
 
             if (SOURCE_TIMESTAMP_PROP in snapshot.summary()) {
                 set(SOURCE_TIMESTAMP_PROP, snapshot.summary()[SOURCE_TIMESTAMP_PROP])
+            }
+            if (SOURCE_WAL_POSITION_PROP in snapshot.summary()) {
+                set(SOURCE_WAL_POSITION_PROP, snapshot.summary()[SOURCE_WAL_POSITION_PROP])
             }
             if (BROKER_OFFSETS_PROP in snapshot.summary()) {
                 set(BROKER_OFFSETS_PROP, snapshot.summary()[BROKER_OFFSETS_PROP])

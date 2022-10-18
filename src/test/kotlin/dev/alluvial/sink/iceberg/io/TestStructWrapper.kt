@@ -14,7 +14,7 @@ import org.apache.iceberg.types.Type.TypeID.*
 import org.apache.kafka.connect.data.SchemaBuilder
 import org.junit.jupiter.api.Test
 
-class TestStructWrapper {
+internal class TestStructWrapper {
     private fun wrapAndGet(sSchema: KafkaSchema) {
         val iSchema = sSchema.toIcebergSchema()
         val wrapper = StructWrapper(sSchema, iSchema)
