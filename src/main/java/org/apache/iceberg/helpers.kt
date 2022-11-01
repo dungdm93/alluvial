@@ -104,27 +104,19 @@ fun Snapshot.isAfter(snapshot: Snapshot?): Boolean {
     return this.sequenceNumber() > snapshot.sequenceNumber()
 }
 
-@JvmName("filterManifestEntryAfter")
-internal fun <C : ContentFile<C>> Iterable<ManifestEntry<C>>.filterAfter(snapshot: Snapshot?): Iterable<ManifestEntry<C>> {
+internal fun <C : ContentFile<C>> Iterable<ManifestEntry<C>>.filterEntryAfter(snapshot: Snapshot?): Iterable<ManifestEntry<C>> {
     if (snapshot == null) return this
     return this.filter { it.sequenceNumber() > snapshot.sequenceNumber() }
 }
 
-internal fun <C : ContentFile<C>> CloseableIterable<ManifestEntry<C>>.filterAfter(snapshot: Snapshot?): CloseableIterable<ManifestEntry<C>> {
+internal fun <C : ContentFile<C>> CloseableIterable<ManifestEntry<C>>.filterEntryAfter(snapshot: Snapshot?): CloseableIterable<ManifestEntry<C>> {
     if (snapshot == null) return this
     return this.filter { it.sequenceNumber() > snapshot.sequenceNumber() }
-}
-
-@JvmName("filterManifestFileAfter")
-internal fun Iterable<ManifestFile>.filterAfter(snapshot: Snapshot?): Iterable<ManifestFile> {
-    if (snapshot == null) return this
-    return this.filter { it.minSequenceNumber() > snapshot.sequenceNumber() }
 }
 
 internal fun ManifestGroup.filterEntryAfter(snapshot: Snapshot?): ManifestGroup {
     if (snapshot == null) return this
-    return this.filterManifests { it.minSequenceNumber() > snapshot.sequenceNumber() }
-        .filterManifestEntries { it.sequenceNumber() > snapshot.sequenceNumber() }
+    return this.filterManifestEntries { it.sequenceNumber() > snapshot.sequenceNumber() }
 }
 
 @Suppress("MemberVisibilityCanBePrivate")

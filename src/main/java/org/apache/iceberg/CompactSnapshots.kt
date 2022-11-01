@@ -216,14 +216,13 @@ class CompactSnapshots(
      */
     private fun planEqualityDeleteFiles(): Map<Set<Int>, Map<StructLike, List<DeleteFile>>> {
         val deleteEntries = highSnapshot.deleteManifests(io)
-            .filterAfter(lowSnapshot)
             .filter { it.hasAddedFiles() || it.hasExistingFiles() } // ignoreDeleted ManifestFile
             .transform {
                 ManifestFiles.readDeleteManifest(it, io, specsById)
                     .liveEntries() // ignoreDeleted ManifestFile
             }
             .concat()
-            .filterAfter(lowSnapshot) // ignoreDeleted ManifestFile
+            .filterEntryAfter(lowSnapshot) // ignoreDeleted ManifestFile
             .filter { it.file().content() == FileContent.EQUALITY_DELETES }
 
         val partitionType = spec.partitionType()
