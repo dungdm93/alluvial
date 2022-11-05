@@ -1,5 +1,7 @@
 package org.apache.iceberg
 
+import dev.alluvial.sink.iceberg.concat
+import dev.alluvial.sink.iceberg.transform
 import io.micrometer.core.instrument.Metrics
 import io.mockk.every
 import io.mockk.spyk
@@ -110,6 +112,7 @@ class TestCompactSnapshotsConcurrent : TestCompactSnapshotsBase() {
         table.newAppend() // #4
             .appendFile(file6)
             .commit()
+        logger.info("===== FINISH SETUP TABLE SNAPSHOTS =====")
     }
 
     private fun simulateConcurrentWrite(conSnapshot: AtomicReference<Snapshot>) {
@@ -132,6 +135,48 @@ class TestCompactSnapshotsConcurrent : TestCompactSnapshotsBase() {
 
     private fun Iterable<Snapshot>.ssWithSeqNumber(seqNum: Long): Snapshot {
         return this.first { it.sequenceNumber() == seqNum }
+    }
+
+    private fun Snapshot.dataEntries(): Iterable<ManifestEntry<DataFile>> {
+        val io = table.io()
+        val specsById = table.specs()
+        return this.dataManifests(io)
+            .transform {
+                ManifestFiles.read(it, io, specsById)
+                    .liveEntries() // ignoreDeleted ManifestFile
+            }
+            .concat()
+    }
+
+    private fun Snapshot.deleteEntries(): Iterable<ManifestEntry<DeleteFile>> {
+        val io = table.io()
+        val specsById = table.specs()
+        return this.deleteManifests(io)
+            .transform {
+                ManifestFiles.readDeleteManifest(it, io, specsById)
+                    .liveEntries() // ignoreDeleted ManifestFile
+            }
+            .concat()
+    }
+
+    private fun assertManifestEntry(snap: Snapshot, type: String) {
+        snap.dataEntries().forEach {
+            val s = table.snapshot(it.snapshotId())
+            Assertions.assertEquals(s.sequenceNumber(), it.sequenceNumber()) {
+                "%s snapshot(#%d, %d) contains DataEntries(%d).sequenceNumber() mismatch: %s".format(
+                    type, snap.sequenceNumber(), snap.snapshotId(), it.snapshotId(), it.file().path()
+                )
+            }
+        }
+
+        snap.deleteEntries().forEach {
+            val s = table.snapshot(it.snapshotId())
+            Assertions.assertEquals(s.sequenceNumber(), it.sequenceNumber()) {
+                "%s snapshot(#%d, %d) contains DeleteEntries(%d).sequenceNumber() mismatch: %s".format(
+                    type, snap.sequenceNumber(), snap.snapshotId(), it.snapshotId(), it.file().path()
+                )
+            }
+        }
     }
 
     private fun assertCherryPick(cherryPicked: Snapshot, original: Snapshot) {
@@ -164,6 +209,8 @@ class TestCompactSnapshotsConcurrent : TestCompactSnapshotsBase() {
             original.removedDeleteFiles(table.io()).mapTo(hashSetOf()) { it.path() },
             cherryPicked.removedDeleteFiles(table.io()).mapTo(hashSetOf()) { it.path() },
         )
+
+        assertManifestEntry(cherryPicked, "cherry-picked")
     }
 
     private fun assertSquash(squashed: Snapshot, high: Snapshot, low: Snapshot) {
@@ -175,6 +222,8 @@ class TestCompactSnapshotsConcurrent : TestCompactSnapshotsBase() {
                     "ManifestFile.sequenceNumber MUST be equals Snapshot.sequenceNumber()"
                 )
             }
+
+        assertManifestEntry(squashed, "squashed")
     }
 
     @Test
@@ -208,7 +257,7 @@ class TestCompactSnapshotsConcurrent : TestCompactSnapshotsBase() {
         )
         assertSquash(squashedSnapshot, highSnapshot, lowSnapshot)
 
-        assertCherryPick(newSnapshots[0], conSnapshot.get())
         assertCherryPick(newSnapshots[1], snapshots[0])
+        assertCherryPick(newSnapshots[0], conSnapshot.get())
     }
 }
