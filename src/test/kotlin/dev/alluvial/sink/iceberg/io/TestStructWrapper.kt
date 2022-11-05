@@ -11,7 +11,6 @@ import dev.alluvial.source.kafka.KAFKA_PRIMITIVES_SCHEMA
 import dev.alluvial.source.kafka.structSchema
 import org.apache.iceberg.StructLike
 import org.apache.iceberg.types.Type.TypeID.*
-import org.apache.kafka.connect.data.SchemaBuilder
 import org.junit.jupiter.api.Test
 
 internal class TestStructWrapper {
@@ -27,6 +26,7 @@ internal class TestStructWrapper {
         }
     }
 
+    @Suppress("UNUSED_VARIABLE", "UNUSED_PARAMETER")
     private fun validate(
         sStruct: KafkaStruct, wrapper: StructWrapper,
         sSchema: KafkaSchema, iSchema: IcebergSchema
@@ -38,14 +38,17 @@ internal class TestStructWrapper {
                     val iValue = wrapper.get(i, List::class.java)
                     val sValue = sStruct[field.name()] as List<*>?
                 }
+
                 MAP -> {
                     val iValue = wrapper.get(i, Map::class.java)
                     val sValue = sStruct[field.name()] as Map<*, *>?
                 }
+
                 STRUCT -> {
                     val iValue = wrapper.get(i, StructLike::class.java)
                     val sValue = sStruct[field.name()] as KafkaStruct?
                 }
+
                 else -> {
                     val iValue = wrapper.get(i, fieldTypeId.javaClass())
                     val sValue = sStruct[field.name()]
