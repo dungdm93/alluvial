@@ -23,14 +23,14 @@ internal class AlluvialSquashOperation(
     }
 
     private val io = ops.io()
-
+    private var highSchemaId: Int? = null
     private var lowSnapshot: Snapshot? = null
     private lateinit var highSnapshot: Snapshot
     private lateinit var operation: String
     private lateinit var rollback: PendingUpdate<*>
-    private var highSchemaId: Int? = null
-    private var cherrypickUpdates = emptyList<SnapshotProducer<*>>()
-    private val cherrypickMap = mutableMapOf<Long, SnapshotProducer<*>>()
+    private var cherrypicks = emptyList<SnapshotProducer<*>>()
+    private val obsoletedCherrypicks = mutableListOf<SnapshotProducer<*>>()
+    private val verifiedCherrypicks = mutableMapOf<Long, Int>()
 
     private var validated = false
     private var validatePosDeletesFilesInRange = true
@@ -105,24 +105,22 @@ internal class AlluvialSquashOperation(
     override fun commit() {
         val base = refresh()
 
-        cherrypickUpdates = base.currentAncestors()
+        obsoletedCherrypicks.addAll(cherrypicks)
+        cherrypicks = base.currentAncestors()
             .filterAfter(highSnapshot)
             .reversed()
-            .map { cherrypickMap.computeIfAbsent(it.snapshotId(), this::cherrypick) }
+            .map { cherrypick(it.snapshotId()) }
 
         rollback.commit()
         if (operation != NOOP) super.commit()
-        cherrypickUpdates.forEach { it.commit() }
+        cherrypicks.forEach { it.commit() }
 
         cleanupOnCommitSuccess()
     }
 
     override fun cleanAll() {
+        cleanupOnCommitSuccess()
         super.cleanAll()
-
-        Tasks.foreach(cherrypickMap.values)
-            .suppressFailureWhenFinished()
-            .run(SnapshotProducer<*>::cleanAll)
     }
 
     private fun validatePosDeletesReferenceToDataFileInRange(current: TableMetadata) {
@@ -229,8 +227,7 @@ internal class AlluvialSquashOperation(
     }
 
     private fun cleanupOnCommitSuccess() {
-        val abortUpdates = cherrypickMap.values.toSet() - cherrypickUpdates.toSet()
-        Tasks.foreach(abortUpdates)
+        Tasks.foreach(obsoletedCherrypicks)
             .suppressFailureWhenFinished()
             .run(SnapshotProducer<*>::cleanAll)
     }
@@ -244,7 +241,6 @@ internal class AlluvialSquashOperation(
     inner class SquashCherrypickOperation : MergingSnapshotProducer<SquashCherrypickOperation>(tableName, ops) {
         private var cherrypickSnapshot: Snapshot? = null
         private var requireFastForward = false // TODO
-        private var validated: Int? = null
 
         override fun self() = this
 
@@ -299,11 +295,11 @@ internal class AlluvialSquashOperation(
         }
 
         override fun validate(currentMetadata: TableMetadata) {
-            val hash = Objects.hashCode(deadFiles)
-            if (hash == validated) return // no need to re-validate
-            validated = hash
-
             val cs = cherrypickSnapshot ?: return
+
+            val hash = Objects.hashCode(deadFiles)
+            if (hash == verifiedCherrypicks[cs.snapshotId()]) return // no need to re-validate
+
             val posDel = cs.addedDeleteFiles(io)
                 .filter { it.content() == POSITION_DELETES }
 
@@ -319,6 +315,8 @@ internal class AlluvialSquashOperation(
                     )
                 }
             }
+
+            verifiedCherrypicks[cs.snapshotId()] = hash
         }
 
         private fun setFiles(snapshot: Snapshot) {
