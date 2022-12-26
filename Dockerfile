@@ -1,4 +1,4 @@
-FROM gradle:7.4-jdk11 AS builder
+FROM gradle:7.6-jdk17 AS builder
 ENV GRADLE_OPTS="-Dorg.gradle.daemon=false"
 
 WORKDIR /app
@@ -11,7 +11,7 @@ RUN set -eux; \
     cd ./build/distributions/; \
     tar -xvf ./alluvial-0.1.tar
 
-FROM openjdk:11
+FROM openjdk:17
 LABEL maintainer="Teko's DataOps Team <dataops@teko.vn>"
 
 COPY --from=builder /app/build/distributions/alluvial-0.1/ /opt/alluvial/
