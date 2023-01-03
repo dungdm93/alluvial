@@ -33,7 +33,7 @@ repositories {
 }
 
 val slf4jVersion = "1.7.36"
-val logbackVersion = "1.4.5"
+val logbackVersion = "1.2.11"   // pinned. logback 1.3+ requires slf4j 2.x
 val debeziumVersion = "2.1.1.Final"
 val kafkaVersion = "3.3.1"
 val confluentVersion = "7.0.0"
