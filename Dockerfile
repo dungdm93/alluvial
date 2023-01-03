@@ -11,7 +11,7 @@ RUN set -eux; \
     cd ./build/distributions/; \
     tar -xvf ./alluvial-0.1.tar
 
-FROM openjdk:17
+FROM eclipse-temurin:17-jre-jammy
 LABEL maintainer="Teko's DataOps Team <dataops@teko.vn>"
 
 COPY --from=builder /app/build/distributions/alluvial-0.1/ /opt/alluvial/
