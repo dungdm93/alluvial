@@ -134,10 +134,10 @@ dependencies {
     }
     implementation("org.apache.iceberg:iceberg-aws:$icebergVersion")
     implementation("software.amazon.awssdk:s3:$awsVersion")
-    compileOnly("software.amazon.awssdk:kms:$awsVersion")
-    compileOnly("software.amazon.awssdk:glue:$awsVersion")
-    compileOnly("software.amazon.awssdk:sts:$awsVersion")
-    compileOnly("software.amazon.awssdk:dynamodb:$awsVersion")
+    implementation("software.amazon.awssdk:kms:$awsVersion")
+    implementation("software.amazon.awssdk:glue:$awsVersion")
+    implementation("software.amazon.awssdk:sts:$awsVersion")
+    implementation("software.amazon.awssdk:dynamodb:$awsVersion")
     implementation("software.amazon.awssdk:url-connection-client:$awsVersion")
 
     // Make those Iceberg's transient dependencies available in compile scope
