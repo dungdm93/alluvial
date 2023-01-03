@@ -106,17 +106,17 @@ fun Snapshot.isAfter(snapshot: Snapshot?): Boolean {
 
 internal fun <C : ContentFile<C>> Iterable<ManifestEntry<C>>.filterEntryAfter(snapshot: Snapshot?): Iterable<ManifestEntry<C>> {
     if (snapshot == null) return this
-    return this.filter { it.sequenceNumber() > snapshot.sequenceNumber() }
+    return this.filter { it.dataSequenceNumber() > snapshot.sequenceNumber() }
 }
 
 internal fun <C : ContentFile<C>> CloseableIterable<ManifestEntry<C>>.filterEntryAfter(snapshot: Snapshot?): CloseableIterable<ManifestEntry<C>> {
     if (snapshot == null) return this
-    return this.filter { it.sequenceNumber() > snapshot.sequenceNumber() }
+    return this.filter { it.dataSequenceNumber() > snapshot.sequenceNumber() }
 }
 
 internal fun ManifestGroup.filterEntryAfter(snapshot: Snapshot?): ManifestGroup {
     if (snapshot == null) return this
-    return this.filterManifestEntries { it.sequenceNumber() > snapshot.sequenceNumber() }
+    return this.filterManifestEntries { it.dataSequenceNumber() > snapshot.sequenceNumber() }
 }
 
 @Suppress("MemberVisibilityCanBePrivate")

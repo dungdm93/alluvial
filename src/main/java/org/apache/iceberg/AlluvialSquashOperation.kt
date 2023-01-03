@@ -87,7 +87,7 @@ internal class AlluvialSquashOperation(
         super.add(file)
     }
 
-    override fun validate(currentMetadata: TableMetadata) {
+    override fun validate(currentMetadata: TableMetadata, snapshot: Snapshot?) {
         if (validated) return // no need to re-validate
         if (validatePosDeletesFilesInRange)
             validatePosDeletesReferenceToDataFileInRange(currentMetadata)
@@ -294,7 +294,7 @@ internal class AlluvialSquashOperation(
                 snapshot.copy { schemaId = cs.schemaId() }
         }
 
-        override fun validate(currentMetadata: TableMetadata) {
+        override fun validate(currentMetadata: TableMetadata, snapshot: Snapshot?) {
             val cs = cherrypickSnapshot ?: return
 
             val hash = Objects.hashCode(deadFiles)
