@@ -1,9 +1,10 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     application
     java
-    kotlin("jvm") version "1.7.0"
+    kotlin("jvm") version "1.8.0"
     id("io.spring.dependency-management") version "1.0.11.RELEASE"
 }
 
@@ -11,7 +12,7 @@ group = "dev.alluvial"
 version = "0.1"
 
 java.toolchain {
-    languageVersion.set(JavaLanguageVersion.of(11))
+    languageVersion.set(JavaLanguageVersion.of(17))
 }
 
 application {
@@ -32,25 +33,25 @@ repositories {
 }
 
 val slf4jVersion = "1.7.36"
-val logbackVersion = "1.2.11"
-val debeziumVersion = "1.9.3.Final"
-val kafkaVersion = "3.1.0"
+val logbackVersion = "1.4.5"
+val debeziumVersion = "2.1.1.Final"
+val kafkaVersion = "3.3.1"
 val confluentVersion = "7.0.0"
-val icebergVersion = "0.14.0"
+val icebergVersion = "1.1.0"
 val hadoopVersion = "3.3.2"
 val hiveVersion = "3.1.3"
-val awsVersion = "2.17.209"
+val awsVersion = "2.19.4"
 val jacksonVersion = "2.13.3"
 val micrometerVersion = "1.9.0"
 val prometheusVersion = "0.15.0"
 
-val junitVersion = "5.8.2"
+val junitVersion = "5.9.0"
 val striktVersion = "0.34.1"
 val assertjVersion = "3.23.1"
 val mockkVersion = "1.13.2"
 
 dependencies {
-    implementation(kotlin("stdlib-jdk8"))
+    implementation(kotlin("stdlib"))
     api("org.slf4j:slf4j-api:$slf4jVersion")
     runtimeOnly("ch.qos.logback:logback-classic:$logbackVersion")
     implementation("io.micrometer:micrometer-core:$micrometerVersion")
@@ -142,8 +143,8 @@ dependencies {
     // Make those Iceberg's transient dependencies available in compile scope
     implementation("org.apache.iceberg:iceberg-common:$icebergVersion")
     implementation("org.apache.iceberg:iceberg-bundled-guava:$icebergVersion")
-    implementation("org.apache.avro:avro:1.10.2")
-    implementation("org.apache.orc:orc-core:1.7.5")
+    implementation("org.apache.avro:avro:1.11.0")
+    implementation("org.apache.orc:orc-core:1.7.6")
     implementation("org.apache.parquet:parquet-avro:1.12.3")
 
     // Test Frameworks
@@ -162,9 +163,7 @@ dependencies {
 }
 
 tasks.withType<KotlinCompile> {
-    kotlinOptions {
-        jvmTarget = "11"
-    }
+    compilerOptions.jvmTarget.set(JVM_17)
 }
 
 tasks.getByName<Test>("test") {

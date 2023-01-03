@@ -162,7 +162,7 @@ class TestCompactSnapshotsConcurrent : TestCompactSnapshotsBase() {
     private fun assertManifestEntry(snap: Snapshot, type: String) {
         snap.dataEntries().forEach {
             val s = table.snapshot(it.snapshotId())
-            Assertions.assertEquals(s.sequenceNumber(), it.sequenceNumber()) {
+            Assertions.assertEquals(s.sequenceNumber(), it.dataSequenceNumber()) {
                 "%s snapshot(#%d, %d) contains DataEntries(%d).sequenceNumber() mismatch: %s".format(
                     type, snap.sequenceNumber(), snap.snapshotId(), it.snapshotId(), it.file().path()
                 )
@@ -171,7 +171,7 @@ class TestCompactSnapshotsConcurrent : TestCompactSnapshotsBase() {
 
         snap.deleteEntries().forEach {
             val s = table.snapshot(it.snapshotId())
-            Assertions.assertEquals(s.sequenceNumber(), it.sequenceNumber()) {
+            Assertions.assertEquals(s.sequenceNumber(), it.dataSequenceNumber()) {
                 "%s snapshot(#%d, %d) contains DeleteEntries(%d).sequenceNumber() mismatch: %s".format(
                     type, snap.sequenceNumber(), snap.snapshotId(), it.snapshotId(), it.file().path()
                 )
