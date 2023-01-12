@@ -33,7 +33,7 @@ sink:
     # s3.endpoint: http://minio:9000
     # s3.access-key-id: admin   # env.AWS_ACCESS_KEY_ID
     # s3.secret-access-key: SuperSecr3t   # env.AWS_SECRET_ACCESS_KEY
-    # client.factory: org.apache.iceberg.aws.AlluvialAwsClientFactory
+    # s3.path-style-access: true
     ## env.AWS_REGION=aws-global
   tableCreation:
     properties:
