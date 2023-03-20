@@ -1,6 +1,6 @@
 source:
   kind: kafka
-  topicPrefix: debezium.mysql.sakila
+  topicPrefix: demo.debezium.mysql.sakila
   # topicsExcluded:
   #   - debezium.postgres.dvdrental.public.__debezium_signals
   #   - debezium.postgres.dvdrental.public.__debezium_heartbeat
@@ -54,10 +54,10 @@ sink:
 stream:
   kind: debezium
   connector: mysql
-  examineInterval: 3m
-  idleTimeout: 15m
+  examineInterval: 30s
+  idleTimeout: 1m
   commitBatchSize: 1000
-  commitTimespan: 10m
+  commitTimespan: 2m
   rotateByDateInTz: "+07"
 
 manager:
