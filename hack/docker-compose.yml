@@ -29,8 +29,8 @@ services:
         [ "CMD", "kafka-topics.sh", "--list", "--zookeeper", "zookeeper:2181" ]
 
   schema-registry:
-    image: confluentinc/cp-schema-registry:6.1.0
-    container_name: schema-registry
+    image: confluentinc/cp-schema-registry:7.3.0
+    container_name: schema-registry-alluvial
     hostname: schema-registry
     environment:
       SCHEMA_REGISTRY_HOST_NAME: schema-registry
@@ -46,7 +46,10 @@ services:
       - 8081:8081
 
   debezium:
-    image: quay.io/debezium/connect:1.9.3.Final
+    image: alluvial/debezium
+    build:
+      context: ./debezium
+
     environment:
       BOOTSTRAP_SERVERS: kafka:9092
       GROUP_ID: 1
