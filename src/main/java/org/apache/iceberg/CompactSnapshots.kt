@@ -197,7 +197,7 @@ class CompactSnapshots(
     }
 
     private fun rewriteEqualityDelete() {
-        val fileGroups = planEqualityDeleteFiles()
+        val fileGroups = planPartitionedEqualityDeleteFiles()
 
         fileGroups.forEach { (ids, partitionGroup) ->
             val deleteSchema = TypeUtil.select(schema, ids)
@@ -209,27 +209,29 @@ class CompactSnapshots(
             }
             resultBuilder.addDeleteFiles(writer.result().deleteFiles())
         }
+
+        val globalFileGroups = planGlobalEqualityDeletes()
+        globalFileGroups.forEach { (ids, files) ->
+            val deleteSchema = TypeUtil.select(schema, ids)
+            val writer = newEqualityDeleteWriter(ids, deleteSchema)
+            writer.useResource {
+                rewriteEqualityDeleteGlobal(writer, deleteSchema, files)
+            }
+            resultBuilder.addDeleteFiles(writer.result().deleteFiles())
+        }
     }
 
     /**
      * @see org.apache.iceberg.DeleteFileIndex.Builder.build()
      */
-    private fun planEqualityDeleteFiles(): Map<Set<Int>, Map<StructLike, List<DeleteFile>>> {
-        val deleteEntries = highSnapshot.deleteManifests(io)
-            .filter { it.hasAddedFiles() || it.hasExistingFiles() } // ignoreDeleted ManifestFile
-            .transform {
-                ManifestFiles.readDeleteManifest(it, io, specsById)
-                    .liveEntries() // ignoreDeleted ManifestFile
-            }
-            .concat()
-            .filterEntryAfter(lowSnapshot) // ignoreDeleted ManifestFile
-            .filter { it.file().content() == FileContent.EQUALITY_DELETES }
-
+    private fun planPartitionedEqualityDeleteFiles(): Map<Set<Int>, Map<StructLike, List<DeleteFile>>> {
+        val deleteEntries = planEqualityDeleteEntries()
         val partitionType = spec.partitionType()
         val fileGroups = mutableMapOf<Set<Int>, StructLikeMap<MutableList<DeleteFile>>>()
 
         deleteEntries
             .transform { it.copy().file() } // ManifestReader.open using reuseContainers
+            .filter { it.specId() != PartitionSpec.unpartitioned().specId() }
             .forEach {
                 if (it.specId() != spec.specId()) {
                     throw IllegalStateException("Detect specId changed in middle of CompactionGroup")
@@ -246,6 +248,47 @@ class CompactSnapshots(
         return fileGroups
     }
 
+    private fun planGlobalEqualityDeletes(): Map<Set<Int>, List<DeleteFile>> {
+        val fileGroups = mutableMapOf<Set<Int>, MutableList<DeleteFile>>()
+        planEqualityDeleteEntries()
+            .transform { it.copy().file() }
+            .filter { it.specId() == PartitionSpec.unpartitioned().specId() }
+            .forEach {
+                val fileGroup = fileGroups.computeIfAbsent(it.equalityFieldIds().toSet()) {
+                    arrayListOf()
+                }
+                fileGroup.add(it)
+            }
+        return fileGroups
+    }
+
+    private fun planEqualityDeleteEntries(): Iterable<ManifestEntry<DeleteFile>> {
+        return highSnapshot.deleteManifests(io)
+            .filter { it.hasAddedFiles() || it.hasExistingFiles() } // ignoreDeleted ManifestFile
+            .transform {
+                ManifestFiles.readDeleteManifest(it, io, specsById)
+                    .liveEntries() // ignoreDeleted ManifestFile
+            }
+            .concat()
+            .filterEntryAfter(lowSnapshot) // ignoreDeleted ManifestFile
+            .filter { it.file().content() == FileContent.EQUALITY_DELETES }
+    }
+
+
+    private fun readEqualityDelete(deleteSchema: IcebergSchema, files: List<DeleteFile>): Set<Record> {
+        if (logger.isDebugEnabled) logging(files)
+        // reuseContainers=false to give each record its own object
+        // otherwise transform(Record::copy) is need because delete records will be held in a set
+        val reader = GenericReader(io, deleteSchema, reuseContainers = false)
+        val iterable = reader.openFile(files)
+
+        @Suppress("UNCHECKED_CAST")
+        return Deletes.toEqualitySet(
+            iterable as CloseableIterable<StructLike>,
+            deleteSchema.asStruct()
+        ) as Set<Record>
+    }
+
     /**
      * @see org.apache.iceberg.data.DeleteFilter.applyEqDeletes()
      */
@@ -256,21 +299,23 @@ class CompactSnapshots(
         files: List<DeleteFile>
     ) {
         logger.info("rewrite EQUALITY_DELETES for partition={} with {} DeleteFiles", partition, files.size)
-        if (logger.isDebugEnabled) logging(files)
-        // reuseContainers=false to give each record its own object
-        // otherwise transform(Record::copy) is need because delete records will be held in a set
-        val reader = GenericReader(io, deleteSchema, reuseContainers = false)
-        val iterable = reader.openFile(files)
-
-        @Suppress("UNCHECKED_CAST")
-        val deleteSet = Deletes.toEqualitySet(
-            iterable as CloseableIterable<StructLike>,
-            deleteSchema.asStruct()
-        ) as Set<Record>
-
+        val deleteSet = readEqualityDelete(deleteSchema, files)
 
         for (rec in deleteSet) {
             writer.write(rec, spec, partition)
+        }
+    }
+
+    private fun rewriteEqualityDeleteGlobal(
+        writer: PartitioningWriter<Record, DeleteWriteResult>,
+        deleteSchema: IcebergSchema,
+        files: List<DeleteFile>
+    ) {
+        logger.info("rewrite GLOBAL EQUALITY_DELETES with {} DeleteFiles", files.size)
+        val deleteSet = readEqualityDelete(deleteSchema, files)
+
+        for (rec in deleteSet) {
+            writer.write(rec, PartitionSpec.unpartitioned(), null)
         }
     }
 
