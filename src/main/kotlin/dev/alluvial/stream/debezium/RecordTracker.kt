@@ -96,7 +96,7 @@ class RecordTracker private constructor(
             lastSourceTimestamp = sourceTimestamp
         else ordered = false
 
-        val sourceWALPosition = lastSourceWALPosition.fromSource(source)
+        val sourceWALPosition = lastSourceWALPosition.fromSource(source) ?: return
         if (lastSourceWALPosition < sourceWALPosition)
             lastSourceWALPosition = sourceWALPosition
         else ordered = ordered && lastSourceWALPosition == sourceWALPosition && "r" == record.op()
