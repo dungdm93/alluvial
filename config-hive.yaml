@@ -1,0 +1,76 @@
+source:
+  kind: kafka
+  topicPrefix: demo.debezium.mysql.sakila
+  # topicsExcluded:
+  #   - debezium.postgres.dvdrental.public.__debezium_signals
+  #   - debezium.postgres.dvdrental.public.__debezium_heartbeat
+  config:
+    bootstrap.servers: kafka:9092
+    group.id: alluvial
+    key.converter: io.confluent.connect.avro.AvroConverter
+    value.converter: io.confluent.connect.avro.AvroConverter
+    key.converter.schema.registry.url: http://schema-registry:8081
+    value.converter.schema.registry.url: http://schema-registry:8081
+    poll.timeout.ms: 1000
+  namingAdjusters:
+    - class: dev.alluvial.source.kafka.naming.ChangingCaseNamingAdjuster
+      case: lower
+    - class: dev.alluvial.source.kafka.naming.MappingSchemaNamingAdjuster
+      map:
+        sakila: dvdrental
+        foobar: abcxyz
+
+sink:
+  kind: iceberg
+  catalog:
+    # catalog-impl: org.apache.iceberg.hadoop.HadoopCatalog
+    # warehouse: /tmp/warehouse
+    catalog-impl: org.apache.iceberg.hive.HiveCatalog
+    warehouse: s3a://alluvial/warehouse
+    uri: thrift://hive-metastore:9083
+    io-impl: org.apache.iceberg.aws.s3.S3FileIO
+    ## see: org.apache.iceberg.aws.AwsProperties
+    s3.endpoint: http://minio:9000
+    s3.access-key-id: admin   # env.AWS_ACCESS_KEY_ID
+    s3.secret-access-key: SuperSecr3t   # env.AWS_SECRET_ACCESS_KEY
+    s3.path-style-access: true
+    ## env.AWS_REGION=aws-global
+  tableCreation:
+    properties:
+      write.format.default: PARQUET
+      write.target-file-size-bytes: 134217728  # 128MB
+      engine.hive.enabled: true
+    baseLocation: s3a://alluvial/sakila/
+    partitionSpec:
+      actor:
+        - column: actor_id
+          transform: truncate[50]
+          name: actor_id_truncated
+      film:
+        - column: last_update
+          transform: month
+          name: lum
+
+stream:
+  kind: debezium
+  connector: mysql
+  examineInterval: 30s
+  idleTimeout: 1m
+  commitBatchSize: 1000
+  commitTimespan: 2m
+  rotateByDateInTz: "+07"
+
+manager:
+  namespace: [ dvdrental ]
+  compactSnapshots:
+    tz: "+07"
+
+metrics:
+  exporters:
+    - kind: prometheus
+      properties:
+        prometheus.bind: 0.0.0.0:9090
+        prometheus.daemon: true
+  commonTags:
+    environment: "local"
+    service: "sakila"
