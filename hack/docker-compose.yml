@@ -2,23 +2,21 @@ version: '3.7'
 
 
 services:
-  zookeeper:
-    image: quay.io/debezium/zookeeper:1.9.3.Final
-    networks:
-      default:
-        ipv4_address: 10.5.0.2
-    # ports:
-    #   - 2181:2181 # client connections
-    #   - 2888:2888 # peers connections
-    #   - 3888:3888 # leader election
-
   kafka:
-    image: quay.io/debezium/kafka:1.9.3.Final
+    image: bitnami/kafka:3.4.0
     environment:
-      ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_NUM_PARTITIONS: 12
-    depends_on:
-      - zookeeper
+      KAFKA_ENABLE_KRAFT: yes
+      KAFKA_CFG_PROCESS_ROLES: broker,controller
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,CLIENT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CFG_LISTENERS: CONTROLLER://:9094,CLIENT://:9092,EXTERNAL://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: CLIENT://kafka:9092,EXTERNAL://kafka:9093
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: CLIENT
+      KAFKA_CFG_BROKER_ID: 1
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@127.0.0.1:9094
+      ALLOW_PLAINTEXT_LISTENER: yes
+      # BITNAMI_DEBUG: yes
     networks:
       default:
         ipv4_address: 10.5.0.3
@@ -26,7 +24,7 @@ services:
       - 9092:9092
     healthcheck:
       test:
-        [ "CMD", "kafka-topics.sh", "--list", "--zookeeper", "zookeeper:2181" ]
+        [ "CMD", "/opt/kafka/kafka_liveness.sh" ]
 
   schema-registry:
     image: confluentinc/cp-schema-registry:7.3.0
@@ -68,18 +66,31 @@ services:
     ports:
       - 8083:8083
 
-  akhq:
-    image: tchiotludo/akhq:0.20.0
-    environment:
-      MICRONAUT_CONFIG_FILES: /etc/akhq/akhq.yml
-    volumes:
-      - ./akhq.yml:/etc/akhq/akhq.yml
+  console:
+    container_name: console
+    image: docker.redpanda.com/vectorized/console:v2.2.3
     networks:
       default:
-        ipv4_address: 10.5.0.6
+        ipv4_address: 10.5.0.14
+    entrypoint: /bin/sh
+    depends_on:
+     - kafka
+    command: -c 'echo "$$CONSOLE_CONFIG_FILE" > /tmp/config.yml; /app/console'
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["kafka:9092"]
+          schemaRegistry:
+            enabled: true
+            urls: ["http://schema-registry:8081"]
+        connect:
+          enabled: true
+          clusters:
+            - name: debezium
+              url: http://debezium:8083
     ports:
-      - 8080:8080
-
+      - 8082:8080
   ##### MySQL #####
   # https://hub.docker.com/_/mysql
   # https://debezium.io/documentation/reference/1.8/connectors/mysql.html#setting-up-mysql
