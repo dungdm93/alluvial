@@ -3,6 +3,7 @@
   "config": {
     "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
     "name": "demo.debezium.postgres.dvdrental",
+    "topic.prefix": "demo.debezium.postgres.dvdrental",
     "tasks.max": "1",
     "plugin.name": "pgoutput",
     "database.hostname": "postgres",
@@ -15,6 +16,7 @@
     "key.converter.schema.registry.url": "http://schema-registry:8081",
     "value.converter": "io.confluent.connect.avro.AvroConverter",
     "value.converter.schema.registry.url": "http://schema-registry:8081",
-    "provide.transaction.metadata": "true"
+    "provide.transaction.metadata": "true",
+    "signal.data.collection": "public.__debezium_signals"
   }
 }
