@@ -76,6 +76,18 @@ internal class TestRecordTracker {
         )
     }
 
+    @Test
+    fun testPostgresRecordWithoutWalInfo() {
+        val source: KafkaStruct = mockk {
+            val struct = this
+            every { struct.getInt64("lsn") } returns null
+            every { struct.get("lsn") } returns null
+        }
+        val validWalPos = PostgresWALPosition(1L)
+        Assertions.assertNull(validWalPos.fromSource(source))
+        Assertions.assertTrue(validWalPos > source)
+    }
+
     @ParameterizedTest
     @MethodSource("provideSinkRecord")
     fun testMaybeDuplicate(record: SinkRecord, result: Boolean) {

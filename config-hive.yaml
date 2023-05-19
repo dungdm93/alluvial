@@ -1,6 +1,6 @@
 source:
   kind: kafka
-  topicPrefix: demo.debezium.mysql.sakila
+  topicPrefix: demo.debezium.postgres.dvdrental
   # topicsExcluded:
   #   - debezium.postgres.dvdrental.public.__debezium_signals
   #   - debezium.postgres.dvdrental.public.__debezium_heartbeat
@@ -17,8 +17,7 @@ source:
       case: lower
     - class: dev.alluvial.source.kafka.naming.MappingSchemaNamingAdjuster
       map:
-        sakila: dvdrental
-        foobar: abcxyz
+        dvdrental: dvdrental_pg
 
 sink:
   kind: iceberg
@@ -53,7 +52,7 @@ sink:
 
 stream:
   kind: debezium
-  connector: mysql
+  connector: postgresql
   examineInterval: 30s
   idleTimeout: 1m
   commitBatchSize: 1000
