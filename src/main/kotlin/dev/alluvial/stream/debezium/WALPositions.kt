@@ -14,7 +14,8 @@ import java.util.regex.Pattern
     JsonSubTypes.Type(value = PostgresWALPosition::class, name = "postgresql"),
 )
 interface WALPosition : Comparable<WALPosition> {
-    fun fromSource(source: KafkaStruct): WALPosition
+    fun fromSource(source: KafkaStruct): WALPosition?
+    // Kafka record without WAL position is considered "less than"
     operator fun compareTo(other: KafkaStruct): Int
 }
 
@@ -63,8 +64,8 @@ data class MySqlWALPosition(
 data class PostgresWALPosition(
     val lsn: Long
 ) : WALPosition {
-    override fun fromSource(source: KafkaStruct): WALPosition {
-        val lsn = source.getInt64("lsn")
+    override fun fromSource(source: KafkaStruct): WALPosition? {
+        val lsn = source.getInt64("lsn") ?: return null
         return PostgresWALPosition(lsn)
     }
 
@@ -74,7 +75,7 @@ data class PostgresWALPosition(
     }
 
     override fun compareTo(other: KafkaStruct): Int {
-        val thatLsn = other.getInt64("lsn")
+        val thatLsn = other.getInt64("lsn") ?: return 1
         return lsn.compareTo(thatLsn)
     }
 }
