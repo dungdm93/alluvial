@@ -40,7 +40,7 @@ internal object ZonedTimestampConverter : LogicalTypeConverter<String, Long> {
             Long.MIN_VALUE -> "-infinity"
             else -> {
                 val zdt = ZonedDateTimes.ofEpochTime(ts, sourcePrecision)
-                ZonedTimestamp.toIsoString(zdt, null)
+                ZonedTimestamp.toIsoString(zdt, null, null)
             }
         }
     }
@@ -65,7 +65,7 @@ internal object ZonedTimestampConverter : LogicalTypeConverter<String, Long> {
             Long.MIN_VALUE -> "-infinity"
             else -> {
                 val zdt = ZonedDateTimes.ofEpochTime(ts, sourcePrecision)
-                ZonedTimestamp.toIsoString(zdt, null)
+                ZonedTimestamp.toIsoString(zdt, null, null)
             }
         }
     }

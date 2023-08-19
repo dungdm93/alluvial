@@ -3,7 +3,6 @@ package org.apache.iceberg
 import org.apache.iceberg.data.FileHelpers
 import org.apache.iceberg.data.GenericRecord
 import org.apache.iceberg.data.Record
-import org.apache.iceberg.exceptions.ValidationException
 import org.apache.iceberg.types.Types
 import org.apache.iceberg.util.Pair
 import org.junit.jupiter.api.AfterEach
@@ -167,9 +166,9 @@ class TestAlluvialRowDelta {
             .rollbackTo(2)
             .commit()
 
-        val e = Assertions.assertThrows(ValidationException::class.java, rowDelta::commit)
+        val e = Assertions.assertThrows(IllegalArgumentException::class.java, rowDelta::commit)
         Assertions.assertEquals(
-            "Cannot determine history between starting snapshot 4 and the last known ancestor 1",
+            "Snapshot 4 is not an ancestor of 2",
             e.message
         )
     }

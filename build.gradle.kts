@@ -35,15 +35,15 @@ repositories {
 }
 
 val slf4jVersion = "1.7.36"
-val logbackVersion = "1.2.11"   // pinned. logback 1.3+ requires slf4j 2.x
-val debeziumVersion = "2.1.1.Final"
-val kafkaVersion = "3.3.1"
-val confluentVersion = "7.0.0"
-val icebergVersion = "1.1.0"
+val logbackVersion = "1.2.12"   // pinned. logback 1.3+ requires slf4j 2.x
+val debeziumVersion = "2.3.2.Final"
+val kafkaVersion = "3.5.1"
+val confluentVersion = "7.4.0"
+val icebergVersion = "1.3.1"
 val hadoopVersion = "3.3.2"
 val hiveVersion = "3.1.3"
 val awsVersion = "2.19.4"
-val jacksonVersion = "2.13.3"
+val jacksonVersion = "2.14.2"
 val micrometerVersion = "1.9.0"
 val prometheusVersion = "0.15.0"
 
@@ -59,8 +59,8 @@ dependencies {
     implementation("io.micrometer:micrometer-core:$micrometerVersion")
     implementation("io.micrometer:micrometer-registry-prometheus:$micrometerVersion")
     implementation("io.prometheus:simpleclient_httpserver:$prometheusVersion")
-    implementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:$jacksonVersion")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion")
 
     // Debezium
@@ -140,14 +140,14 @@ dependencies {
     implementation("software.amazon.awssdk:glue:$awsVersion")
     implementation("software.amazon.awssdk:sts:$awsVersion")
     implementation("software.amazon.awssdk:dynamodb:$awsVersion")
-    implementation("software.amazon.awssdk:url-connection-client:$awsVersion")
 
     // Make those Iceberg's transient dependencies available in compile scope
     implementation("org.apache.iceberg:iceberg-common:$icebergVersion")
     implementation("org.apache.iceberg:iceberg-bundled-guava:$icebergVersion")
-    implementation("org.apache.avro:avro:1.11.0")
-    implementation("org.apache.orc:orc-core:1.7.6")
-    implementation("org.apache.parquet:parquet-avro:1.12.3")
+    implementation("com.google.guava:guava:31.1-jre")
+    implementation("org.apache.avro:avro:1.11.1")
+    implementation("org.apache.orc:orc-core:1.8.3:nohive")
+    implementation("org.apache.parquet:parquet-avro:1.13.1")
 
     // Test Frameworks
     testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")

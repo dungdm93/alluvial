@@ -116,7 +116,7 @@ class IcebergTableOutlet(
 
         ///////////// Records per file /////////////
         private val recordCountSummaries = buildMap {
-            FileContent.values().forEach {
+            FileContent.entries.forEach {
                 val name = it.name.lowercase()
                 val summary = DistributionSummary.builder("alluvial.outlet.records")
                     .tags(tags).tag("content", name)
@@ -130,7 +130,7 @@ class IcebergTableOutlet(
 
         ///////////// File size in bytes /////////////
         private val fileSizeSummaries = buildMap {
-            FileContent.values().forEach {
+            FileContent.entries.forEach {
                 val name = it.name.lowercase()
                 val summary = DistributionSummary.builder("alluvial.outlet.file_size")
                     .tags(tags).tag("content", name)
