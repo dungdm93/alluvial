@@ -1,18 +1,20 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-
 plugins {
-    application
     java
-    kotlin("jvm") version "1.8.0"
-    id("io.spring.dependency-management") version "1.0.11.RELEASE"
+    kotlin("jvm") version "1.9.0"
+    application
 }
 
 group = "dev.alluvial"
 version = "0.1"
 
-java.toolchain {
-    languageVersion.set(JavaLanguageVersion.of(17))
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
+}
+
+kotlin {
+    jvmToolchain(17)
 }
 
 application {
@@ -160,10 +162,6 @@ dependencies {
     testImplementation("org.apache.iceberg:iceberg-api:$icebergVersion:tests")
     testImplementation("org.apache.iceberg:iceberg-core:$icebergVersion:tests")
     testImplementation("org.apache.iceberg:iceberg-data:$icebergVersion:tests")
-}
-
-tasks.withType<KotlinCompile> {
-    compilerOptions.jvmTarget.set(JVM_17)
 }
 
 tasks.getByName<Test>("test") {
