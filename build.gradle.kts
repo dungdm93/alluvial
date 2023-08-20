@@ -36,6 +36,8 @@ repositories {
 
 val slf4jVersion = "1.7.36"
 val logbackVersion = "1.2.12"   // pinned. logback 1.3+ requires slf4j 2.x
+val opentelemetryVersion = "1.29.0"
+
 val debeziumVersion = "2.3.2.Final"
 val kafkaVersion = "3.5.1"
 val confluentVersion = "7.4.0"
@@ -56,6 +58,13 @@ dependencies {
     implementation(kotlin("stdlib"))
     api("org.slf4j:slf4j-api:$slf4jVersion")
     runtimeOnly("ch.qos.logback:logback-classic:$logbackVersion")
+    api("io.opentelemetry:opentelemetry-api:$opentelemetryVersion")
+    implementation("io.opentelemetry:opentelemetry-sdk-extension-autoconfigure:$opentelemetryVersion")
+    runtimeOnly("io.opentelemetry:opentelemetry-exporter-otlp:$opentelemetryVersion")
+    runtimeOnly("io.opentelemetry:opentelemetry-exporter-logging:$opentelemetryVersion")
+    runtimeOnly("io.opentelemetry:opentelemetry-exporter-prometheus:$opentelemetryVersion-alpha")
+    runtimeOnly("io.opentelemetry.instrumentation:opentelemetry-logback-mdc-1.0:$opentelemetryVersion-alpha")
+
     implementation("io.micrometer:micrometer-core:$micrometerVersion")
     implementation("io.micrometer:micrometer-registry-prometheus:$micrometerVersion")
     implementation("io.prometheus:simpleclient_httpserver:$prometheusVersion")
