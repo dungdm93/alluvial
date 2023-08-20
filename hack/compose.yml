@@ -2,43 +2,37 @@ version: '3.7'
 
 
 services:
-  zookeeper:
-    image: quay.io/debezium/zookeeper:1.9.3.Final
-    networks:
-      default:
-        ipv4_address: 10.5.0.2
-    # ports:
-    #   - 2181:2181 # client connections
-    #   - 2888:2888 # peers connections
-    #   - 3888:3888 # leader election
-
   kafka:
-    image: quay.io/debezium/kafka:1.9.3.Final
+    image: bitnami/kafka:3.5
     environment:
-      ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_NUM_PARTITIONS: 12
-    depends_on:
-      - zookeeper
+      # KRaft settings
+      KAFKA_CFG_NODE_ID: 0
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+      # Listeners
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+    hostname: kafka
     networks:
       default:
         ipv4_address: 10.5.0.3
     ports:
       - 9092:9092
+    volumes:
+      - kafka_data:/bitnami
     healthcheck:
       test:
-        [ "CMD", "kafka-topics.sh", "--list", "--zookeeper", "zookeeper:2181" ]
+        [ "CMD", "kafka-topics.sh", "--list", "--bootstrap-server", "localhost:9092" ]
 
   schema-registry:
-    image: confluentinc/cp-schema-registry:6.1.0
-    container_name: schema-registry
-    hostname: schema-registry
+    image: bitnami/schema-registry:7.4
+    depends_on: [ kafka ]
     environment:
-      SCHEMA_REGISTRY_HOST_NAME: schema-registry
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:9092
-      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
-      SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY_LEVEL: NONE
-    depends_on:
-      - kafka
+      SCHEMA_REGISTRY_KAFKA_BROKERS: PLAINTEXT://kafka:9092
+      SCHEMA_REGISTRY_AVRO_COMPATIBILY_LEVEL: NONE
     networks:
       default:
         ipv4_address: 10.5.0.4
@@ -46,7 +40,12 @@ services:
       - 8081:8081
 
   debezium:
-    image: quay.io/debezium/connect:1.9.3.Final
+    image: alluvial/debezium:2.3
+    build:
+      context: ./debezium
+      args:
+        DEBEZIUM_VERSION: 2.3
+    depends_on: [ kafka ]
     environment:
       BOOTSTRAP_SERVERS: kafka:9092
       GROUP_ID: 1
@@ -57,25 +56,26 @@ services:
       VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
       CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
       CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
-    depends_on:
-      - kafka
+
+      ENABLE_CONFLUENT_CONVERTERS: true
     networks:
       default:
         ipv4_address: 10.5.0.5
     ports:
       - 8083:8083
 
-  akhq:
-    image: tchiotludo/akhq:0.20.0
+  console:
+    image: docker.redpanda.com/vectorized/console:v2.3.1
+    depends_on: [ kafka, schema-registry ]
     environment:
-      MICRONAUT_CONFIG_FILES: /etc/akhq/akhq.yml
-    volumes:
-      - ./akhq.yml:/etc/akhq/akhq.yml
+      CONFIG_FILEPATH: /etc/kafka-console/config.yml
     networks:
       default:
         ipv4_address: 10.5.0.6
     ports:
       - 8080:8080
+    volumes:
+      - ./console:/etc/kafka-console/
 
   ##### MySQL #####
   # https://hub.docker.com/_/mysql
@@ -108,7 +108,7 @@ services:
   # sql> SHOW wal_level;
   # sql> SELECT * FROM pg_settings;
   postgres:
-    image: postgres:11-alpine
+    image: postgres:15-alpine
     command:
       - -c
       - wal_level=logical
@@ -126,6 +126,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
 volumes:
+  kafka_data:
   mysql_data:
   postgres_data:
 

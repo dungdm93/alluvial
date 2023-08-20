@@ -1,8 +1,8 @@
 {
-  "name": "demo.debezium.mysql.sakila",
+  "name": "debezium.mysql.sakila",
   "config": {
     "connector.class": "io.debezium.connector.mysql.MySqlConnector",
-    "name": "demo.debezium.mysql.sakila",
+    "topic.prefix": "debezium.mysql.sakila",
     "tasks.max": "1",
     "database.hostname": "mysql",
     "database.port": "3306",
@@ -10,9 +10,10 @@
     "database.password": "SuperSecr3t",
     "database.server.name": "debezium.mysql.sakila",
     "database.include.list": "sakila",
+    "database.server.id": "123456",
     "table.include.list": "sakila.actor,sakila.film",
-    "database.history.kafka.bootstrap.servers": "kafka:9092",
-    "database.history.kafka.topic": "debezium.mysql.sakila.dbhistory",
+    "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
+    "schema.history.internal.kafka.topic": "debezium.mysql.sakila.dbhistory",
     "signal.kafka.bootstrap.servers": "kafka:9092",
     "signal.kafka.topic": "_debezium.signals",
     "read.only": "true",
