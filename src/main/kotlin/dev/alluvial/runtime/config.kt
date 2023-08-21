@@ -13,6 +13,7 @@ data class Config(
     val stream: StreamConfig,
     val manager: ManagerConfig,
     val metrics: MetricsConfig,
+    val telemetry: TelemetryConfig,
 )
 
 data class SourceConfig(
@@ -153,3 +154,8 @@ data class MetricsExporterConfig(
         require(kind.isNotEmpty()) { "metrics.exporters.kind cannot be empty" }
     }
 }
+
+data class TelemetryConfig(
+    val enabled: Boolean = false,
+    val properties: Map<String, String> = emptyMap(),
+)
