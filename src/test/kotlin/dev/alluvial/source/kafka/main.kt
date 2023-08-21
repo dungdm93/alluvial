@@ -1,7 +1,7 @@
 package dev.alluvial.source.kafka
 
 import dev.alluvial.runtime.SourceConfig
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import io.opentelemetry.api.OpenTelemetry
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
@@ -27,7 +27,10 @@ fun main() {
         topicPrefix = "debezium.mysql",
         config = config
     )
-    val source = KafkaSource(sourceConfig, SimpleMeterRegistry())
+    val telemetry = OpenTelemetry.noop()
+    val tracer = telemetry.getTracer("demo")
+    val meter = telemetry.getMeter("demo")
+    val source = KafkaSource(sourceConfig, telemetry, tracer, meter)
     val name = "sakila.actor"
     val inlet = source.getInlet(name, "debezium.mysql.sakila.sakila.actor")
 

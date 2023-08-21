@@ -75,6 +75,7 @@ metrics:
     environment: "local"
     service: "sakila"
 
+# https://github.com/open-telemetry/opentelemetry-java/tree/main/sdk-extensions/autoconfigure
 telemetry:
   enabled: true
   properties: {}

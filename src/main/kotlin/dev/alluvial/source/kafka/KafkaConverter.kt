@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory
 import java.io.Closeable
 
 @Suppress("MemberVisibilityCanBePrivate")
-class KafkaConverter(config: Map<String, Any>) : Closeable {
+class KafkaConverter(config: Map<String, *>) : Closeable {
     companion object {
         private val logger = LoggerFactory.getLogger(KafkaConverter::class.java)
 
@@ -21,7 +21,7 @@ class KafkaConverter(config: Map<String, Any>) : Closeable {
         const val HEADER_CONVERTER_CLASS_CONFIG = "header.converter"
         const val HEADER_CONVERTER_CLASS_DEFAULT = "org.apache.kafka.connect.storage.SimpleHeaderConverter"
 
-        fun newConverter(config: Map<String, Any>, classPropertyName: String, isKey: Boolean): Converter {
+        fun newConverter(config: Map<String, *>, classPropertyName: String, isKey: Boolean): Converter {
             require(config.containsKey(classPropertyName)) { "Require '$classPropertyName' in config" }
             val className: String = config[classPropertyName] as String
             val jClass = Class.forName(className)
@@ -35,7 +35,7 @@ class KafkaConverter(config: Map<String, Any>) : Closeable {
             return converter
         }
 
-        fun newHeaderConverter(config: Map<String, Any>, classPropertyName: String): HeaderConverter {
+        fun newHeaderConverter(config: Map<String, *>, classPropertyName: String): HeaderConverter {
             val className: String = config.getOrDefault(classPropertyName, HEADER_CONVERTER_CLASS_DEFAULT) as String
             val jClass = Class.forName(className)
             val converter = jClass.getDeclaredConstructor().newInstance() as HeaderConverter
@@ -59,7 +59,7 @@ class KafkaConverter(config: Map<String, Any>) : Closeable {
         headerConverter = newHeaderConverter(config, HEADER_CONVERTER_CLASS_CONFIG)
     }
 
-    fun convert(message: ConsumerRecord<ByteArray, ByteArray>): SinkRecord {
+    fun convert(message: ConsumerRecord<ByteArray?, ByteArray?>): SinkRecord {
         val keyAndSchema = convertKey(message)
         val valueAndSchema = convertValue(message)
         val headers = convertHeaders(message)
@@ -73,7 +73,7 @@ class KafkaConverter(config: Map<String, Any>) : Closeable {
         )
     }
 
-    fun convertKey(message: ConsumerRecord<ByteArray, ByteArray>): SchemaAndValue {
+    fun convertKey(message: ConsumerRecord<ByteArray?, ByteArray?>): SchemaAndValue {
         try {
             return keyConverter.toConnectData(message.topic(), message.headers(), message.key())
         } catch (e: Exception) {
@@ -85,7 +85,7 @@ class KafkaConverter(config: Map<String, Any>) : Closeable {
         }
     }
 
-    fun convertValue(message: ConsumerRecord<ByteArray, ByteArray>): SchemaAndValue {
+    fun convertValue(message: ConsumerRecord<ByteArray?, ByteArray?>): SchemaAndValue {
         try {
             return valueConverter.toConnectData(message.topic(), message.headers(), message.value())
         } catch (e: Exception) {
@@ -97,7 +97,7 @@ class KafkaConverter(config: Map<String, Any>) : Closeable {
         }
     }
 
-    fun convertHeaders(message: ConsumerRecord<ByteArray, ByteArray>): Headers {
+    fun convertHeaders(message: ConsumerRecord<ByteArray?, ByteArray?>): Headers {
         val result: Headers = ConnectHeaders()
         val recordHeaders = message.headers() ?: return result
 

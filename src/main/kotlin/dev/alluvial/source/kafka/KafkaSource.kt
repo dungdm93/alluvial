@@ -2,8 +2,10 @@ package dev.alluvial.source.kafka
 
 import dev.alluvial.runtime.SourceConfig
 import dev.alluvial.source.kafka.naming.NamingAdjusterManager
-import io.micrometer.core.instrument.MeterRegistry
-import io.micrometer.core.instrument.binder.kafka.KafkaClientMetrics
+import io.opentelemetry.api.OpenTelemetry
+import io.opentelemetry.api.metrics.Meter
+import io.opentelemetry.api.trace.Tracer
+import io.opentelemetry.instrumentation.kafkaclients.v2_6.KafkaTelemetry
 import org.apache.iceberg.catalog.TableIdentifier
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.OffsetSpec
@@ -14,7 +16,12 @@ import org.apache.kafka.common.TopicPartition
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 
-class KafkaSource(sourceConfig: SourceConfig, private val registry: MeterRegistry) : Closeable {
+class KafkaSource(
+    sourceConfig: SourceConfig,
+    telemetry: OpenTelemetry,
+    private val tracer: Tracer,
+    private val meter: Meter,
+) {
     companion object {
         private val logger = LoggerFactory.getLogger(KafkaSource::class.java)
         private val DEFAULT_CONFIG = mapOf(
@@ -27,7 +34,22 @@ class KafkaSource(sourceConfig: SourceConfig, private val registry: MeterRegistr
         )
     }
 
-    private val config = sourceConfig.config + DEFAULT_CONFIG
+    private val kafkaTelemetry = KafkaTelemetry.create(telemetry)
+    private val config = buildMap {
+        putAll(sourceConfig.config)
+        // TracingInterceptor classes SHOULD accept config opentelemetry.supplier
+        put(
+            ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
+            "io.opentelemetry.instrumentation.kafkaclients.v2_6.TracingProducerInterceptor"
+        )
+        put(
+            ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
+            "io.opentelemetry.instrumentation.kafkaclients.v2_6.TracingConsumerInterceptor"
+        )
+        putAll(kafkaTelemetry.metricConfigProperties())
+        putAll(DEFAULT_CONFIG)
+    }
+
     private val topicPrefix = sourceConfig.topicPrefix.trimEnd('.') + "."
     private val topicsExcluded = sourceConfig.topicsExcluded
     private val topicsIncluded = sourceConfig.topicsIncluded
@@ -35,12 +57,11 @@ class KafkaSource(sourceConfig: SourceConfig, private val registry: MeterRegistr
     private val adminClient = AdminClient.create(config)
     private val converter = KafkaConverter(config)
     private val naming = NamingAdjusterManager(sourceConfig.namingAdjusters)
-    private val metrics = KafkaClientMetrics(adminClient).also { it.bindTo(registry) }
 
     fun availableTopics(): List<String> {
         val topics = adminClient.listTopics().names().get()
         return topics.filter {
-            if(topicsIncluded.isNotEmpty())
+            if (topicsIncluded.isNotEmpty())
                 return@filter topicsIncluded.contains(it)
             if (!it.startsWith(topicPrefix) || topicsExcluded.contains(it)) return@filter false
             val str = it.substring(topicPrefix.length)
@@ -50,11 +71,11 @@ class KafkaSource(sourceConfig: SourceConfig, private val registry: MeterRegistr
 
     fun getInlet(name: String, topic: String): KafkaTopicInlet {
         val overrideConfig = mapOf(ConsumerConfig.CLIENT_ID_CONFIG to name)
-        val consumer = newConsumer<ByteArray, ByteArray>(overrideConfig)
+        val consumer = newConsumer<ByteArray?, ByteArray?>(overrideConfig)
         val converter = getConverter()
 
         logger.info("Creating new inlet {}", name)
-        return KafkaTopicInlet(name, topic, consumer, converter, pollTimeout, registry)
+        return KafkaTopicInlet(name, topic, consumer, converter, pollTimeout, tracer, meter)
     }
 
     fun latestOffsets(topic: String): Map<Int, Long> {
@@ -71,7 +92,7 @@ class KafkaSource(sourceConfig: SourceConfig, private val registry: MeterRegistr
         }.toMap()
     }
 
-    fun <K, V> newConsumer(overrideConfig: Map<String, Any>? = null): KafkaConsumer<K, V> {
+    fun <K, V> newConsumer(overrideConfig: Map<String, *>? = null): KafkaConsumer<K, V> {
         val config = if (overrideConfig == null)
             this.config else
             this.config + overrideConfig
@@ -96,9 +117,5 @@ class KafkaSource(sourceConfig: SourceConfig, private val registry: MeterRegistr
         table = naming.adjustTable(ns, table)
 
         return TableIdentifier.of(*ns.toTypedArray(), table)
-    }
-
-    override fun close() {
-        metrics.close()
     }
 }

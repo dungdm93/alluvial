@@ -79,7 +79,7 @@ class StreamController : Runnable {
         initializeTelemetry(config)
         val connector = config.stream.connector
 
-        source = KafkaSource(config.source, registry)
+        source = KafkaSource(config.source, telemetry, tracer, meter)
         sink = IcebergSink(config.sink, registry)
         val tableCreator = KafkaSchemaTableCreator(source, sink, config.sink.tableCreation)
         streamletFactory = DebeziumStreamletFactory(connector, source, sink, tableCreator, config.stream, registry)

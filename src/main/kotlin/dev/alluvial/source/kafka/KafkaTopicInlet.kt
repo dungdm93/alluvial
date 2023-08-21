@@ -1,17 +1,17 @@
 package dev.alluvial.source.kafka
 
 import dev.alluvial.api.Inlet
-import io.micrometer.core.instrument.Gauge
-import io.micrometer.core.instrument.MeterRegistry
-import io.micrometer.core.instrument.Tags
-import io.micrometer.core.instrument.binder.kafka.KafkaClientMetrics
+import dev.alluvial.utils.withSpan
+import io.opentelemetry.api.common.AttributeKey.stringKey
+import io.opentelemetry.api.common.Attributes
+import io.opentelemetry.api.metrics.Meter
+import io.opentelemetry.api.trace.Tracer
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.connect.sink.SinkRecord
 import org.slf4j.LoggerFactory
-import java.io.Closeable
 import java.time.Duration
 import java.util.ArrayDeque
 import java.util.PriorityQueue
@@ -21,10 +21,11 @@ import java.util.Queue
 class KafkaTopicInlet(
     val name: String,
     val topic: String,
-    private val consumer: Consumer<ByteArray, ByteArray>,
+    private val consumer: Consumer<ByteArray?, ByteArray?>,
     private val converter: KafkaConverter,
     private val pollTimeout: Duration,
-    registry: MeterRegistry,
+    private val tracer: Tracer,
+    private val meter: Meter,
 ) : Inlet {
     companion object {
         private val logger = LoggerFactory.getLogger(KafkaTopicInlet::class.java)
@@ -53,7 +54,8 @@ class KafkaTopicInlet(
     private val partitions: Set<TopicPartition>
     private val partitionQueues = mutableMapOf<Int, Queue<SinkRecord>>()
     private val heap = PriorityQueue(comparator)
-    private val metrics = Metrics(registry)
+
+    private val attributes = Attributes.of(stringKey("inlet"), name)
 
     init {
         partitions = consumer.partitionsFor(topic).map {
@@ -61,12 +63,18 @@ class KafkaTopicInlet(
         }.toSet()
 
         consumer.assign(partitions)
+
+        meter.gaugeBuilder("alluvial.inlet.partition.queue.size").ofLongs()
+            .buildWithCallback {
+                val totalSize = partitionQueues.values.sumOf(Collection<*>::size).toLong()
+                it.record(totalSize, attributes)
+            }
     }
 
     /**
      * Read a record from kafka in timestamp order and ignore Tombstone events
      */
-    fun read(): SinkRecord? {
+    fun read(): SinkRecord? = tracer.withSpan("KafkaTopicInlet.read") {
         val record = pollFromQueues()
         if (record == null) {
             pollFromBrokers()
@@ -119,7 +127,7 @@ class KafkaTopicInlet(
         } while (pausedPartitions.size < partitions.size)
     }
 
-    private fun queueRecords(tp: TopicPartition, records: List<ConsumerRecord<ByteArray, ByteArray>>) {
+    private fun queueRecords(tp: TopicPartition, records: List<ConsumerRecord<ByteArray?, ByteArray?>>) {
         if (records.isEmpty()) return
 
         // add records to queue
@@ -145,7 +153,7 @@ class KafkaTopicInlet(
         consumer.resume(partitions)
     }
 
-    fun commit(positions: Map<Int, Long>) {
+    fun commit(positions: Map<Int, Long>) = tracer.withSpan("KafkaTopicInlet.commit") {
         val offsets = buildMap(positions.size) {
             positions.forEach { (partition, offset) ->
                 val tp = TopicPartition(topic, partition)
@@ -171,14 +179,14 @@ class KafkaTopicInlet(
             .toMap()
     }
 
-    fun seekOffsets(offsets: Map<Int, Long>) {
+    fun seekOffsets(offsets: Map<Int, Long>) = tracer.withSpan("KafkaTopicInlet.seekOffsets") {
         offsets.forEach { (partition, offset) ->
             consumer.seek(TopicPartition(topic, partition), offset)
         }
         commit(offsets)
     }
 
-    fun currentLag(): Long {
+    fun currentLag(): Long = tracer.withSpan("KafkaTopicInlet.currentLag") {
         val endOffsets = consumer.endOffsets(partitions)
         val committedOffsets = committedOffsets()
 
@@ -195,30 +203,9 @@ class KafkaTopicInlet(
         consumer.close()
         partitionQueues.clear()
         heap.clear()
-        metrics.close()
     }
 
     override fun toString(): String {
         return "KafkaTopicInlet($topic)"
-    }
-
-    private inner class Metrics(private val registry: MeterRegistry) : Closeable {
-        private val tags = Tags.of("inlet", name)
-
-        private val kafkaClientMetrics = KafkaClientMetrics(consumer, tags)
-            .also { it.bindTo(registry) }
-
-        private val queueSize = Gauge.builder(
-            "alluvial.inlet.partition.queue.size", this@KafkaTopicInlet.partitionQueues
-        ) { it.values.sumOf(Collection<*>::size).toDouble() }
-            .tags(tags)
-            .description("Total size of all inlet partition queues")
-            .register(registry)
-
-        override fun close() {
-            registry.remove(queueSize)
-            queueSize.close()
-            kafkaClientMetrics.close()
-        }
     }
 }

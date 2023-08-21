@@ -40,7 +40,7 @@ class KafkaSchemaTableCreator(
 
     override fun createTable(topic: String, tableId: TableIdentifier): Table {
         val overrideConfig = mapOf(ConsumerConfig.CLIENT_ID_CONFIG to "${tableId}(creator)")
-        val consumer = source.newConsumer<ByteArray, ByteArray>(overrideConfig)
+        val consumer = source.newConsumer<ByteArray?, ByteArray?>(overrideConfig)
         val converter = source.getConverter()
 
         setupConsumer(consumer, topic)

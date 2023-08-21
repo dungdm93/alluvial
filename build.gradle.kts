@@ -64,6 +64,7 @@ dependencies {
     runtimeOnly("io.opentelemetry:opentelemetry-exporter-logging:$opentelemetryVersion")
     runtimeOnly("io.opentelemetry:opentelemetry-exporter-prometheus:$opentelemetryVersion-alpha")
     runtimeOnly("io.opentelemetry.instrumentation:opentelemetry-logback-mdc-1.0:$opentelemetryVersion-alpha")
+    implementation("io.opentelemetry.instrumentation:opentelemetry-kafka-clients-2.6:$opentelemetryVersion-alpha")
 
     implementation("io.micrometer:micrometer-core:$micrometerVersion")
     implementation("io.micrometer:micrometer-registry-prometheus:$micrometerVersion")
