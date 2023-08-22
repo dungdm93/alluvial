@@ -78,4 +78,8 @@ metrics:
 # https://github.com/open-telemetry/opentelemetry-java/tree/main/sdk-extensions/autoconfigure
 telemetry:
   enabled: true
-  properties: {}
+  properties:
+    otel.traces.exporter: otlp
+    otel.exporter.otlp.endpoint: http://localhost:4317
+    otel.metrics.exporter: prometheus
+    otel.exporter.prometheus.port: 9464

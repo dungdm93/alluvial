@@ -46,7 +46,7 @@ class KafkaTopicInlet(
                 val res = sourceTimestampComparator.compare(o1, o2)
                 if (res != 0) return@Comparator res
             }
-            return@Comparator kafkaTimestampComparator.compare(o1, o2)
+            kafkaTimestampComparator.compare(o1, o2)
         }
     }
 
