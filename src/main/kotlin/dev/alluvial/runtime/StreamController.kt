@@ -7,6 +7,7 @@ import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.source.kafka.KafkaSource
 import dev.alluvial.stream.debezium.DebeziumStreamlet
 import dev.alluvial.stream.debezium.DebeziumStreamletFactory
+import dev.alluvial.utils.SERVICE_COMPONENT
 import dev.alluvial.utils.recommendedPoolSize
 import dev.alluvial.utils.shutdownAndAwaitTermination
 import io.micrometer.core.instrument.Gauge
@@ -16,6 +17,8 @@ import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.api.metrics.Meter
 import io.opentelemetry.api.trace.Tracer
 import io.opentelemetry.sdk.autoconfigure.AutoConfiguredOpenTelemetrySdk
+import io.opentelemetry.semconv.resource.attributes.ResourceAttributes.SERVICE_NAME
+import io.opentelemetry.semconv.resource.attributes.ResourceAttributes.SERVICE_VERSION
 import org.apache.iceberg.catalog.TableIdentifier
 import org.slf4j.LoggerFactory
 import java.io.Closeable
@@ -91,6 +94,13 @@ class StreamController : Runnable {
             OpenTelemetry.noop() else
             AutoConfiguredOpenTelemetrySdk.builder()
                 .addPropertiesSupplier { OPENTELEMETRY_DEFAULT_PROPERTIES + config.telemetry.properties }
+                .addResourceCustomizer { r, _ ->
+                    val rb = r.toBuilder()
+                    rb.put(SERVICE_NAME, "alluvial")
+                    rb.put(SERVICE_VERSION, "0.13.0")
+                    rb.put(SERVICE_COMPONENT, "StreamController")
+                    rb.build()
+                }
                 .setResultAsGlobal()
                 .build()
                 .openTelemetrySdk
