@@ -18,8 +18,6 @@ import java.time.format.DateTimeFormatter
 class DebeziumTaskWriterFactory(
     private val table: Table,
     private val tracker: RecordTracker,
-    private val registry: MeterRegistry,
-    private val tags: Tags
 ) {
     companion object {
         private val PARTITION_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneOffset.UTC)
@@ -85,8 +83,6 @@ class DebeziumTaskWriterFactory(
             table.schema(),
             table.schema().identifierFieldIds(),
             tracker,
-            registry,
-            tags
         )
     }
 }

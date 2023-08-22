@@ -64,7 +64,7 @@ class StreamController : Instrumental(), Runnable {
         val connector = config.stream.connector
 
         source = KafkaSource(config.source, telemetry, tracer, meter)
-        sink = IcebergSink(config.sink, registry)
+        sink = IcebergSink(config.sink, telemetry, tracer, meter)
         val tableCreator = KafkaSchemaTableCreator(source, sink, config.sink.tableCreation)
         streamletFactory = DebeziumStreamletFactory(connector, source, sink, tableCreator, config.stream, registry)
         examineInterval = config.stream.examineInterval

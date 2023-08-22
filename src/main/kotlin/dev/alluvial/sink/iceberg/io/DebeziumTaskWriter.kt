@@ -31,8 +31,6 @@ class DebeziumTaskWriter(
     iSchema: IcebergSchema,
     equalityFieldIds: Set<Int>,
     private val tracker: RecordTracker,
-    registry: MeterRegistry,
-    tags: Tags
 ) : TaskWriter<SinkRecord> {
     private val insertWriter by lazy {
         partitioningWriterFactory.newDataWriter() as TrackedPartitioningWriter
@@ -61,7 +59,6 @@ class DebeziumTaskWriter(
      */
     private val insertedRowMap: MutableMap<Key, Pair<PathOffset, Partition?>>
 
-    private val metrics = Metrics(registry, tags)
     private val keyer: Keyer<SinkRecord>
     private var key: Key? = null
 
@@ -98,7 +95,6 @@ class DebeziumTaskWriter(
             "t" -> throw TableTruncatedException()
             else -> {} // ignore
         }
-        metrics.increaseRecordCount(operation)
     }
 
     private fun internalPosDelete(key: Key): Boolean {
@@ -205,44 +201,6 @@ class DebeziumTaskWriter(
                     val key = record.key() as KafkaStruct
                     return wrapper.wrap(key)
                 }
-            }
-        }
-    }
-
-    private inner class Metrics(
-        private val registry: MeterRegistry,
-        tags: Tags
-    ) : Closeable {
-        private val opCounters = mapOf(
-            "c" to Counter.builder("alluvial.task.writer.records")
-                .tags(tags).tag("op", "create")
-                .description("Total CREATE events")
-                .register(registry),
-
-            "r" to Counter.builder("alluvial.task.writer.records")
-                .tags(tags).tag("op", "read")
-                .description("Total READ events")
-                .register(registry),
-
-            "u" to Counter.builder("alluvial.task.writer.records")
-                .tags(tags).tag("op", "update")
-                .description("Total UPDATE events")
-                .register(registry),
-
-            "d" to Counter.builder("alluvial.task.writer.records")
-                .tags(tags).tag("op", "delete")
-                .description("Total DELETE events")
-                .register(registry)
-        )
-
-        fun increaseRecordCount(op: String) {
-            opCounters[op]?.increment()
-        }
-
-        override fun close() {
-            opCounters.forEach { (_, meter) ->
-                registry.remove(meter)
-                meter.close()
             }
         }
     }

@@ -3,6 +3,9 @@ package dev.alluvial.sink.iceberg
 import dev.alluvial.runtime.SinkConfig
 import dev.alluvial.stream.debezium.RecordTracker
 import io.micrometer.core.instrument.MeterRegistry
+import io.opentelemetry.api.OpenTelemetry
+import io.opentelemetry.api.metrics.Meter
+import io.opentelemetry.api.trace.Tracer
 import org.apache.hadoop.conf.Configuration
 import org.apache.iceberg.CachingCatalog
 import org.apache.iceberg.CatalogProperties.*
@@ -20,7 +23,12 @@ import org.apache.iceberg.exceptions.NoSuchTableException
 import org.apache.iceberg.util.PropertyUtil
 import org.slf4j.LoggerFactory
 
-class IcebergSink(sinkConfig: SinkConfig, private val registry: MeterRegistry) {
+class IcebergSink(
+    sinkConfig: SinkConfig,
+    telemetry: OpenTelemetry,
+    private val tracer: Tracer,
+    private val meter: Meter,
+) {
     companion object {
         private val logger = LoggerFactory.getLogger(IcebergSink::class.java)
     }
@@ -52,7 +60,7 @@ class IcebergSink(sinkConfig: SinkConfig, private val registry: MeterRegistry) {
             val tracker = RecordTracker.create(connector, table)
 
             logger.info("Creating new outlet {}", name)
-            IcebergTableOutlet(name, table, tracker, registry)
+            IcebergTableOutlet(name, table, tracker, tracer, meter)
         } catch (e: NoSuchTableException) {
             null
         }
