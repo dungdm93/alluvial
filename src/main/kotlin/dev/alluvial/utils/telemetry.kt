@@ -8,6 +8,27 @@ import io.opentelemetry.api.trace.Tracer
 
 val SERVICE_COMPONENT = stringKey("service.component")
 
+/**
+ * @see io.micrometer.core.instrument.binder.BaseUnits
+ */
+object Units {
+    const val BYTES = "bytes"
+    const val ROWS = "rows"
+    const val TASKS = "tasks"
+    const val THREADS = "threads"
+    const val CLASSES = "classes"
+    const val BUFFERS = "buffers"
+    const val EVENTS = "events"
+    const val FILES = "files"
+    const val SESSIONS = "sessions"
+    const val MILLISECONDS = "ms"
+    const val MESSAGES = "messages"
+    const val CONNECTIONS = "connections"
+    const val OPERATIONS = "operations"
+    const val PERCENT = "percent"
+    const val OBJECTS = "objects"
+}
+
 inline fun <R> Tracer.withSpan(
     name: String,
     attributes: Attributes = Attributes.empty(),
