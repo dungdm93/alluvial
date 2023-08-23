@@ -55,7 +55,7 @@ class KafkaTopicInlet(
     private val partitionQueues = mutableMapOf<Int, Queue<SinkRecord>>()
     private val heap = PriorityQueue(comparator)
 
-    private val attributes = Attributes.of(stringKey("inlet"), name)
+    private val attrs = Attributes.of(stringKey("alluvial.inlet"), name)
 
     init {
         partitions = consumer.partitionsFor(topic).map {
@@ -67,14 +67,14 @@ class KafkaTopicInlet(
         meter.gaugeBuilder("alluvial.inlet.partition.queue.size").ofLongs()
             .buildWithCallback {
                 val totalSize = partitionQueues.values.sumOf(Collection<*>::size).toLong()
-                it.record(totalSize, attributes)
+                it.record(totalSize, attrs)
             }
     }
 
     /**
      * Read a record from kafka in timestamp order and ignore Tombstone events
      */
-    fun read(): SinkRecord? = tracer.withSpan("KafkaTopicInlet.read") {
+    fun read(): SinkRecord? = tracer.withSpan("KafkaTopicInlet.read", attrs) {
         val record = pollFromQueues()
         if (record == null) {
             pollFromBrokers()
@@ -153,7 +153,7 @@ class KafkaTopicInlet(
         consumer.resume(partitions)
     }
 
-    fun commit(positions: Map<Int, Long>) = tracer.withSpan("KafkaTopicInlet.commit") {
+    fun commit(positions: Map<Int, Long>) = tracer.withSpan("KafkaTopicInlet.commit", attrs) {
         val offsets = buildMap(positions.size) {
             positions.forEach { (partition, offset) ->
                 val tp = TopicPartition(topic, partition)
@@ -179,14 +179,14 @@ class KafkaTopicInlet(
             .toMap()
     }
 
-    fun seekOffsets(offsets: Map<Int, Long>) = tracer.withSpan("KafkaTopicInlet.seekOffsets") {
+    fun seekOffsets(offsets: Map<Int, Long>) = tracer.withSpan("KafkaTopicInlet.seekOffsets", attrs) {
         offsets.forEach { (partition, offset) ->
             consumer.seek(TopicPartition(topic, partition), offset)
         }
         commit(offsets)
     }
 
-    fun currentLag(): Long = tracer.withSpan("KafkaTopicInlet.currentLag") {
+    fun currentLag(): Long = tracer.withSpan("KafkaTopicInlet.currentLag", attrs) {
         val endOffsets = consumer.endOffsets(partitions)
         val committedOffsets = committedOffsets()
 

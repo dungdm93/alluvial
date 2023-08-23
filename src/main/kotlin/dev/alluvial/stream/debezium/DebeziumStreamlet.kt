@@ -9,30 +9,27 @@ import dev.alluvial.source.kafka.KafkaTopicInlet
 import dev.alluvial.source.kafka.sourceTimestamp
 import dev.alluvial.utils.SchemaChangedException
 import dev.alluvial.utils.TableTruncatedException
-import io.micrometer.core.instrument.Counter
-import io.micrometer.core.instrument.LongTaskTimer
-import io.micrometer.core.instrument.MeterRegistry
-import io.micrometer.core.instrument.Tags
-import org.apache.iceberg.BROKER_OFFSETS_PROP
-import org.apache.iceberg.SOURCE_TIMESTAMP_PROP
-import org.apache.iceberg.mapper
+import dev.alluvial.utils.withSpan
+import io.opentelemetry.api.common.AttributeKey
+import io.opentelemetry.api.common.Attributes
+import io.opentelemetry.api.metrics.Meter
+import io.opentelemetry.api.trace.Tracer
 import org.apache.kafka.connect.sink.SinkRecord
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
-import java.io.Closeable
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 
-@Suppress("MemberVisibilityCanBePrivate")
 class DebeziumStreamlet(
     override val name: String,
-    val inlet: KafkaTopicInlet,
-    val outlet: IcebergTableOutlet,
-    val tracker: RecordTracker,
-    val schemaHandler: SchemaHandler,
     streamConfig: StreamConfig,
-    registry: MeterRegistry,
+    private val inlet: KafkaTopicInlet,
+    private val outlet: IcebergTableOutlet,
+    private val tracker: RecordTracker,
+    private val schemaHandler: SchemaHandler,
+    private val tracer: Tracer,
+    private val meter: Meter,
 ) : Streamlet {
     companion object {
         private val logger = LoggerFactory.getLogger(DebeziumStreamlet::class.java)
@@ -44,21 +41,27 @@ class DebeziumStreamlet(
     private val commitBatchSize = streamConfig.commitBatchSize
     private val commitTimespanMs = streamConfig.commitTimespan.toMillis()
     private val rotateByDateInTz = streamConfig.rotateByDateInTz
-    private val metrics = Metrics(registry)
 
     @Volatile
     override var status = CREATED
 
+    private val attrs = Attributes.of(AttributeKey.stringKey("alluvial.streamlet"), name)
+    private val schemaMigrationCounter = meter.counterBuilder("alluvial.streamlet.schema.migration")
+        .setDescription("Streamlet schema migration count")
+        .build()
+
     override fun run() = withMDC {
-        if (status != CREATED) resume()
-        status = RUNNING
-        logger.info("Streamlet {} is running", name)
-        ensureOffsets()
-        while (shouldRun()) {
-            captureChanges(commitBatchSize)
+        tracer.withSpan("DebeziumStreamlet.run", attrs) {
+            if (status != CREATED) resume()
+            status = RUNNING
+            logger.info("Streamlet {} is running", name)
+            ensureOffsets()
+            while (shouldRun()) {
+                captureChanges(commitBatchSize)
+            }
+            pause()
+            status = SUSPENDED
         }
-        pause()
-        status = SUSPENDED
     }
 
     override fun pause() {
@@ -71,20 +74,18 @@ class DebeziumStreamlet(
         logger.info("Streamlet {} is resumed", name)
     }
 
-    private fun commit() {
+    private fun commit() = tracer.withSpan("DebeziumStreamlet.commit", attrs) {
         val offsets = tracker.consumedBrokerOffsets()
         val summary = tracker.buildSummary()
 
         logger.info("Committing changes {}", offsets)
-        metrics.recordCommit {
-            status = COMMITTING
-            outlet.commit(summary)
-            inlet.commit(offsets)
-            status = RUNNING
-        }
+        status = COMMITTING
+        outlet.commit(summary)
+        inlet.commit(offsets)
+        status = RUNNING
     }
 
-    override fun shouldRun(): Boolean {
+    override fun shouldRun(): Boolean = tracer.withSpan("DebeziumStreamlet.shouldRun", attrs) {
         val lag = inlet.currentLag()
         if (lag <= 0) return false
         if (lag > commitBatchSize) return true
@@ -99,7 +100,7 @@ class DebeziumStreamlet(
         return lag <= 0 && committedTime < clock.millis() - idleTimeoutMs
     }
 
-    private fun captureChanges(batchSize: Int) {
+    private fun captureChanges(batchSize: Int) = tracer.withSpan("DebeziumStreamlet.captureChanges", attrs) {
         var record = pendingRecord?.also { pendingRecord = null } ?: inlet.read()
         var consumingDate: LocalDate? = null
         var count = 0 // count consumed records ignore tombstone
@@ -154,11 +155,11 @@ class DebeziumStreamlet(
         } catch (ex: SchemaChangedException) {
             if (count > 0) commit()
             schemaHandler.migrateSchema(record!!)
-            metrics.incrementSchemaMigration()
+            schemaMigrationCounter.add(1, attrs)
         }
     }
 
-    private fun ensureOffsets() {
+    private fun ensureOffsets() = tracer.withSpan("DebeziumStreamlet.ensureOffsets", attrs) {
         val outletOffsets = tracker.committedBrokerOffsets()
         val inletOffsets = inlet.committedOffsets()
 
@@ -183,7 +184,6 @@ class DebeziumStreamlet(
         logger.warn("Closing {}", this)
         inlet.close()
         outlet.close()
-        metrics.close()
     }
 
     private inline fun <R> withMDC(block: () -> R): R {
@@ -206,36 +206,5 @@ class DebeziumStreamlet(
 
     override fun toString(): String {
         return "DebeziumStreamlet(${name})"
-    }
-
-    private inner class Metrics(private val registry: MeterRegistry) : Closeable {
-        private val tags: Tags = Tags.of("streamlet", this@DebeziumStreamlet.name)
-
-        private val commitDuration = LongTaskTimer.builder("alluvial.streamlet.commit.duration")
-            .tags(tags)
-            .description("Streamlet commit duration")
-            .register(registry)
-
-        private val schemaMigration = Counter.builder("alluvial.streamlet.schema.migration")
-            .tags(tags)
-            .description("Streamlet schema migration count")
-            .register(registry)
-
-        private val meters = listOf(commitDuration, schemaMigration)
-
-        fun <T> recordCommit(block: () -> T): T {
-            return commitDuration.record(block)
-        }
-
-        fun incrementSchemaMigration() {
-            schemaMigration.increment()
-        }
-
-        override fun close() {
-            meters.forEach {
-                registry.remove(it)
-                it.close()
-            }
-        }
     }
 }

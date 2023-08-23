@@ -1,7 +1,6 @@
 package dev.alluvial.runtime
 
 import dev.alluvial.api.Streamlet.Status.*
-import dev.alluvial.metrics.MetricsService
 import dev.alluvial.schema.debezium.KafkaSchemaTableCreator
 import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.source.kafka.KafkaSource
@@ -9,12 +8,9 @@ import dev.alluvial.stream.debezium.DebeziumStreamlet
 import dev.alluvial.stream.debezium.DebeziumStreamletFactory
 import dev.alluvial.utils.recommendedPoolSize
 import dev.alluvial.utils.shutdownAndAwaitTermination
-import io.micrometer.core.instrument.Gauge
-import io.micrometer.core.instrument.MeterRegistry
-import io.micrometer.core.instrument.Metrics
+import dev.alluvial.utils.withSpan
 import org.apache.iceberg.catalog.TableIdentifier
 import org.slf4j.LoggerFactory
-import java.io.Closeable
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
@@ -28,11 +24,7 @@ class StreamController : Instrumental(), Runnable {
     companion object {
         private val logger = LoggerFactory.getLogger(StreamController::class.java)
         private val executor = Executors.newScheduledThreadPool(recommendedPoolSize())
-        private val registry = Metrics.globalRegistry
     }
-
-    private val metrics = AppMetrics(registry)
-    private lateinit var metricsService: MetricsService
 
     private lateinit var source: KafkaSource
     private lateinit var sink: IcebergSink
@@ -50,28 +42,19 @@ class StreamController : Instrumental(), Runnable {
         logger.warn("Shutdown Hook: closing streamlets")
         streamlets.values.forEach(DebeziumStreamlet::close)
         streamlets.clear()
-
-        logger.warn("Shutdown Hook: closing metrics")
-        metrics.close()
-        metricsService.close()
     }
 
     fun configure(config: Config) {
-        metricsService =
-            MetricsService(registry, config.metrics).bindJvmMetrics().bindSystemMetrics().bindAwsClientMetrics()
-
         initializeTelemetry(config, "StreamController")
-        val connector = config.stream.connector
 
         source = KafkaSource(config.source, telemetry, tracer, meter)
         sink = IcebergSink(config.sink, telemetry, tracer, meter)
         val tableCreator = KafkaSchemaTableCreator(source, sink, config.sink.tableCreation)
-        streamletFactory = DebeziumStreamletFactory(connector, source, sink, tableCreator, config.stream, registry)
+        streamletFactory = DebeziumStreamletFactory(config.stream, source, sink, tableCreator, tracer, meter)
         examineInterval = config.stream.examineInterval
     }
 
     override fun run() {
-        metricsService.run()
         Runtime.getRuntime().addShutdownHook(terminatingHook)
 
         executor.scheduleWithFixedDelay(::examineStreamlets, 0, examineInterval.toMillis(), MILLISECONDS)
@@ -84,10 +67,9 @@ class StreamController : Instrumental(), Runnable {
         }
     }
 
-    private fun examineStreamlets() {
+    private fun examineStreamlets() = tracer.withSpan("StreamController.examineStreamlets") {
         logger.info("Start examine streamlets")
         val topics = source.availableTopics()
-        metrics.availableTopicsCount = topics.size
 
         logger.info("Found {} topics available", topics.size)
         for (topic in topics) {
@@ -95,13 +77,17 @@ class StreamController : Instrumental(), Runnable {
         }
     }
 
-    private fun examineStreamlet(topic: String) {
+    private fun examineStreamlet(topic: String): Unit = tracer.withSpan(
+        "StreamController.examineStreamlet"
+    ) { span ->
         val tableId = topic2Table.computeIfAbsent(topic) { source.tableIdOf(topic) }
         if (topic !in streamlets) {
             if (currentLagOf(topic, tableId) > 0) channel.put(topic)
+            span.addEvent("NEW")
             return
         }
         val streamlet = streamlets[topic]!!
+        span.setAttribute("alluvial.streamlet", streamlet.name)
         when (streamlet.status) {
             CREATED -> logger.warn("Streamlet {} is still in CREATED state, something may be wrong!!!", streamlet.name)
 
@@ -112,9 +98,10 @@ class StreamController : Instrumental(), Runnable {
                     logger.info("Close streamlet {}: No more message for awhile", streamlet.name)
                     streamlet.close()
                     streamlets.remove(topic)
-                        ?.also(metrics::unregisterStreamlet)
+                    span.addEvent("TERMINATED")
                 } else if (streamlet.shouldRun()) {
                     channel.put(topic)
+                    span.addEvent("RESUMING")
                 } else {
                     logger.info("Streamlet {} still SUSPENDED for next examination", streamlet.name)
                 }
@@ -141,42 +128,6 @@ class StreamController : Instrumental(), Runnable {
         return streamlets.computeIfAbsent(topic) {
             logger.info("create new stream {}", it)
             streamletFactory.createStreamlet(topic, tableId)
-                .also(metrics::registerStreamlet)
-        }
-    }
-
-    private inner class AppMetrics(private val registry: MeterRegistry) : Closeable {
-        private val streamletStatuses = ConcurrentHashMap<String, Gauge>()
-        private val availableTopics = Gauge.builder("alluvial.topic.available", this) {
-            it.availableTopicsCount.toDouble()
-        }.register(registry)
-
-        var availableTopicsCount = 0
-
-        fun registerStreamlet(streamlet: DebeziumStreamlet) {
-            streamletStatuses.computeIfAbsent(streamlet.name) {
-                Gauge.builder("alluvial.streamlet.status", streamlet) { it.status.ordinal.toDouble() }
-                    .tags("streamlet", streamlet.name)
-                    .register(registry)
-            }
-        }
-
-        fun unregisterStreamlet(streamlet: DebeziumStreamlet) {
-            val meter = streamletStatuses.remove(streamlet.name) ?: return
-            registry.remove(meter)
-            meter.close()
-            logger.debug("Unwatch status of streamlet {}", streamlet.name)
-        }
-
-        override fun close() {
-            registry.remove(availableTopics)
-            availableTopics.close()
-
-            streamletStatuses.forEach { (_, meter) ->
-                registry.remove(meter)
-                meter.close()
-            }
-            streamletStatuses.clear()
         }
     }
 }
