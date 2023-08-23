@@ -7,18 +7,11 @@ import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.source.kafka.KafkaSource
 import dev.alluvial.stream.debezium.DebeziumStreamlet
 import dev.alluvial.stream.debezium.DebeziumStreamletFactory
-import dev.alluvial.utils.SERVICE_COMPONENT
 import dev.alluvial.utils.recommendedPoolSize
 import dev.alluvial.utils.shutdownAndAwaitTermination
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Metrics
-import io.opentelemetry.api.OpenTelemetry
-import io.opentelemetry.api.metrics.Meter
-import io.opentelemetry.api.trace.Tracer
-import io.opentelemetry.sdk.autoconfigure.AutoConfiguredOpenTelemetrySdk
-import io.opentelemetry.semconv.resource.attributes.ResourceAttributes.SERVICE_NAME
-import io.opentelemetry.semconv.resource.attributes.ResourceAttributes.SERVICE_VERSION
 import org.apache.iceberg.catalog.TableIdentifier
 import org.slf4j.LoggerFactory
 import java.io.Closeable
@@ -31,25 +24,15 @@ import java.util.concurrent.TimeUnit.MILLISECONDS
 import java.util.concurrent.TimeUnit.SECONDS
 import kotlin.concurrent.thread
 
-class StreamController : Runnable {
+class StreamController : Instrumental(), Runnable {
     companion object {
         private val logger = LoggerFactory.getLogger(StreamController::class.java)
         private val executor = Executors.newScheduledThreadPool(recommendedPoolSize())
         private val registry = Metrics.globalRegistry
-
-        private val OPENTELEMETRY_DEFAULT_PROPERTIES = mapOf(
-            "otel.traces.exporter" to "none",
-            "otel.metrics.exporter" to "none",
-            "otel.logs.exporter" to "none",
-        )
-        private const val INSTRUMENTATION_NAME = "dev.alluvial"
     }
 
     private val metrics = AppMetrics(registry)
     private lateinit var metricsService: MetricsService
-    private lateinit var telemetry: OpenTelemetry
-    private lateinit var tracer: Tracer
-    private lateinit var meter: Meter
 
     private lateinit var source: KafkaSource
     private lateinit var sink: IcebergSink
@@ -74,12 +57,10 @@ class StreamController : Runnable {
     }
 
     fun configure(config: Config) {
-        metricsService = MetricsService(registry, config.metrics)
-            .bindJvmMetrics()
-            .bindSystemMetrics()
-            .bindAwsClientMetrics()
+        metricsService =
+            MetricsService(registry, config.metrics).bindJvmMetrics().bindSystemMetrics().bindAwsClientMetrics()
 
-        initializeTelemetry(config)
+        initializeTelemetry(config, "StreamController")
         val connector = config.stream.connector
 
         source = KafkaSource(config.source, telemetry, tracer, meter)
@@ -87,29 +68,6 @@ class StreamController : Runnable {
         val tableCreator = KafkaSchemaTableCreator(source, sink, config.sink.tableCreation)
         streamletFactory = DebeziumStreamletFactory(connector, source, sink, tableCreator, config.stream, registry)
         examineInterval = config.stream.examineInterval
-    }
-
-    private fun initializeTelemetry(config: Config) {
-        telemetry = if (!config.telemetry.enabled)
-            OpenTelemetry.noop() else
-            AutoConfiguredOpenTelemetrySdk.builder()
-                .addPropertiesSupplier { OPENTELEMETRY_DEFAULT_PROPERTIES + config.telemetry.properties }
-                .addResourceCustomizer { r, _ ->
-                    val rb = r.toBuilder()
-                    rb.put(SERVICE_NAME, "alluvial")
-                    rb.put(SERVICE_VERSION, "0.13.0")
-                    rb.put(SERVICE_COMPONENT, "StreamController")
-                    rb.build()
-                }
-                .setResultAsGlobal()
-                .build()
-                .openTelemetrySdk
-        tracer = telemetry.tracerBuilder(INSTRUMENTATION_NAME)
-            .setInstrumentationVersion("0.13.0")
-            .build()
-        meter = telemetry.meterBuilder(INSTRUMENTATION_NAME)
-            .setInstrumentationVersion("0.13.0")
-            .build()
     }
 
     override fun run() {
@@ -147,8 +105,7 @@ class StreamController : Runnable {
         when (streamlet.status) {
             CREATED -> logger.warn("Streamlet {} is still in CREATED state, something may be wrong!!!", streamlet.name)
 
-            RUNNING,
-            COMMITTING -> logger.info("Streamlet {} is {}", streamlet.name, streamlet.status)
+            RUNNING, COMMITTING -> logger.info("Streamlet {} is {}", streamlet.name, streamlet.status)
 
             SUSPENDED -> {
                 if (streamlet.canTerminate()) {
