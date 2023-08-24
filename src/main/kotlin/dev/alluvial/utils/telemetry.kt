@@ -29,6 +29,12 @@ object Units {
     const val OBJECTS = "objects"
 }
 
+fun Attributes.merge(vararg attributes: Attributes): Attributes {
+    val ab = this.toBuilder()
+    attributes.forEach(ab::putAll)
+    return ab.build()
+}
+
 inline fun <R> Tracer.withSpan(
     name: String,
     attributes: Attributes = Attributes.empty(),

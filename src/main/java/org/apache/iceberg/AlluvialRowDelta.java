@@ -2,15 +2,23 @@ package org.apache.iceberg;
 
 import org.apache.iceberg.common.DynFields;
 import org.apache.iceberg.common.DynFields.UnboundField;
+import org.apache.iceberg.metrics.MetricsReporter;
 
 public class AlluvialRowDelta extends BaseRowDelta {
     private static final UnboundField<Long> startingSnapshotIdField = DynFields.builder()
-        .hiddenImpl(BaseRowDelta.class, "startingSnapshotId")
-        .build();
+            .hiddenImpl(BaseRowDelta.class, "startingSnapshotId")
+            .build();
+    private static final UnboundField<MetricsReporter> reporterField = DynFields.builder()
+            .hiddenImpl(BaseTable.class, "reporter")
+            .build();
 
     public static AlluvialRowDelta of(Table table) {
         var ops = ((HasTableOperations) table).operations();
-        return new AlluvialRowDelta(table.name(), ops);
+        var reporter = reporterField.get(table);
+
+        var rd = new AlluvialRowDelta(table.name(), ops);
+        rd.reportWith(reporter);
+        return rd;
     }
 
     private boolean validateFromHead = false;

@@ -2,6 +2,7 @@ package org.apache.iceberg
 
 import org.apache.iceberg.common.DynFields
 import org.apache.iceberg.common.DynMethods
+import org.apache.iceberg.metrics.MetricsReporter
 import org.slf4j.LoggerFactory
 
 class AlluvialTransaction(
@@ -15,6 +16,9 @@ class AlluvialTransaction(
         private val updatesField = DynFields.builder()
             .hiddenImpl(BaseTransaction::class.java, "updates")
             .build<MutableList<PendingUpdate<*>>>()
+        private val reporterField = DynFields.builder()
+            .hiddenImpl(BaseTransaction::class.java, "reporter")
+            .build<MetricsReporter>()
         private val checkLastOperationCommittedMethod = DynMethods.builder("checkLastOperationCommitted")
             .hiddenImpl(BaseTransaction::class.java, String::class.java)
             .build()
@@ -26,6 +30,7 @@ class AlluvialTransaction(
     }
 
     private val updates = updatesField.get(this)
+    private val reporter = reporterField.get(this)
 
     @Suppress("SameParameterValue")
     private fun checkLastOperationCommitted(operation: String): Unit =
@@ -36,7 +41,7 @@ class AlluvialTransaction(
         checkLastOperationCommitted("SquashOperation")
         val table = table() as TransactionTable
 
-        val squash = AlluvialSquashOperation(table.name(), table.operations())
+        val squash = AlluvialSquashOperation(table.name(), table.operations()).reportWith(reporter)
         updates.add(squash)
 
         return squash

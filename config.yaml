@@ -25,6 +25,7 @@ sink:
   catalog:
     catalog-impl: org.apache.iceberg.hadoop.HadoopCatalog
     warehouse: /tmp/warehouse
+    metrics-reporter-impl: dev.alluvial.instrumentation.iceberg.OpenTelemetryMetricsReporter
     # catalog-impl: org.apache.iceberg.hive.HiveCatalog
     # warehouse: s3a://alluvial/warehouse
     # uri: thrift://hive-metastore:9083
