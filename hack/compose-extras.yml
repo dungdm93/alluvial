@@ -8,8 +8,6 @@ services:
     # Caused at org.apache.hadoop.hive.metastore.HiveMetaStoreClient.resolveUris(HiveMetaStoreClient.java:267)
     container_name: hive-metastore
     entrypoint: [ "/usr/local/scripts/metastore-entrypoint.sh" ]
-    depends_on:
-      - postgres
     environment:
       HADOOP_OPTIONAL_TOOLS: hadoop-aws
     networks:
