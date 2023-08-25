@@ -70,6 +70,7 @@ dependencies {
     implementation("io.micrometer:micrometer-core:$micrometerVersion")
     implementation("io.micrometer:micrometer-registry-prometheus:$micrometerVersion")
     implementation("io.prometheus:simpleclient_httpserver:$prometheusVersion")
+
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:$jacksonVersion")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion")
@@ -153,9 +154,8 @@ dependencies {
     implementation("software.amazon.awssdk:dynamodb:$awsVersion")
 
     // Make those Iceberg's transient dependencies available in compile scope
+    implementation(project(":iceberg-bundled-guava", configuration = "shadow"))
     implementation("org.apache.iceberg:iceberg-common:$icebergVersion")
-    implementation("org.apache.iceberg:iceberg-bundled-guava:$icebergVersion")
-    implementation("com.google.guava:guava:31.1-jre")
     implementation("org.apache.avro:avro:1.11.1")
     implementation("org.apache.orc:orc-core:1.8.3:nohive")
     implementation("org.apache.parquet:parquet-avro:1.13.1")
@@ -173,6 +173,15 @@ dependencies {
     testImplementation("org.apache.iceberg:iceberg-api:$icebergVersion:tests")
     testImplementation("org.apache.iceberg:iceberg-core:$icebergVersion:tests")
     testImplementation("org.apache.iceberg:iceberg-data:$icebergVersion:tests")
+}
+
+configurations.all {
+    exclude(group = "org.apache.iceberg", module = "iceberg-bundled-guava")
+//    resolutionStrategy.dependencySubstitution {
+//        substitute(module("org.apache.iceberg:iceberg-bundled-guava"))
+//            .using(project(":iceberg-bundled-guava"))
+//            .because("Patching MoreExecutors for OpenTelemetry propagate Context")
+//    }
 }
 
 tasks.getByName<Test>("test") {

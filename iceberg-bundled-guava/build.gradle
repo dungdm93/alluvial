@@ -1,0 +1,23 @@
+plugins {
+    id("java")
+    id("com.github.johnrengelman.shadow") version "8.1.1"
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly("com.google.guava:guava:32.1.1-jre") {
+        transitive = false
+    }
+}
+
+tasks.jar.dependsOn tasks.shadowJar
+shadowJar {
+    configurations = [project.configurations.compileClasspath]
+    zip64 true
+
+    relocate("com.google.common", "org.apache.iceberg.relocated.com.google.common")
+    minimize()
+}
