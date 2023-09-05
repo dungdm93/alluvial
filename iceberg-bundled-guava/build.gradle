@@ -18,6 +18,16 @@ shadowJar {
     configurations = [project.configurations.compileClasspath]
     zip64 true
 
-    relocate("com.google.common", "org.apache.iceberg.relocated.com.google.common")
+    relocate("com.google.common", "org.apache.iceberg.relocated.com.google.common") {
+        exclude("com.google.common.util.concurrent.*MoreExecutors*")
+    }
+    relocate(
+        "com.google.common.util.concurrent.MoreExecutors",
+        "org.apache.iceberg.relocated.com.google.common.util.concurrent.MoreExecutorsOrigin"
+    )
+    relocate(
+        "com.google.common.util.concurrent.PatchedMoreExecutors",
+        "org.apache.iceberg.relocated.com.google.common.util.concurrent.MoreExecutors"
+    )
     minimize()
 }
