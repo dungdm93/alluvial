@@ -148,10 +148,6 @@ dependencies {
     }
     implementation("org.apache.iceberg:iceberg-aws:$icebergVersion")
     implementation("software.amazon.awssdk:s3:$awsVersion")
-    implementation("software.amazon.awssdk:kms:$awsVersion")
-    implementation("software.amazon.awssdk:glue:$awsVersion")
-    implementation("software.amazon.awssdk:sts:$awsVersion")
-    implementation("software.amazon.awssdk:dynamodb:$awsVersion")
 
     // Make those Iceberg's transient dependencies available in compile scope
     implementation(project(":iceberg-bundled-guava", configuration = "shadow"))
