@@ -30,12 +30,15 @@ sink:
     # warehouse: s3a://alluvial/warehouse
     # uri: thrift://hive-metastore:9083
     # io-impl: org.apache.iceberg.aws.s3.S3FileIO
+    # s3.client-factory-impl: org.apache.iceberg.aws.s3.DefaultS3FileIOAwsClientFactory
+    # s3.client-factory-impl: org.apache.iceberg.aws.s3.AlluvialS3FileIOAwsClientFactory
+    # s3.mutation.otel.class: dev.alluvial.instrumentation.aws.OpenTelemetryAwsClientMutation
     ## see: org.apache.iceberg.aws.AwsProperties
     # s3.endpoint: http://minio:9000
     # s3.access-key-id: admin   # env.AWS_ACCESS_KEY_ID
     # s3.secret-access-key: SuperSecr3t   # env.AWS_SECRET_ACCESS_KEY
     # s3.path-style-access: true
-    ## env.AWS_REGION=aws-global
+    # client.region: aws-global # env.AWS_REGION
   tableCreation:
     properties:
       write.format.default: PARQUET
