@@ -8,14 +8,14 @@ repositories {
 }
 
 dependencies {
-    compileOnly("com.google.guava:guava:32.1.1-jre") {
+    compileOnly("io.opentelemetry:opentelemetry-api:1.29.0")
+    implementation("com.google.guava:guava:32.1.1-jre") {
         transitive = false
     }
 }
 
 tasks.jar.dependsOn tasks.shadowJar
 shadowJar {
-    configurations = [project.configurations.compileClasspath]
     zip64 true
 
     relocate("com.google.common", "org.apache.iceberg.relocated.com.google.common") {

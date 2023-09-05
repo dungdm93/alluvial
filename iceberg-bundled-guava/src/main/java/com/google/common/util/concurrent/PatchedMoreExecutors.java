@@ -1,6 +1,7 @@
 package com.google.common.util.concurrent;
 
 import com.google.common.annotations.VisibleForTesting;
+import io.opentelemetry.context.Context;
 
 import java.time.Duration;
 import java.util.concurrent.Executor;
@@ -70,7 +71,8 @@ public final class PatchedMoreExecutors {
         final ExecutorService getExitingExecutorService(
             ThreadPoolExecutor executor, long terminationTimeout, TimeUnit timeUnit) {
             useDaemonThreadFactory(executor);
-            ExecutorService service = Executors.unconfigurableExecutorService(executor);
+            // ExecutorService service = Executors.unconfigurableExecutorService(executor);
+            ExecutorService service = Context.taskWrapping(executor);
             addDelayedShutdownHook(executor, terminationTimeout, timeUnit);
             return service;
         }
