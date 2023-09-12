@@ -10,6 +10,7 @@ import io.opentelemetry.api.metrics.Meter
 import io.opentelemetry.api.trace.Tracer
 import io.opentelemetry.sdk.autoconfigure.AutoConfiguredOpenTelemetrySdk
 import io.opentelemetry.semconv.resource.attributes.ResourceAttributes
+import org.slf4j.bridge.SLF4JBridgeHandler
 import java.lang.management.BufferPoolMXBean
 import java.lang.management.ManagementFactory
 import java.lang.management.MemoryPoolMXBean
@@ -29,6 +30,11 @@ abstract class Instrumental {
     protected lateinit var telemetry: OpenTelemetry
     protected lateinit var tracer: Tracer
     protected lateinit var meter: Meter
+
+    init {
+        SLF4JBridgeHandler.removeHandlersForRootLogger()
+        SLF4JBridgeHandler.install()
+    }
 
     protected fun initializeTelemetry(config: Config, component: String) {
         telemetry = if (!config.telemetry.enabled)

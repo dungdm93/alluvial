@@ -43,7 +43,7 @@ val debeziumVersion = "2.3.2.Final"
 val kafkaVersion = "3.5.1"
 val confluentVersion = "7.4.0"
 val icebergVersion = "1.3.1"
-val hadoopVersion = "3.3.2"
+val hadoopVersion = "3.3.6"
 val hiveVersion = "3.1.3"
 val awsVersion = "2.19.4"
 
@@ -54,8 +54,13 @@ val mockkVersion = "1.13.2"
 
 dependencies {
     implementation(kotlin("stdlib"))
+
+    // Logging
     api("org.slf4j:slf4j-api:$slf4jVersion")
+    implementation("org.slf4j:jul-to-slf4j:$slf4jVersion")
     runtimeOnly("ch.qos.logback:logback-classic:$logbackVersion")
+
+    // OpenTelemetry
     api("io.opentelemetry:opentelemetry-api:$opentelemetryVersion")
     implementation("io.opentelemetry:opentelemetry-sdk-extension-autoconfigure:$opentelemetryVersion")
     runtimeOnly("io.opentelemetry:opentelemetry-exporter-otlp:$opentelemetryVersion")
@@ -65,6 +70,7 @@ dependencies {
     implementation("io.opentelemetry.instrumentation:opentelemetry-kafka-clients-2.6:$opentelemetryVersion-alpha")
     implementation("io.opentelemetry.instrumentation:opentelemetry-aws-sdk-2.2:$opentelemetryVersion-alpha")
 
+    // Jackson
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:$jacksonVersion")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion")
@@ -85,17 +91,34 @@ dependencies {
     implementation("org.apache.iceberg:iceberg-data:$icebergVersion")
     implementation("org.apache.iceberg:iceberg-orc:$icebergVersion")
     implementation("org.apache.iceberg:iceberg-parquet:$icebergVersion")
-    implementation("org.apache.hadoop:hadoop-client:$hadoopVersion") {
+    implementation("org.apache.hadoop:hadoop-hdfs-client:$hadoopVersion")
+    implementation("org.apache.hadoop:hadoop-mapreduce-client-core:$hadoopVersion") {
+        exclude(group = "io.netty", module = "netty")
+        exclude(group = "org.slf4j", module = "slf4j-reload4j")
+        exclude(group = "org.apache.hadoop", module = "hadoop-yarn-client")
+        exclude(group = "org.apache.hadoop", module = "hadoop-yarn-common")
+    }
+    implementation("org.apache.hadoop:hadoop-common:$hadoopVersion") {
         exclude(group = "log4j")
         exclude(group = "org.slf4j")
+        exclude(group = "ch.qos.reload4j")
+        exclude(group = "com.jcraft") // jsch
+        exclude(group = "commons-cli")
         exclude(group = "commons-logging")
         exclude(group = "commons-beanutils")
+        exclude(group = "com.google.code.gson")
         exclude(group = "org.apache.avro")
         exclude(group = "javax.servlet")
-        exclude(group = "com.google.code.gson")
+        exclude(group = "javax.servlet.jsp")
+        exclude(group = "com.sun.jersey")
+        exclude(group = "org.eclipse.jetty")
+        exclude(group = "com.github.pjfanning") // https://github.com/pjfanning/jersey-1.x
+        exclude(group = "org.apache.zookeeper")
+        exclude(group = "org.apache.curator")
+        exclude(group = "org.apache.kerby")
     }
     runtimeOnly("org.apache.iceberg:iceberg-hive-metastore:$icebergVersion")
-    // "org.apache.hive:hive-standalone-metastore:$hiveVersion"
+    // "org.apache.hive:hive-standalone-metastore-common:$hiveVersion"
     // "org.apache.hive:hive-common:$hiveVersion"
     // "org.apache.hive:hive-serde:$hiveVersion"
     runtimeOnly("org.apache.hive:hive-metastore:$hiveVersion") {
@@ -141,7 +164,9 @@ dependencies {
         exclude(group = "org.codehaus.jettison", module = "jettison")
     }
     implementation("org.apache.iceberg:iceberg-aws:$icebergVersion")
-    implementation("software.amazon.awssdk:s3:$awsVersion")
+    implementation("software.amazon.awssdk:s3:$awsVersion") {
+        exclude(group = "software.amazon.awssdk", module = "netty-nio-client")
+    }
 
     // Make those Iceberg's transient dependencies available in compile scope
     implementation(project(":iceberg-bundled-guava", configuration = "shadow"))
