@@ -8,11 +8,11 @@ import dev.alluvial.sink.iceberg.type.KafkaStruct
 import dev.alluvial.sink.iceberg.type.toIcebergSchema
 import dev.alluvial.source.kafka.KafkaTopicInlet
 import dev.alluvial.source.kafka.structSchema
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.spyk
 import io.mockk.verify
+import io.opentelemetry.api.OpenTelemetry
 import org.apache.iceberg.PartitionSpec
 import org.apache.iceberg.SnapshotSummary.TOTAL_RECORDS_PROP
 import org.apache.iceberg.Table
@@ -33,7 +33,6 @@ internal class TestDebeziumStreamlet {
     companion object {
         private const val topic = "topic"
         private val streamConfig = StreamConfig("iceberg", "mysql")
-        private val registry = SimpleMeterRegistry()
         private val recordSchema = structSchema {
             field("id", Schema.INT32_SCHEMA)
         }
@@ -56,6 +55,9 @@ internal class TestDebeziumStreamlet {
     private lateinit var tmpDir: File
     private lateinit var table: Table
     private lateinit var tracker: RecordTracker
+    private val telemetry = OpenTelemetry.noop()
+    private val tracer = telemetry.getTracer("noop")
+    private val meter = telemetry.getMeter("noop")
 
     private fun record(
         keySchema: Schema? = defaultKeySchema, key: KafkaStruct? = defaultKey,
@@ -102,7 +104,7 @@ internal class TestDebeziumStreamlet {
     }
 
     private fun spyOutlet(): IcebergTableOutlet {
-        return spyk(IcebergTableOutlet(table.name(), table, tracker, registry))
+        return spyk(IcebergTableOutlet(table.name(), table, tracker, tracer, meter))
     }
 
     private fun spyStreamlet(
@@ -112,7 +114,7 @@ internal class TestDebeziumStreamlet {
         shouldRuns: List<Boolean>,
     ): DebeziumStreamlet {
         val handler = KafkaSchemaSchemaHandler(outlet)
-        return spyk(DebeziumStreamlet("streamlet", inlet, outlet, tracker, handler, config, registry)) {
+        return spyk(DebeziumStreamlet("streamlet", config, inlet, outlet, tracker, handler, tracer, meter)) {
             val streamlet = this
             every { streamlet["ensureOffsets"]() } answers { }
             every { shouldRun() } returnsMany shouldRuns

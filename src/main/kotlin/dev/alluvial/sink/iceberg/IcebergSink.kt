@@ -2,7 +2,6 @@ package dev.alluvial.sink.iceberg
 
 import dev.alluvial.runtime.SinkConfig
 import dev.alluvial.stream.debezium.RecordTracker
-import io.micrometer.core.instrument.MeterRegistry
 import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.api.metrics.Meter
 import io.opentelemetry.api.trace.Tracer

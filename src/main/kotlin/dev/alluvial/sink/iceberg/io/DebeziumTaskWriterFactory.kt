@@ -2,8 +2,6 @@ package dev.alluvial.sink.iceberg.io
 
 import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.stream.debezium.RecordTracker
-import io.micrometer.core.instrument.MeterRegistry
-import io.micrometer.core.instrument.Tags
 import org.apache.iceberg.FileFormat
 import org.apache.iceberg.Table
 import org.apache.iceberg.TableProperties.*

@@ -37,6 +37,7 @@ repositories {
 val slf4jVersion = "1.7.36"
 val logbackVersion = "1.2.12"   // pinned. logback 1.3+ requires slf4j 2.x
 val opentelemetryVersion = "1.29.0"
+val jacksonVersion = "2.14.2"
 
 val debeziumVersion = "2.3.2.Final"
 val kafkaVersion = "3.5.1"
@@ -45,9 +46,6 @@ val icebergVersion = "1.3.1"
 val hadoopVersion = "3.3.2"
 val hiveVersion = "3.1.3"
 val awsVersion = "2.19.4"
-val jacksonVersion = "2.14.2"
-val micrometerVersion = "1.9.0"
-val prometheusVersion = "0.15.0"
 
 val junitVersion = "5.9.0"
 val striktVersion = "0.34.1"
@@ -66,10 +64,6 @@ dependencies {
     runtimeOnly("io.opentelemetry.instrumentation:opentelemetry-logback-mdc-1.0:$opentelemetryVersion-alpha")
     implementation("io.opentelemetry.instrumentation:opentelemetry-kafka-clients-2.6:$opentelemetryVersion-alpha")
     implementation("io.opentelemetry.instrumentation:opentelemetry-aws-sdk-2.2:$opentelemetryVersion-alpha")
-
-    implementation("io.micrometer:micrometer-core:$micrometerVersion")
-    implementation("io.micrometer:micrometer-registry-prometheus:$micrometerVersion")
-    implementation("io.prometheus:simpleclient_httpserver:$prometheusVersion")
 
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:$jacksonVersion")

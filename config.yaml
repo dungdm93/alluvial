@@ -69,16 +69,6 @@ manager:
   compactSnapshots:
     tz: "+07"
 
-metrics:
-  exporters:
-    - kind: prometheus
-      properties:
-        prometheus.bind: 0.0.0.0:9090
-        prometheus.daemon: true
-  commonTags:
-    environment: "local"
-    service: "sakila"
-
 # https://github.com/open-telemetry/opentelemetry-java/tree/main/sdk-extensions/autoconfigure
 telemetry:
   enabled: true

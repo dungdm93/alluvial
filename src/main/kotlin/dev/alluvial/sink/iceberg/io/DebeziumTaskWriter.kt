@@ -5,9 +5,6 @@ import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
 import dev.alluvial.stream.debezium.RecordTracker
 import dev.alluvial.utils.TableTruncatedException
-import io.micrometer.core.instrument.Counter
-import io.micrometer.core.instrument.MeterRegistry
-import io.micrometer.core.instrument.Tags
 import org.apache.iceberg.ContentFile
 import org.apache.iceberg.PartitionKey
 import org.apache.iceberg.PartitionSpec
@@ -20,7 +17,6 @@ import org.apache.iceberg.util.Pair
 import org.apache.iceberg.util.StructLikeMap
 import org.apache.iceberg.util.Tasks
 import org.apache.kafka.connect.sink.SinkRecord
-import java.io.Closeable
 
 class DebeziumTaskWriter(
     partitioningWriterFactory: PartitioningWriterFactory<KafkaStruct>,

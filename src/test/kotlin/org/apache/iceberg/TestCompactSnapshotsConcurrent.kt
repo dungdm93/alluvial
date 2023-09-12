@@ -2,7 +2,6 @@ package org.apache.iceberg
 
 import dev.alluvial.sink.iceberg.concat
 import dev.alluvial.sink.iceberg.transform
-import io.micrometer.core.instrument.Metrics
 import io.mockk.every
 import io.mockk.spyk
 import org.apache.hadoop.conf.Configuration
@@ -43,8 +42,6 @@ class TestCompactSnapshotsConcurrent : TestCompactSnapshotsBase() {
         table.updateSchema()
             .setIdentifierFields("id")
             .commit()
-
-        metrics = CompactSnapshots.Metrics(Metrics.globalRegistry, tableId)
     }
 
     @AfterEach
@@ -243,10 +240,11 @@ class TestCompactSnapshotsConcurrent : TestCompactSnapshotsBase() {
         val snapshots = table.currentAncestors().toList()
         val highSnapshot = snapshots.ssWithSeqNumber(3)
         val lowSnapshot = snapshots.ssWithSeqNumber(1)
-        val compaction = spyk(CompactSnapshots(table, metrics, lowSnapshot.snapshotId(), highSnapshot.snapshotId())) {
-            val com = this
-            every { com.invokeNoArgs("newTransaction") } returns txn
-        }
+        val compaction =
+            spyk(CompactSnapshots(lowSnapshot.snapshotId(), highSnapshot.snapshotId(), table, tracer, meter)) {
+                val com = this
+                every { com.invokeNoArgs("newTransaction") } returns txn
+            }
         compaction.execute()
         val newSnapshots = table.currentAncestors().toList()
         val squashedSnapshot = newSnapshots[2]

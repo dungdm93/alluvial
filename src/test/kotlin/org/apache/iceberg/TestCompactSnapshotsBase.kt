@@ -1,8 +1,9 @@
 package org.apache.iceberg
 
 import dev.alluvial.sink.iceberg.io.GenericReader
-import io.micrometer.core.instrument.Metrics
-import org.apache.iceberg.catalog.TableIdentifier
+import io.opentelemetry.api.OpenTelemetry
+import io.opentelemetry.api.metrics.Meter
+import io.opentelemetry.api.trace.Tracer
 import org.apache.iceberg.data.GenericRecord
 import org.apache.iceberg.data.Record
 import org.apache.iceberg.types.Types
@@ -29,7 +30,10 @@ open class TestCompactSnapshotsBase {
     @TempDir
     protected lateinit var tableDir: File
     protected lateinit var table: Table
-    protected lateinit var metrics: CompactSnapshots.Metrics
+
+    private val telemetry = OpenTelemetry.noop()
+    protected val tracer: Tracer = telemetry.getTracer("noop")
+    protected val meter: Meter = telemetry.getMeter("noop")
 
     @BeforeEach
     open fun setupTable() {
@@ -38,7 +42,6 @@ open class TestCompactSnapshotsBase {
         table.updateSchema()
             .setIdentifierFields("id")
             .commit()
-        metrics = CompactSnapshots.Metrics(Metrics.globalRegistry, TableIdentifier.of("test"))
     }
 
     @AfterEach

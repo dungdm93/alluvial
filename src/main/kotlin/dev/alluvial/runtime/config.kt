@@ -12,7 +12,6 @@ data class Config(
     val sink: SinkConfig,
     val stream: StreamConfig,
     val manager: ManagerConfig,
-    val metrics: MetricsConfig,
     val telemetry: TelemetryConfig,
 )
 
@@ -139,21 +138,6 @@ data class ExpirationConfig(
     @JsonDeserialize(using = DurationDeserializer::class)
     val age: Duration = Duration.ofDays(1),
 )
-
-data class MetricsConfig(
-    val exporters: List<MetricsExporterConfig> = emptyList(),
-    val commonTags: Map<String, String> = emptyMap(),
-    // TODO: Support including/excluding meters by patterns
-)
-
-data class MetricsExporterConfig(
-    val kind: String,
-    val properties: Map<String, String> = emptyMap(),
-) {
-    init {
-        require(kind.isNotEmpty()) { "metrics.exporters.kind cannot be empty" }
-    }
-}
 
 data class TelemetryConfig(
     val enabled: Boolean = false,

@@ -4,8 +4,6 @@ import dev.alluvial.sink.iceberg.type.KafkaSchema
 import dev.alluvial.sink.iceberg.type.KafkaStruct
 import dev.alluvial.source.kafka.structSchema
 import dev.alluvial.stream.debezium.RecordTracker
-import io.micrometer.core.instrument.Tags
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.apache.iceberg.FileFormat
 import org.apache.iceberg.PartitionSpec
 import org.apache.iceberg.SortOrder
@@ -66,7 +64,7 @@ internal open class TestDebeziumTaskWriterBase : TableTestBase(2) {
     }
 
     protected fun createTaskWriter(sSchema: KafkaSchema): TaskWriter<SinkRecord> {
-        val factory = DebeziumTaskWriterFactory(table, tracker, SimpleMeterRegistry(), Tags.empty())
+        val factory = DebeziumTaskWriterFactory(table, tracker)
         factory.setDataKafkaSchema(sSchema)
         return factory.create()
     }

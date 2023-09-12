@@ -6,9 +6,9 @@ import dev.alluvial.sink.iceberg.type.KafkaStruct
 import dev.alluvial.sink.iceberg.type.toIcebergSchema
 import dev.alluvial.source.kafka.structSchema
 import dev.alluvial.stream.debezium.RecordTracker
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
 import io.mockk.mockk
+import io.opentelemetry.api.OpenTelemetry
 import org.apache.iceberg.PartitionSpec
 import org.apache.iceberg.Table
 import org.apache.iceberg.TestTables
@@ -62,7 +62,12 @@ internal class TestKafkaSchemaSchemaHandler {
         }
     }
 
-    private fun createOutlet() = IcebergTableOutlet(table.name(), table, tracker, SimpleMeterRegistry())
+    private fun createOutlet(): IcebergTableOutlet {
+        val telemetry = OpenTelemetry.noop()
+        val tracer = telemetry.getTracer("noop")
+        val meter = telemetry.getMeter("noop")
+        return IcebergTableOutlet(table.name(), table, tracker, tracer, meter)
+    }
 
     @BeforeEach
     fun before() {
