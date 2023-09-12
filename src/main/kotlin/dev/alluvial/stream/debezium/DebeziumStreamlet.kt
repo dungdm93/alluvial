@@ -10,7 +10,7 @@ import dev.alluvial.source.kafka.sourceTimestamp
 import dev.alluvial.utils.SchemaChangedException
 import dev.alluvial.utils.TableTruncatedException
 import dev.alluvial.utils.withSpan
-import io.opentelemetry.api.common.AttributeKey
+import io.opentelemetry.api.common.AttributeKey.stringKey
 import io.opentelemetry.api.common.Attributes
 import io.opentelemetry.api.metrics.Meter
 import io.opentelemetry.api.trace.Tracer
@@ -45,7 +45,7 @@ class DebeziumStreamlet(
     @Volatile
     override var status = CREATED
 
-    private val attrs = Attributes.of(AttributeKey.stringKey("alluvial.streamlet"), name)
+    private val attrs = Attributes.of(stringKey("alluvial.streamlet"), name)
     private val schemaMigrationCounter = meter.counterBuilder("alluvial.streamlet.schema.migration")
         .setDescription("Streamlet schema migration count")
         .build()

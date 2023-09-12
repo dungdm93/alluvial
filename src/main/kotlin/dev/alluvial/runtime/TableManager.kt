@@ -4,7 +4,6 @@ import com.google.common.collect.Maps
 import com.google.common.collect.Multimaps
 import com.google.common.collect.SetMultimap
 import com.google.common.collect.Sets
-import dev.alluvial.metrics.MetricsService
 import dev.alluvial.utils.Callback
 import dev.alluvial.utils.CompactionGroup
 import dev.alluvial.utils.CompactionPoints
@@ -12,15 +11,19 @@ import dev.alluvial.utils.LanePoolRunner
 import dev.alluvial.utils.recommendedPoolSize
 import dev.alluvial.utils.schedule
 import dev.alluvial.utils.shutdownAndAwaitTermination
-import io.micrometer.core.instrument.Metrics
-import io.micrometer.core.instrument.binder.iceberg.IcebergTableMetrics
+import dev.alluvial.utils.withSpan
+import io.opentelemetry.api.common.AttributeKey.stringKey
+import io.opentelemetry.api.common.Attributes
+import io.opentelemetry.context.Context
 import org.apache.hadoop.conf.Configuration
 import org.apache.iceberg.CachingCatalog
 import org.apache.iceberg.CatalogProperties
 import org.apache.iceberg.CatalogUtil
 import org.apache.iceberg.CompactSnapshots
 import org.apache.iceberg.HasTableOperations
+import org.apache.iceberg.PendingUpdate
 import org.apache.iceberg.Snapshot
+import org.apache.iceberg.Table
 import org.apache.iceberg.ancestorsOf
 import org.apache.iceberg.catalog.Catalog
 import org.apache.iceberg.catalog.Namespace
@@ -32,18 +35,17 @@ import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import java.time.Duration
 import java.time.ZonedDateTime
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeUnit.MINUTES
 import kotlin.concurrent.thread
 
-class TableManager : Runnable {
+class TableManager : Instrumental(), Runnable {
     companion object {
         private val logger = LoggerFactory.getLogger(TableManager::class.java)
-        private val executor = Executors.newScheduledThreadPool(recommendedPoolSize())
-        private val registry = Metrics.globalRegistry
+        private val executor = Context.taskWrapping(
+            Executors.newScheduledThreadPool(recommendedPoolSize())
+        )
+        private val TABLE = stringKey("table")
 
         fun loadCatalog(properties: Map<String, String>): Catalog {
             val cacheEnabled = PropertyUtil.propertyAsBoolean(
@@ -69,10 +71,6 @@ class TableManager : Runnable {
         }
     }
 
-    private val tableMetrics: ConcurrentMap<TableIdentifier, IcebergTableMetrics> = ConcurrentHashMap()
-    private val compactMetrics: ConcurrentMap<TableIdentifier, CompactSnapshots.Metrics> = ConcurrentHashMap()
-    private lateinit var metricsService: MetricsService
-
     private lateinit var compactionConfig: CompactionConfig
     private lateinit var expirationConfig: ExpirationConfig
     private lateinit var catalog: Catalog
@@ -86,34 +84,28 @@ class TableManager : Runnable {
     private val terminatingHook = thread(start = false, name = "terminator") {
         logger.warn("Shutdown Hook: shutdown the ExecutorService")
         executor.shutdownAndAwaitTermination(60, TimeUnit.SECONDS)
-
-        logger.warn("Shutdown Hook: closing metrics")
-        metricsService.close()
     }
 
     fun configure(config: Config) {
-        metricsService = MetricsService(registry, config.metrics)
-            .bindJvmMetrics()
-            .bindSystemMetrics()
-            .bindAwsClientMetrics()
+        initializeTelemetry(config, "TableManager")
 
         catalog = loadCatalog(config.sink.catalog)
         namespace = Namespace.of(*config.manager.namespace)
         examineInterval = config.manager.examineInterval
 
         tagRunner = LanePoolRunner(executor, this::executeTagging)
-        tagRunner.addListener(newMdcListener("tagging"))
+        tagRunner.addListener(newMdcListener("t"))
 
         expirationConfig = config.manager.expireOrphanSnapshots
         expireRunner = LanePoolRunner(executor, this::executeExpiration)
-        expireRunner.addListener(newMdcListener("expiration"))
+        expireRunner.addListener(newMdcListener("x"))
 
         compactionConfig = config.manager.compactSnapshots
         compactionGroups = Multimaps.newSetMultimap(Maps.newConcurrentMap(), Sets::newHashSet)
         compactRunner = LanePoolRunner(executor, this::executeCompaction)
         compactRunner.addListener(object : Callback<CompactionGroup, Unit> {
             override fun beforeExecute(input: CompactionGroup) {
-                MDC.put("name", "compaction(${input.tableId}/${input.key})")
+                MDC.put("name", "z(${input.tableId}/${input.key})")
             }
 
             override fun onSuccess(input: CompactionGroup, result: Unit) {
@@ -122,59 +114,42 @@ class TableManager : Runnable {
                 } else {
                     logger.error("Something when wrong, {} has gone", input)
                 }
-                compactMetrics[input.tableId]?.increment(true)
                 MDC.remove("name")
             }
 
             override fun onFailure(input: CompactionGroup, throwable: Throwable) {
                 compactionGroups.remove(input.tableId, input)
                 logger.error("Error while compact on {}", input, throwable)
-                compactMetrics[input.tableId]?.increment(false)
                 MDC.remove("name")
             }
         })
     }
 
     override fun run() {
-        metricsService.run()
         Runtime.getRuntime().addShutdownHook(terminatingHook)
-
-        executor.scheduleWithFixedDelay(::refreshMonitors, 0, 1, MINUTES)
         schedule(examineInterval, ::examineTables)
     }
 
-    private fun refreshMonitors() {
-        val tableIds = catalog.listTables(namespace)
-
-        tableIds.forEach {
-            tableMetrics.computeIfAbsent(it) { id ->
-                logger.info("Create new IcebergTableMetrics for {}", id)
-                val table = catalog.loadTable(id)
-                val metrics = IcebergTableMetrics(table, id)
-                metrics.bindTo(registry)
-                metrics
-            }
-        }
-    }
-
-    private fun examineTables() {
+    private fun examineTables() = tracer.withSpan("TableManager.examineTables") { span ->
         logger.info("Start examine tables")
-        val tableIds = catalog.listTables(namespace)
+        val tableIds = tracer.withSpan("Iceberg.listTables") { catalog.listTables(namespace) }
         val now = ZonedDateTime.now(compactionConfig.tz)
         val points = CompactionPoints.from(now, compactionConfig)
 
         tableIds.forEach { id ->
             logger.info("Examine table {}", id)
-            val table = catalog.loadTable(id)
-            compactMetrics.computeIfAbsent(id) { CompactSnapshots.Metrics(registry, id) }
+            val table = id.loadTable()
+            val attrs = Attributes.of(TABLE, id.toString())
 
             if (tagRunner.isEmpty(id)) {
                 logger.info("Enqueue taggingSnapshots for {}", id)
+                span.addEvent("TableManager.TAG", attrs)
                 tagRunner.enqueue(id, id)
             }
 
             if (expirationConfig.enabled && expireRunner.isEmpty(id)) {
                 logger.info("Enqueue expireSnapshots for {}", id)
+                span.addEvent("TableManager.EXPIRE", attrs)
                 expireRunner.enqueue(id, id)
             }
 
@@ -190,23 +165,23 @@ class TableManager : Runnable {
             cgs.forEach {
                 if (compactionGroups.put(id, it)) {
                     logger.info("Enqueue compactSnapshots for {}", it)
+                    span.addEvent("TableManager.COMPACT", attrs)
                     compactRunner.enqueue(it.tableId, it)
                 }
             }
         }
     }
 
-    private fun executeCompaction(cg: CompactionGroup) {
+    private fun executeCompaction(cg: CompactionGroup) = tracer.withSpan("TableManager.executeCompaction") {
         logger.info("Run compaction on {}", cg)
-        val table = catalog.loadTable(cg.tableId)
-        val metrics = compactMetrics[cg.tableId]!!
-        val action = CompactSnapshots(table, metrics, cg.lowSnapshotId, cg.highSnapshotId)
+        val table = cg.tableId.loadTable()
+        val action = CompactSnapshots(cg.lowSnapshotId, cg.highSnapshotId, table, tracer, meter)
         action.execute()
     }
 
-    private fun executeExpiration(tableId: TableIdentifier) {
+    private fun executeExpiration(tableId: TableIdentifier) = tracer.withSpan("TableManager.executeExpiration") {
         logger.info("Run expiration on {}", tableId)
-        val table = catalog.loadTable(tableId)
+        val table = tableId.loadTable()
         val meta = (table as HasTableOperations).operations().current()
         val expireTime = System.currentTimeMillis() - expirationConfig.age.toMillis()
         val orphanSnapshots = table.snapshots()
@@ -232,16 +207,16 @@ class TableManager : Runnable {
             .expireOlderThan(Long.MIN_VALUE)
             .cleanExpiredFiles(true)
         orphanSnapshots.forEach(action::expireSnapshotId)
-        action.commit()
+        action.commitUpdate()
     }
 
-    private fun executeTagging(tableId: TableIdentifier) {
+    private fun executeTagging(tableId: TableIdentifier) = tracer.withSpan("TableManager.executeTagging") {
         logger.info("Run tagging on {}", tableId)
         val now = ZonedDateTime.now(compactionConfig.tz)
         val points = CompactionPoints.from(now, compactionConfig)
         val taggingPoint = points.dayCompactionPoint.toEpochMilli()
 
-        val table = catalog.loadTable(tableId)
+        val table = tableId.loadTable()
         val refs = (table as HasTableOperations).operations().current().refs()
 
         val cgs = CompactionGroup
@@ -261,7 +236,17 @@ class TableManager : Runnable {
             logger.info("Creating tag {} from {}", cg.key, cg.highSnapshotId)
             manageSnapshots.createTag(cg.key, cg.highSnapshotId)
         }
-        manageSnapshots.commit()
+        manageSnapshots.commitUpdate()
+    }
+
+    @Suppress("NOTHING_TO_INLINE")
+    private inline fun TableIdentifier.loadTable(): Table {
+        return tracer.withSpan("Iceberg.loadTable") { catalog.loadTable(this) }
+    }
+
+    @Suppress("NOTHING_TO_INLINE")
+    private inline fun PendingUpdate<*>.commitUpdate() {
+        return tracer.withSpan("Iceberg.commit") { this.commit() }
     }
 
     private fun <I, O> newMdcListener(action: String): Callback<I, O> {
