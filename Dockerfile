@@ -1,11 +1,12 @@
-FROM gradle:7.6-jdk17 AS builder
+FROM gradle:8.3-jdk17 AS builder
 ENV GRADLE_OPTS="-Dorg.gradle.daemon=false"
 
 WORKDIR /app
 COPY gradle.properties *.gradle.kts ./
-RUN gradle dependencies
+RUN --mount=type=cache,target=/root/.gradle,sharing=locked \
+  gradle dependencies
 
-COPY ./src ./src
+COPY . .
 RUN gradle assembleDist
 RUN set -eux; \
     cd ./build/distributions/; \
@@ -14,5 +15,6 @@ RUN set -eux; \
 FROM eclipse-temurin:17-jre-jammy
 LABEL maintainer="Teko's DataOps Team <dataops@teko.vn>"
 
-COPY --from=builder /app/build/distributions/alluvial-0.1/ /opt/alluvial/
+COPY --from=builder --link \
+    /app/build/distributions/alluvial-0.1/ /opt/alluvial/
 ENV PATH=/opt/alluvial/bin:$PATH
