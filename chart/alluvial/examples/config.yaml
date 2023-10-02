@@ -35,12 +35,10 @@ configs:
     commitBatchSize: 1000
     commitTimespan: "10m"
 
-  metrics:
-    exporters:
-      - kind: prometheus
-        properties:
-          prometheus.bind: 0.0.0.0:9090
-          prometheus.daemon: true
-    commonTags:
-      environment: "local"
-      service: "sakila"
+  telemetry:
+    enabled: true
+    properties:
+      otel.traces.exporter: otlp
+      otel.exporter.otlp.endpoint: http://localhost:4317
+      otel.metrics.exporter: prometheus
+      otel.exporter.prometheus.port: 9464
