@@ -94,11 +94,11 @@ class TableManager : Instrumental(), Runnable {
         examineInterval = config.manager.examineInterval
 
         tagRunner = LanePoolRunner(executor, this::executeTagging)
-        tagRunner.addListener(newMdcListener("t"))
+        tagRunner.addListener(newMdcListener("tag", "t"))
 
         expirationConfig = config.manager.expireOrphanSnapshots
         expireRunner = LanePoolRunner(executor, this::executeExpiration)
-        expireRunner.addListener(newMdcListener("x"))
+        expireRunner.addListener(newMdcListener("expire", "x"))
 
         compactionConfig = config.manager.compactSnapshots
         compactionGroups = Multimaps.newSetMultimap(Maps.newConcurrentMap(), Sets::newHashSet)
@@ -249,10 +249,10 @@ class TableManager : Instrumental(), Runnable {
         return tracer.withSpan("Iceberg.commit") { this.commit() }
     }
 
-    private fun <I, O> newMdcListener(action: String): Callback<I, O> {
+    private fun <I, O> newMdcListener(action: String, code: String): Callback<I, O> {
         return object : Callback<I, O> {
             override fun beforeExecute(input: I) {
-                MDC.put("name", "$action($input)")
+                MDC.put("name", "$code($input)")
             }
 
             override fun onSuccess(input: I, result: O) {
