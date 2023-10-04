@@ -49,7 +49,7 @@ spec:
           ports:
           - name: metrics
             protocol: TCP
-            containerPort: 9090
+            containerPort: 9464
           volumeMounts:
             {{- include "alluvial.volumeMounts" . | nindent 12 }}
           livenessProbe:
