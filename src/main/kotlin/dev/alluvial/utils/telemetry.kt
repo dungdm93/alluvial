@@ -7,6 +7,9 @@ import io.opentelemetry.api.trace.StatusCode
 import io.opentelemetry.api.trace.Tracer
 
 val SERVICE_COMPONENT = stringKey("service.component")
+val ICEBERG_TABLE = stringKey("iceberg.table")
+val ICEBERG_SCHEMA = stringKey("iceberg.schema")
+val ICEBERG_PARTITION = stringKey("iceberg.partition")
 
 /**
  * @see io.micrometer.core.instrument.binder.BaseUnits

@@ -20,12 +20,12 @@ class OpenTelemetryMetricsReporter : MetricsReporter {
     companion object {
         private val logger = LoggerFactory.getLogger(OpenTelemetryMetricsReporter::class.java)
 
+        private val TABLE_ATTRIBUTE_KEY = stringKey("table")
+        private val CONTENT_ATTRIBUTE_KEY = stringKey("content")
         private val ADDED_OPERATION_ATTRIBUTES = Attributes.of(stringKey("op"), "added")
         private val REMOVED_OPERATION_ATTRIBUTES = Attributes.of(stringKey("op"), "removed")
         private val FILE_CONTENT_ATTRIBUTES = FileContent.entries
-            .associateWith {
-                Attributes.of(stringKey("content"), it.name.lowercase())
-            }
+            .associateWith { Attributes.of(CONTENT_ATTRIBUTE_KEY, it.name.lowercase()) }
     }
 
     private lateinit var meter: Meter
@@ -64,7 +64,7 @@ class OpenTelemetryMetricsReporter : MetricsReporter {
     }
 
     private fun reportScanReport(report: ScanReport) {
-        val table = Attributes.of(stringKey("table"), report.tableName())
+        val table = Attributes.of(TABLE_ATTRIBUTE_KEY, report.tableName())
         val smr = report.scanMetrics()
 
         scanTotal.add(1, table)
@@ -72,7 +72,7 @@ class OpenTelemetryMetricsReporter : MetricsReporter {
     }
 
     private fun reportCommitReport(report: CommitReport) {
-        val table = Attributes.of(stringKey("table"), report.tableName())
+        val table = Attributes.of(TABLE_ATTRIBUTE_KEY, report.tableName())
         val cmr = report.commitMetrics()
 
         commitTotal.add(1, table)

@@ -7,14 +7,13 @@ import com.google.common.collect.Sets
 import dev.alluvial.utils.Callback
 import dev.alluvial.utils.CompactionGroup
 import dev.alluvial.utils.CompactionPoints
+import dev.alluvial.utils.ICEBERG_TABLE
 import dev.alluvial.utils.LanePoolRunner
 import dev.alluvial.utils.recommendedPoolSize
 import dev.alluvial.utils.schedule
 import dev.alluvial.utils.shutdownAndAwaitTermination
 import dev.alluvial.utils.withSpan
-import io.opentelemetry.api.common.AttributeKey.stringKey
 import io.opentelemetry.api.common.Attributes
-import io.opentelemetry.context.Context
 import org.apache.hadoop.conf.Configuration
 import org.apache.iceberg.CachingCatalog
 import org.apache.iceberg.CatalogProperties
@@ -42,10 +41,7 @@ import kotlin.concurrent.thread
 class TableManager : Instrumental(), Runnable {
     companion object {
         private val logger = LoggerFactory.getLogger(TableManager::class.java)
-        private val executor = Context.taskWrapping(
-            Executors.newScheduledThreadPool(recommendedPoolSize())
-        )
-        private val TABLE = stringKey("table")
+        private val executor = Executors.newScheduledThreadPool(recommendedPoolSize())
 
         fun loadCatalog(properties: Map<String, String>): Catalog {
             val cacheEnabled = PropertyUtil.propertyAsBoolean(
@@ -139,7 +135,7 @@ class TableManager : Instrumental(), Runnable {
         tableIds.forEach { id ->
             logger.info("Examine table {}", id)
             val table = id.loadTable()
-            val attrs = Attributes.of(TABLE, id.toString())
+            val attrs = Attributes.of(ICEBERG_TABLE, id.toString())
 
             if (tagRunner.isEmpty(id)) {
                 logger.info("Enqueue taggingSnapshots for {}", id)
@@ -172,14 +168,20 @@ class TableManager : Instrumental(), Runnable {
         }
     }
 
-    private fun executeCompaction(cg: CompactionGroup) = tracer.withSpan("TableManager.executeCompaction") {
+    private fun executeCompaction(cg: CompactionGroup) = tracer.withSpan(
+        "TableManager.executeCompaction",
+        Attributes.of(ICEBERG_TABLE, cg.tableId.toString()),
+    ) {
         logger.info("Run compaction on {}", cg)
         val table = cg.tableId.loadTable()
         val action = CompactSnapshots(cg.lowSnapshotId, cg.highSnapshotId, table, tracer, meter)
         action.execute()
     }
 
-    private fun executeExpiration(tableId: TableIdentifier) = tracer.withSpan("TableManager.executeExpiration") {
+    private fun executeExpiration(tableId: TableIdentifier) = tracer.withSpan(
+        "TableManager.executeExpiration",
+        Attributes.of(ICEBERG_TABLE, tableId.toString()),
+    ) {
         logger.info("Run expiration on {}", tableId)
         val table = tableId.loadTable()
         val meta = (table as HasTableOperations).operations().current()
@@ -210,7 +212,10 @@ class TableManager : Instrumental(), Runnable {
         action.commitUpdate()
     }
 
-    private fun executeTagging(tableId: TableIdentifier) = tracer.withSpan("TableManager.executeTagging") {
+    private fun executeTagging(tableId: TableIdentifier) = tracer.withSpan(
+        "TableManager.executeTagging",
+        Attributes.of(ICEBERG_TABLE, tableId.toString()),
+    ) {
         logger.info("Run tagging on {}", tableId)
         val now = ZonedDateTime.now(compactionConfig.tz)
         val points = CompactionPoints.from(now, compactionConfig)

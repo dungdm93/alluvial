@@ -8,8 +8,10 @@ import dev.alluvial.sink.iceberg.io.PartitioningWriter
 import dev.alluvial.sink.iceberg.io.PartitioningWriterFactory
 import dev.alluvial.sink.iceberg.transform
 import dev.alluvial.sink.iceberg.type.IcebergSchema
+import dev.alluvial.utils.ICEBERG_PARTITION
+import dev.alluvial.utils.ICEBERG_SCHEMA
+import dev.alluvial.utils.ICEBERG_TABLE
 import dev.alluvial.utils.withSpan
-import io.opentelemetry.api.common.AttributeKey.stringKey
 import io.opentelemetry.api.common.Attributes
 import io.opentelemetry.api.metrics.Meter
 import io.opentelemetry.api.trace.Tracer
@@ -57,8 +59,6 @@ class CompactSnapshots(
         private val PARTITION_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneOffset.UTC)
         private val TASK_FORMATTER = DateTimeFormatter.ofPattern("HHmmss").withZone(ZoneOffset.UTC)
         private val contentFileComparator = Comparator.comparing(ContentFile<*>::path, Comparators.charSequences())
-        private val PARTITION = stringKey("iceberg.partition")
-        private val SCHEMA = stringKey("iceberg.schema")
     }
 
     private val io = table.io()
@@ -73,7 +73,7 @@ class CompactSnapshots(
     private val fileWriterFactoryBuilder: GenericFileWriterFactory.Builder
     private val partitioningWriterFactoryBuilder: PartitioningWriterFactory.Builder<Record>
     private val resultBuilder = WriteResult.builder()
-    private val attrs = Attributes.of(stringKey("iceberg.table"), table.name())
+    private val attrs = Attributes.of(ICEBERG_TABLE, table.name())
 
     init {
         val ancestorIds = table.currentAncestorIds()
@@ -191,7 +191,7 @@ class CompactSnapshots(
         "CompactSnapshots.rewriteDataForPartition", attrs
     ) { span ->
         logger.info("rewrite DATA for partition={} with {} FileScanTasks", partition, files.size)
-        span.setAttribute(PARTITION, partition.toString())
+        span.setAttribute(ICEBERG_PARTITION, partition.toString())
         if (logger.isDebugEnabled) logging(files)
         val reader = GenericReader(io, schema)
         val iterable = reader.openTask(files)
@@ -267,8 +267,8 @@ class CompactSnapshots(
         "CompactSnapshots.rewriteEqualityDeleteForPartition", attrs
     ) { span ->
         logger.info("rewrite EQUALITY_DELETES for partition={} with {} DeleteFiles", partition, files.size)
-        span.setAttribute(PARTITION, partition.toString())
-        span.setAttribute(SCHEMA, deleteSchema.toString())
+        span.setAttribute(ICEBERG_PARTITION, partition.toString())
+        span.setAttribute(ICEBERG_SCHEMA, deleteSchema.toString())
         if (logger.isDebugEnabled) logging(files)
         // reuseContainers=false to give each record its own object
         // otherwise transform(Record::copy) is need because delete records will be held in a set
