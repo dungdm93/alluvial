@@ -24,7 +24,7 @@ class DebeziumStreamletFactory(
         val inlet = source.getInlet(name, topic)
         val outlet = sink.getOutlet(name, config.connector, tableId) ?: createOutlet(name, topic, tableId)
         val tracker = outlet.tracker
-        val schemaHandler = KafkaSchemaSchemaHandler(outlet)
+        val schemaHandler = KafkaSchemaSchemaHandler(name, outlet, tracer, meter)
 
         return DebeziumStreamlet(name, config, inlet, outlet, tracker, schemaHandler, tracer, meter)
     }
