@@ -4,6 +4,7 @@ import com.google.common.collect.Maps
 import com.google.common.collect.Multimaps
 import com.google.common.collect.SetMultimap
 import com.google.common.collect.Sets
+import dev.alluvial.instrumentation.iceberg.OpenTelemetryEventListeners
 import dev.alluvial.utils.Callback
 import dev.alluvial.utils.CompactionGroup
 import dev.alluvial.utils.CompactionPoints
@@ -44,6 +45,8 @@ class TableManager : Instrumental(), Runnable {
         private val executor = Executors.newScheduledThreadPool(recommendedPoolSize())
 
         fun loadCatalog(properties: Map<String, String>): Catalog {
+            OpenTelemetryEventListeners.register()
+
             val cacheEnabled = PropertyUtil.propertyAsBoolean(
                 properties,
                 CatalogProperties.CACHE_ENABLED,

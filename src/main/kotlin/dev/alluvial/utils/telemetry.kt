@@ -1,5 +1,6 @@
 package dev.alluvial.utils
 
+import io.opentelemetry.api.common.AttributeKey.longKey
 import io.opentelemetry.api.common.AttributeKey.stringKey
 import io.opentelemetry.api.common.Attributes
 import io.opentelemetry.api.trace.Span
@@ -10,6 +11,9 @@ val SERVICE_COMPONENT = stringKey("service.component")
 val ICEBERG_TABLE = stringKey("iceberg.table")
 val ICEBERG_SCHEMA = stringKey("iceberg.schema")
 val ICEBERG_PARTITION = stringKey("iceberg.partition")
+val ICEBERG_OPERATION = stringKey("iceberg.operation")
+val ICEBERG_SNAPSHOT_ID = longKey("iceberg.snapshotId")
+val ICEBERG_SEQUENCE_NUMBER = longKey("iceberg.sequenceNumber")
 
 /**
  * @see io.micrometer.core.instrument.binder.BaseUnits

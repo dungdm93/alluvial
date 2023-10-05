@@ -1,5 +1,6 @@
 package dev.alluvial.sink.iceberg
 
+import dev.alluvial.instrumentation.iceberg.OpenTelemetryEventListeners
 import dev.alluvial.runtime.SinkConfig
 import dev.alluvial.stream.debezium.RecordTracker
 import io.opentelemetry.api.OpenTelemetry
@@ -36,6 +37,7 @@ class IcebergSink(
     private val supportsNamespaces: SupportsNamespaces?
 
     init {
+        OpenTelemetryEventListeners.register()
         val properties = sinkConfig.catalog
 
         val cacheEnabled = PropertyUtil.propertyAsBoolean(properties, CACHE_ENABLED, CACHE_ENABLED_DEFAULT)
