@@ -25,11 +25,13 @@ class DebeziumTaskWriterFactory(
     private var dataKafkaSchema: KafkaSchema? = null
     private var equalityDeleteKafkaSchema: KafkaSchema? = null
     private var positionDeleteKafkaSchema: KafkaSchema? = null
-    private val fileFormat = PropertyUtil.propertyAsString(
-        table.properties(),
-        DEFAULT_FILE_FORMAT,
-        DEFAULT_FILE_FORMAT_DEFAULT.uppercase()
-    ).let(FileFormat::valueOf)
+    private val fileFormat = FileFormat.fromString(
+        PropertyUtil.propertyAsString(
+            table.properties(),
+            DEFAULT_FILE_FORMAT,
+            DEFAULT_FILE_FORMAT_DEFAULT
+        )
+    )
     private val targetFileSizeInBytes = PropertyUtil.propertyAsLong(
         table.properties(),
         WRITE_TARGET_FILE_SIZE_BYTES,
