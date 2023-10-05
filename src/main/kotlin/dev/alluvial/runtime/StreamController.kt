@@ -6,9 +6,12 @@ import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.source.kafka.KafkaSource
 import dev.alluvial.stream.debezium.DebeziumStreamlet
 import dev.alluvial.stream.debezium.DebeziumStreamletFactory
+import dev.alluvial.utils.ICEBERG_TABLE
+import dev.alluvial.utils.KAFKA_TOPIC
 import dev.alluvial.utils.recommendedPoolSize
 import dev.alluvial.utils.shutdownAndAwaitTermination
 import dev.alluvial.utils.withSpan
+import io.opentelemetry.api.common.Attributes
 import org.apache.iceberg.catalog.TableIdentifier
 import org.slf4j.LoggerFactory
 import java.time.Duration
@@ -81,9 +84,10 @@ class StreamController : Instrumental(), Runnable {
         "StreamController.examineStreamlet"
     ) { span ->
         val tableId = topic2Table.computeIfAbsent(topic) { source.tableIdOf(topic) }
+        val attr = Attributes.of(KAFKA_TOPIC, topic, ICEBERG_TABLE, tableId.toString())
         if (topic !in streamlets) {
             if (currentLagOf(topic, tableId) > 0) channel.put(topic)
-            span.addEvent("NEW")
+            span.addEvent("Streamlet.NEW", attr)
             return
         }
         val streamlet = streamlets[topic]!!
@@ -98,10 +102,10 @@ class StreamController : Instrumental(), Runnable {
                     logger.info("Close streamlet {}: No more message for awhile", streamlet.name)
                     streamlet.close()
                     streamlets.remove(topic)
-                    span.addEvent("TERMINATED")
+                    span.addEvent("Streamlet.TERMINATED", attr)
                 } else if (streamlet.shouldRun()) {
                     channel.put(topic)
-                    span.addEvent("RESUMING")
+                    span.addEvent("Streamlet.RESUMING", attr)
                 } else {
                     logger.info("Streamlet {} still SUSPENDED for next examination", streamlet.name)
                 }

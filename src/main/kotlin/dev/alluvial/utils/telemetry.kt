@@ -1,3 +1,5 @@
+@file:Suppress("HasPlatformType")
+
 package dev.alluvial.utils
 
 import io.opentelemetry.api.common.AttributeKey.longKey
@@ -8,6 +10,7 @@ import io.opentelemetry.api.trace.StatusCode
 import io.opentelemetry.api.trace.Tracer
 
 val SERVICE_COMPONENT = stringKey("service.component")
+val KAFKA_TOPIC = stringKey("kafka.topic")
 val ICEBERG_TABLE = stringKey("iceberg.table")
 val ICEBERG_SCHEMA = stringKey("iceberg.schema")
 val ICEBERG_PARTITION = stringKey("iceberg.partition")
