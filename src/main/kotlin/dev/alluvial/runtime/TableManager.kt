@@ -5,6 +5,7 @@ import com.google.common.collect.Multimaps
 import com.google.common.collect.SetMultimap
 import com.google.common.collect.Sets
 import dev.alluvial.instrumentation.iceberg.OpenTelemetryEventListeners
+import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.utils.Callback
 import dev.alluvial.utils.CompactionGroup
 import dev.alluvial.utils.CompactionPoints
@@ -44,8 +45,9 @@ class TableManager : Instrumental(), Runnable {
         private val logger = LoggerFactory.getLogger(TableManager::class.java)
         private val executor = Executors.newScheduledThreadPool(recommendedPoolSize())
 
-        fun loadCatalog(properties: Map<String, String>): Catalog {
+        fun loadCatalog(props: Map<String, String>): Catalog {
             OpenTelemetryEventListeners.register()
+            val properties = props + IcebergSink.DEFAULT_CONFIG
 
             val cacheEnabled = PropertyUtil.propertyAsBoolean(
                 properties,

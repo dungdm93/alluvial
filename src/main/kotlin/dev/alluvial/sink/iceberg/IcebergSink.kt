@@ -13,6 +13,7 @@ import org.apache.iceberg.CatalogUtil
 import org.apache.iceberg.CatalogUtil.ICEBERG_CATALOG_HADOOP
 import org.apache.iceberg.Schema
 import org.apache.iceberg.Table
+import org.apache.iceberg.aws.s3.S3FileIOProperties.CLIENT_FACTORY
 import org.apache.iceberg.brokerOffsets
 import org.apache.iceberg.catalog.Catalog
 import org.apache.iceberg.catalog.Catalog.TableBuilder
@@ -31,6 +32,13 @@ class IcebergSink(
 ) {
     companion object {
         private val logger = LoggerFactory.getLogger(IcebergSink::class.java)
+
+        val DEFAULT_CONFIG = mapOf(
+            METRICS_REPORTER_IMPL to "dev.alluvial.instrumentation.iceberg.OpenTelemetryMetricsReporter",
+            // default org.apache.iceberg.aws.s3.DefaultS3FileIOAwsClientFactory
+            CLIENT_FACTORY to "org.apache.iceberg.aws.s3.AlluvialS3FileIOAwsClientFactory",
+            "s3.mutation.otel.class" to "dev.alluvial.instrumentation.aws.OpenTelemetryAwsClientMutation",
+        )
     }
 
     private val catalog: Catalog
@@ -38,7 +46,7 @@ class IcebergSink(
 
     init {
         OpenTelemetryEventListeners.register()
-        val properties = sinkConfig.catalog
+        val properties = sinkConfig.catalog + DEFAULT_CONFIG
 
         val cacheEnabled = PropertyUtil.propertyAsBoolean(properties, CACHE_ENABLED, CACHE_ENABLED_DEFAULT)
         val cacheExpirationIntervalMs = PropertyUtil.propertyAsLong(

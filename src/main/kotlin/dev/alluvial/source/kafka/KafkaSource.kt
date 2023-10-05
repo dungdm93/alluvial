@@ -14,7 +14,6 @@ import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
 import org.slf4j.LoggerFactory
-import java.io.Closeable
 
 class KafkaSource(
     sourceConfig: SourceConfig,
