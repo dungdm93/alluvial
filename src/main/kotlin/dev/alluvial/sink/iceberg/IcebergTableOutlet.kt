@@ -45,7 +45,7 @@ class IcebergTableOutlet(
     private var writer: TaskWriter<SinkRecord>? = null
     private val writerFactory = DebeziumTaskWriterFactory(table, tracker)
 
-    fun write(record: SinkRecord) = tracer.withSpan("IcebergTableOutlet.write", attrs) {
+    fun write(record: SinkRecord) {
         if (writer == null) {
             logger.info("Create new TaskWriter")
             writer = writerFactory.create()

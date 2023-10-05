@@ -74,7 +74,7 @@ class KafkaTopicInlet(
     /**
      * Read a record from kafka in timestamp order and ignore Tombstone events
      */
-    fun read(): SinkRecord? = tracer.withSpan("KafkaTopicInlet.read", attrs) {
+    fun read(): SinkRecord? {
         val record = pollFromQueues()
         if (record == null) {
             pollFromBrokers()
