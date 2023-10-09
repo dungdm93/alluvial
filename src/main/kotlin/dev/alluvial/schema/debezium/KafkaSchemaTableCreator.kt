@@ -1,12 +1,16 @@
 package dev.alluvial.schema.debezium
 
 import dev.alluvial.api.TableCreator
+import dev.alluvial.runtime.PartitionSpecConfig
 import dev.alluvial.runtime.TableCreationConfig
 import dev.alluvial.sink.iceberg.IcebergSink
 import dev.alluvial.sink.iceberg.type.IcebergSchema
 import dev.alluvial.sink.iceberg.type.toIcebergSchema
 import dev.alluvial.source.kafka.KafkaSource
 import dev.alluvial.source.kafka.fieldSchema
+import dev.alluvial.utils.withSpan
+import io.opentelemetry.api.metrics.Meter
+import io.opentelemetry.api.trace.Tracer
 import org.apache.iceberg.PartitionSpec
 import org.apache.iceberg.SortOrder
 import org.apache.iceberg.Table
@@ -24,9 +28,11 @@ import org.slf4j.LoggerFactory
 import java.time.Duration
 
 class KafkaSchemaTableCreator(
+    tableCreationConfig: TableCreationConfig,
     private val source: KafkaSource,
     private val sink: IcebergSink,
-    tableCreationConfig: TableCreationConfig,
+    private val tracer: Tracer,
+    private val meter: Meter,
 ) : TableCreator {
     companion object {
         private val logger = LoggerFactory.getLogger(KafkaSchemaTableCreator::class.java)
@@ -38,15 +44,30 @@ class KafkaSchemaTableCreator(
     private val partitionSpec = tableCreationConfig.partitionSpec
     private val baseLocation = tableCreationConfig.baseLocation?.trimEnd('/')
 
-    override fun createTable(topic: String, tableId: TableIdentifier): Table {
+    override fun createTable(topic: String, tableId: TableIdentifier): Table = tracer.withSpan(
+        "KafkaSchemaTableCreator.createTable"
+    ) {
+        val record = findSchemaRecord(topic, tableId)
+        val table = buildTable(tableId, record)
+        val partitionConfigs = partitionSpec[tableId.name()]
+        if (!partitionConfigs.isNullOrEmpty()) {
+            updatePartitionSpec(table, partitionConfigs)
+        }
+
+        return table
+    }
+
+    private fun findSchemaRecord(topic: String, tableId: TableIdentifier): SinkRecord = tracer.withSpan(
+        "KafkaSchemaTableCreator.findSchemaRecord"
+    ) {
         val overrideConfig = mapOf(ConsumerConfig.CLIENT_ID_CONFIG to "${tableId}(creator)")
         val consumer = source.newConsumer<ByteArray?, ByteArray?>(overrideConfig)
         val converter = source.getConverter()
 
-        setupConsumer(consumer, topic)
-        val record = consumer.firstNonNull(converter::convert)
-        consumer.close()
-        return buildTable(tableId, record)
+        consumer.use {
+            setupConsumer(consumer, topic)
+            consumer.firstNonNull(converter::convert)
+        }
     }
 
     private fun <K, V> setupConsumer(consumer: KafkaConsumer<K, V>, topic: String) {
@@ -72,7 +93,9 @@ class KafkaSchemaTableCreator(
         return block(r)
     }
 
-    private fun buildTable(tableId: TableIdentifier, record: SinkRecord): Table {
+    private fun buildTable(tableId: TableIdentifier, record: SinkRecord): Table = tracer.withSpan(
+        "KafkaSchemaTableCreator.buildTable"
+    ) {
         val iSchema = icebergSchemaFrom(record)
         val schemaVersion = record.schemaVersion()
 
@@ -100,27 +123,29 @@ class KafkaSchemaTableCreator(
             builder.withSortOrder(SortOrder.unsorted())
             builder.withPartitionSpec(PartitionSpec.unpartitioned())
         }
-        val partitionConfigs = partitionSpec[tableId.name()]
-        if (!partitionConfigs.isNullOrEmpty()) {
-            val schema = table.schema()
-            val updateSpec = table.updateSpec()
-
-            partitionConfigs.forEach {
-                if ("identity".equals(it.transform, true)) {
-                    val ref = Expressions.ref<Any>(it.column)
-                    updateSpec.addField(it.name, ref)
-                } else {
-                    val field = schema.findField(it.column)
-                    val transform = Transforms.fromString(field.type(), it.transform)
-                    val term = Expressions.transform(field.name(), transform)
-                    updateSpec.addField(it.name, term)
-                }
-            }
-
-            updateSpec.commit()
-            logger.info("partitionSpec: {}", table.spec())
-        }
         return table
+    }
+
+    private fun updatePartitionSpec(table: Table, partitionConfigs: List<PartitionSpecConfig>) = tracer.withSpan(
+        "KafkaSchemaTableCreator.updatePartitionSpec"
+    ) {
+        val schema = table.schema()
+        val updateSpec = table.updateSpec()
+
+        partitionConfigs.forEach {
+            if ("identity".equals(it.transform, true)) {
+                val ref = Expressions.ref<Any>(it.column)
+                updateSpec.addField(it.name, ref)
+            } else {
+                val field = schema.findField(it.column)
+                val transform = Transforms.fromString(field.type(), it.transform)
+                val term = Expressions.transform(field.name(), transform)
+                updateSpec.addField(it.name, term)
+            }
+        }
+
+        updateSpec.commit()
+        logger.info("partitionSpec: {}", table.spec())
     }
 
     private fun icebergSchemaFrom(record: SinkRecord): IcebergSchema {
