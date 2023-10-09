@@ -8,7 +8,11 @@ import dev.alluvial.sink.iceberg.type.IcebergSchema
 import dev.alluvial.sink.iceberg.type.toIcebergSchema
 import dev.alluvial.source.kafka.KafkaSource
 import dev.alluvial.source.kafka.fieldSchema
+import dev.alluvial.utils.ICEBERG_TABLE
+import dev.alluvial.utils.KAFKA_TOPIC
 import dev.alluvial.utils.withSpan
+import io.opentelemetry.api.common.AttributeKey.stringKey
+import io.opentelemetry.api.common.Attributes
 import io.opentelemetry.api.metrics.Meter
 import io.opentelemetry.api.trace.Tracer
 import org.apache.iceberg.PartitionSpec
@@ -38,6 +42,11 @@ class KafkaSchemaTableCreator(
         private val logger = LoggerFactory.getLogger(KafkaSchemaTableCreator::class.java)
         const val TABLE_FORMAT_VERSION = "2"
         private val pollTimeout: Duration = Duration.ofSeconds(1)
+
+        private val KAFKA_KEY_SCHEMA = stringKey("iceberg.kafka.keySchema")
+        private val KAFKA_VALUE_SCHEMA = stringKey("iceberg.kafka.valueSchema")
+        private val PARTITION_SPEC = stringKey("iceberg.partitionSpec")
+        private val TABLE_LOCATION = stringKey("iceberg.location")
     }
 
     private val properties = tableCreationConfig.properties
@@ -45,21 +54,26 @@ class KafkaSchemaTableCreator(
     private val baseLocation = tableCreationConfig.baseLocation?.trimEnd('/')
 
     override fun createTable(topic: String, tableId: TableIdentifier): Table = tracer.withSpan(
-        "KafkaSchemaTableCreator.createTable"
-    ) {
-        val record = findSchemaRecord(topic, tableId)
-        val table = buildTable(tableId, record)
+        "KafkaSchemaTableCreator.createTable",
+    ) { span ->
+        val attrs = Attributes.of(KAFKA_TOPIC, topic, ICEBERG_TABLE, tableId.toString())
+        span.setAllAttributes(attrs)
+
+        val record = findSchemaRecord(topic, tableId, attrs)
+        val table = buildTable(tableId, record, attrs)
         val partitionConfigs = partitionSpec[tableId.name()]
         if (!partitionConfigs.isNullOrEmpty()) {
-            updatePartitionSpec(table, partitionConfigs)
+            updatePartitionSpec(table, partitionConfigs, attrs)
         }
 
         return table
     }
 
-    private fun findSchemaRecord(topic: String, tableId: TableIdentifier): SinkRecord = tracer.withSpan(
-        "KafkaSchemaTableCreator.findSchemaRecord"
-    ) {
+    private fun findSchemaRecord(
+        topic: String,
+        tableId: TableIdentifier,
+        attrs: Attributes,
+    ): SinkRecord = tracer.withSpan("KafkaSchemaTableCreator.findSchemaRecord", attrs) {
         val overrideConfig = mapOf(ConsumerConfig.CLIENT_ID_CONFIG to "${tableId}(creator)")
         val consumer = source.newConsumer<ByteArray?, ByteArray?>(overrideConfig)
         val converter = source.getConverter()
@@ -93,15 +107,19 @@ class KafkaSchemaTableCreator(
         return block(r)
     }
 
-    private fun buildTable(tableId: TableIdentifier, record: SinkRecord): Table = tracer.withSpan(
-        "KafkaSchemaTableCreator.buildTable"
-    ) {
+    private fun buildTable(
+        tableId: TableIdentifier,
+        record: SinkRecord,
+        attrs: Attributes,
+    ): Table = tracer.withSpan("KafkaSchemaTableCreator.buildTable", attrs) { span ->
         val iSchema = icebergSchemaFrom(record)
         val schemaVersion = record.schemaVersion()
 
         val table = sink.buildTable(tableId, iSchema) { builder ->
             logger.info("Creating table {}", tableId)
             logger.info("schema: version: {}\n{}", schemaVersion, iSchema)
+            span.setAttribute(KAFKA_KEY_SCHEMA, record.keySchema().toString())
+            span.setAttribute(KAFKA_VALUE_SCHEMA, record.valueSchema().toString())
 
             builder.withProperty(TableProperties.FORMAT_VERSION, TABLE_FORMAT_VERSION)
             logger.info("formatVersion: {}", TABLE_FORMAT_VERSION)
@@ -116,6 +134,7 @@ class KafkaSchemaTableCreator(
                 val location = "${baseLocation}/${nsPath}/${tableId.name()}"
                 builder.withLocation(location)
                 logger.info("location: {}", location)
+                span.setAttribute(TABLE_LOCATION, location)
             }
 
             // TableMetadata MUST have SortOrder.unsorted() and PartitionSpec.unpartitioned()
@@ -126,11 +145,14 @@ class KafkaSchemaTableCreator(
         return table
     }
 
-    private fun updatePartitionSpec(table: Table, partitionConfigs: List<PartitionSpecConfig>) = tracer.withSpan(
-        "KafkaSchemaTableCreator.updatePartitionSpec"
-    ) {
+    private fun updatePartitionSpec(
+        table: Table,
+        partitionConfigs: List<PartitionSpecConfig>,
+        attrs: Attributes,
+    ) = tracer.withSpan("KafkaSchemaTableCreator.updatePartitionSpec", attrs) { span ->
         val schema = table.schema()
         val updateSpec = table.updateSpec()
+        span.setAttribute(PARTITION_SPEC, partitionConfigs.toString())
 
         partitionConfigs.forEach {
             if ("identity".equals(it.transform, true)) {
