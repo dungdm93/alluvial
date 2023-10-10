@@ -48,6 +48,10 @@ internal class TestKafkaSchemaSchemaHandler {
     private lateinit var tmpDir: File
     private lateinit var table: Table
     private lateinit var tracker: RecordTracker
+    private val name = "test"
+    private val telemetry = OpenTelemetry.noop()
+    private val tracer = telemetry.getTracer("noop")
+    private val meter = telemetry.getMeter("noop")
     private val formatVersion: Int = 2
 
     private fun createTable(iSchema: IcebergSchema, schemaVersion: String? = null) {
@@ -84,7 +88,7 @@ internal class TestKafkaSchemaSchemaHandler {
     fun recordNullShouldNotMigrate() {
         createTable(VALUE_SCHEMA_ORIGIN.toIcebergSchema())
         val outlet = createOutlet()
-        val schemaHandler = KafkaSchemaSchemaHandler(outlet)
+        val schemaHandler = KafkaSchemaSchemaHandler(name, outlet, tracer, meter)
         val newValueSchema = structSchema { field("fieldSuperNew", INT32_SCHEMA) }
         val record = SinkRecord(
             "topic",
@@ -102,7 +106,7 @@ internal class TestKafkaSchemaSchemaHandler {
     fun tableNoSchemaVersionShouldMigrate() {
         createTable(VALUE_SCHEMA_ORIGIN.toIcebergSchema())
         val outlet = createOutlet()
-        val schemaHandler = KafkaSchemaSchemaHandler(outlet)
+        val schemaHandler = KafkaSchemaSchemaHandler(name, outlet, tracer, meter)
         Assertions.assertTrue(schemaHandler.shouldMigrate(RECORD_ORIGIN))
     }
 
@@ -111,7 +115,7 @@ internal class TestKafkaSchemaSchemaHandler {
         val schemaVersion = RECORD_ORIGIN.schemaVersion()
         createTable(VALUE_SCHEMA_ORIGIN.toIcebergSchema(), schemaVersion)
         val outlet = createOutlet()
-        val schemaHandler = KafkaSchemaSchemaHandler(outlet)
+        val schemaHandler = KafkaSchemaSchemaHandler(name, outlet, tracer, meter)
         Assertions.assertFalse(schemaHandler.shouldMigrate(RECORD_ORIGIN))
     }
 
@@ -120,7 +124,7 @@ internal class TestKafkaSchemaSchemaHandler {
         val schemaVersion = RECORD_ORIGIN.schemaVersion()
         createTable(VALUE_SCHEMA_ORIGIN.toIcebergSchema(), schemaVersion)
         val outlet = createOutlet()
-        val schemaHandler = KafkaSchemaSchemaHandler(outlet)
+        val schemaHandler = KafkaSchemaSchemaHandler(name, outlet, tracer, meter)
 
         val newValueSchema = structSchema(2) {
             field("id", INT32_SCHEMA)
@@ -143,7 +147,7 @@ internal class TestKafkaSchemaSchemaHandler {
         val schemaVersion = RECORD_ORIGIN.schemaVersion()
         createTable(VALUE_SCHEMA_ORIGIN.toIcebergSchema(), schemaVersion)
         val outlet = createOutlet()
-        val schemaHandler = KafkaSchemaSchemaHandler(outlet)
+        val schemaHandler = KafkaSchemaSchemaHandler(name, outlet, tracer, meter)
 
         val newKeySchema = structSchema(2) {
             field("id", INT32_SCHEMA)
@@ -165,7 +169,7 @@ internal class TestKafkaSchemaSchemaHandler {
     fun migrateSchemaWhenSchemaVersionIsNull() {
         createTable(VALUE_SCHEMA_ORIGIN.toIcebergSchema())
         val outlet = createOutlet()
-        val schemaHandler = KafkaSchemaSchemaHandler(outlet)
+        val schemaHandler = KafkaSchemaSchemaHandler(name, outlet, tracer, meter)
 
         Assertions.assertNull(schemaHandler.schemaVersion)
 
@@ -190,7 +194,7 @@ internal class TestKafkaSchemaSchemaHandler {
 
         createTable(VALUE_SCHEMA_ORIGIN.toIcebergSchema(), version)
         val outlet = createOutlet()
-        val schemaHandler = KafkaSchemaSchemaHandler(outlet)
+        val schemaHandler = KafkaSchemaSchemaHandler(name, outlet, tracer, meter)
 
         Assertions.assertEquals(schemaHandler.schemaVersion, version)
         Assertions.assertEquals(table.properties()[SCHEMA_VERSION_PROP], version)

@@ -55,6 +55,7 @@ internal class TestDebeziumStreamlet {
     private lateinit var tmpDir: File
     private lateinit var table: Table
     private lateinit var tracker: RecordTracker
+    private val name = "test"
     private val telemetry = OpenTelemetry.noop()
     private val tracer = telemetry.getTracer("noop")
     private val meter = telemetry.getMeter("noop")
@@ -113,7 +114,7 @@ internal class TestDebeziumStreamlet {
         config: StreamConfig,
         shouldRuns: List<Boolean>,
     ): DebeziumStreamlet {
-        val handler = KafkaSchemaSchemaHandler(outlet)
+        val handler = KafkaSchemaSchemaHandler(name, outlet, tracer, meter)
         return spyk(DebeziumStreamlet("streamlet", config, inlet, outlet, tracker, handler, tracer, meter)) {
             val streamlet = this
             every { streamlet["ensureOffsets"]() } answers { }

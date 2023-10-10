@@ -3,6 +3,7 @@ package org.apache.iceberg.io
 import dev.alluvial.sink.iceberg.io.PathOffset
 import io.mockk.every
 import io.mockk.mockk
+import org.apache.iceberg.PartitionSpec
 import org.apache.iceberg.deletes.PositionDelete
 import org.apache.iceberg.deletes.PositionDeleteWriter
 import org.apache.iceberg.encryption.EncryptedOutputFile
@@ -45,7 +46,11 @@ class TestSortedPositionDeleteWriter {
             }
             every { newPositionDeleteWriter(any(), any(), any()) } returns writer
         }
-        return RollingPositionDeleteWriter(writerFactory, fileFactory, io, 1000000, null, null)
+        return RollingPositionDeleteWriter(
+            writerFactory, fileFactory,
+            io, 1000000,
+            PartitionSpec.unpartitioned(), null
+        )
     }
 
     @BeforeEach
