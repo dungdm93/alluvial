@@ -11,8 +11,12 @@ import io.opentelemetry.api.trace.Tracer
 
 val SERVICE_COMPONENT = stringKey("service.component")
 val KAFKA_TOPIC = stringKey("kafka.topic")
+val KAFKA_KEY_SCHEMA = stringKey("kafka.keySchema")
+val KAFKA_VALUE_SCHEMA = stringKey("kafka.valueSchema")
 val ICEBERG_TABLE = stringKey("iceberg.table")
 val ICEBERG_SCHEMA = stringKey("iceberg.schema")
+val ICEBERG_PARTITION_SPEC = stringKey("iceberg.partitionSpec")
+val ICEBERG_TABLE_LOCATION = stringKey("iceberg.location")
 val ICEBERG_PARTITION = stringKey("iceberg.partition")
 val ICEBERG_OPERATION = stringKey("iceberg.operation")
 val ICEBERG_SNAPSHOT_ID = longKey("iceberg.snapshotId")
