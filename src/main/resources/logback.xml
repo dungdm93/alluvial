@@ -3,7 +3,6 @@
             value="%replace(%prefix(%X{trace_id} %X{span_id})){'\\S+=(\\s+|$)', ''}"/>
 
   <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-    <withJansi>true</withJansi>
     <encoder>
       <!-- ISO-8601 format: https://jira.qos.ch/browse/LOGBACK-262 -->
       <!-- https://logback.qos.ch/manual/layouts.html -->

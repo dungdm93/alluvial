@@ -34,8 +34,8 @@ repositories {
     }
 }
 
-val slf4jVersion = "1.7.36"
-val logbackVersion = "1.2.12"   // pinned. logback 1.3+ requires slf4j 2.x
+val slf4jVersion = "2.0.9"
+val logbackVersion = "1.4.11"
 val opentelemetryVersion = "1.29.0"
 val jacksonVersion = "2.14.2"
 
